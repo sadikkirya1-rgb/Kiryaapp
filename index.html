@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Map Selection</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="splash">
+  <span class="letter">K</span><span class="letter">I</span><span class="letter">R</span><span class="letter">Y</span><span class="letter">A</span>
+  <span class="bike">🚴‍♂️</span>
+</div>
+
+<div id="home">
+  <div class="card">
+    <div class="address-card" id="openMapBtn">Enter delivery Address <span class="icon">📍</span></div>
+    <div class="logo">🏠</div>
+    <div class="title">Out of delivery area</div>
+    <div class="subtitle">We can't deliver to this location yet.</div>
+  </div>
+
+  <nav>
+    <div class="nav-item active">🏠<span>Home</span></div>
+    <div class="nav-item">🔍<span>Discover</span></div>
+    <div class="nav-item">🛒<span>Cart</span></div>
+    <div class="nav-item">👤<span>Profile</span></div>
+    <div class="nav-item">🚴‍♂️<span>Rider</span></div>
+    <div class="nav-item">🏪<span>Shop</span></div>
+    <div class="nav-item">🛎️<span>Admin</span></div>
+  </nav>
+</div>
+
+<div id="mapScreen">
+  <div id="backBtn" title="Go back">⬅️</div>
+  <div id="map"></div>
+  <div id="currentLocationBtn" title="Go to my location">📍</div>
+
+  <div id="bottomCard">
+    <div>
+      <h2>Where Shall We Deliver to?</h2>
+      <div class="subtitle">
+        <span class="icon">🏠</span>
+        <span id="selectedAddress">Select a location on the map</span>
+      </div>
+    </div>
+    <button id="addAddressBtn">Add New Address</button>
+  </div>
+
+  <div id="searchCard">
+    <div id="searchNormalContent">
+      <div class="search-title">Trouble using the Location? <br> try using search instead</div>
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="Search city, Streets, Districts" id="searchInput" autocomplete="off"/>
+        <span id="closeSearch" class="close-btn">✖</span>
+      </div>
+      <ul id="autocompleteSuggestions" class="autocomplete-list"></ul>
+    </div>
+    <div id="searchErrorContent">
+      <div class="error-emoji">⚠️</div>
+      <div class="error-title">Something Went Wrong.</div>
+      <div class="error-msg">Kindly go back on home page and select your address</div>
+      <button id="errorBackBtn">Go Back</button>
+    </div>
+  </div>
+</div>
+
+<div id="newHomeScreen">
+  <div class="header">
+    <div id="newHomeBackBtn" title="Go back">⬅️</div>
+    <div class="selected-address-card" id="selectedAddressCard">
+      <span class="home-icon">🏠</span>
+      <span id="selectedAddressText">Selected address not set</span>
+    </div>
+    <div class="top-grid">
+      <div class="grid-item"><div class="circle">🍕</div><div class="grid-label">Food</div></div>
+      <div class="grid-item"><div class="circle">🛒</div><div class="grid-label">Groceries</div></div>
+      <div class="grid-item"><div class="circle">🛍️</div><div class="grid-label">Shops</div></div>
+      <div class="grid-item"><div class="circle">💊</div><div class="grid-label">Pharmacies</div></div>
+      <div class="grid-item"><div class="circle">📦</div><div class="grid-label">Packages</div></div>
+      <div class="grid-item"><div class="circle">🥤</div><div class="grid-label">Drinks</div></div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="for-you-text">These Are For You</div>
+    <div class="shop-scroll" id="shopScroll">
+      <div class="shop-item">🛍️</div>
+      <div class="shop-item">🛒</div>
+      <div class="shop-item">🏬</div>
+      <div class="shop-item">🏤</div>
+      <div class="shop-item">📦</div>
+      <div class="shop-item">🍽️</div>
+      <div class="shop-item">🥤</div>
+      <div class="shop-item">🍰</div>
+    </div>
+    <div id="ad-container">
+        <div class="shop-info ad-banner active">
+          <div class="shop-info-row">
+            <div>
+              <div class="headline">FreeDelivery on Your First order</div>
+              <div class="sub">Treat yourself, we got it!</div>
+            </div>
+            <div class="bike-block"><span>🚴‍♂️</span></div>
+          </div>
+        </div>
+        <div class="shop-info ad-banner" style="background: linear-gradient(135deg, #ff6f61, #d9534f);">
+          <div class="shop-info-row">
+            <div>
+              <div class="headline">20% Off All Pizzas!</div>
+              <div class="sub">This weekend only.</div>
+            </div>
+            <div class="bike-block" style="background: rgba(255, 255, 255, 0.2);"><span style="font-size: 2.2rem;">🍕</span></div>
+          </div>
+        </div>
+        <div class="shop-info ad-banner" style="background: linear-gradient(135deg, #26a69a, #00796b);">
+          <div class="shop-info-row">
+            <div>
+              <div class="headline">Fresh Groceries Delivered</div>
+              <div class="sub">From farm to your table.</div>
+            </div>
+            <div class="bike-block" style="background: rgba(255, 255, 255, 0.2);"><span style="font-size: 2.2rem;">🛒</span></div>
+          </div>
+        </div>
+    </div>
+  </div>
+</div>
+
+<div id="contentSearchScreen">
+  <div class="cs-header">
+    <div id="csBackBtn" style="font-size: 1.5em; cursor: pointer; padding: 5px;">⬅️</div>
+    <div class="cs-search-bar">
+      <span>🔍</span>
+      <input type="text" placeholder="Search food, groceries, shops..." id="contentSearchInput">
+    </div>
+  </div>
+  <div class="cs-content">
+    <h3>Browse Categories</h3>
+    <div class="top-grid" id="searchCategoriesGrid"></div>
+    <h3>Popular Shops</h3>
+    <div class="shop-scroll" id="searchShopsScroll"></div>
+    <div id="searchAllItemsContainer"></div>
+  </div>
+</div>
+
+<div id="categoryScreen">
+  <div class="cat-header">
+    <div class="back-btn" id="catBackBtn" title="Go back">⬅️</div>
+    <div class="cat-address-card">
+      <span class="home-icon">🏠</span>
+      <span id="catAddressText">...</span>
+    </div>
+    <div class="cat-header-search">
+      <span>🔍</span>
+      <input type="text" placeholder="Search in category..." id="headerSearchInput">
+    </div>
+  </div>
+  <div class="cat-content">
+    <div class="cat-title" id="catTitle">Category</div>
+    <div class="cat-search-wrapper">
+      <div class="cat-search-bar">
+        <span>🔍</span>
+        <input type="text" placeholder="Search in category..." id="mainCatSearchInput">
+      </div>
+    </div>
+    <div class="filter-scroll">
+      <div class="filter-item"><div class="filter-box">🏷️</div><div class="filter-name">Promotions</div></div>
+      <div class="filter-item"><div class="filter-box">🍟</div><div class="filter-name">Fast Food</div></div>
+      <div class="filter-item"><div class="filter-box">🍗</div><div class="filter-name">Chicken</div></div>
+      <div class="filter-item"><div class="filter-box">🍔</div><div class="filter-name">Burgers</div></div>
+      <div class="filter-item"><div class="filter-box">🥩</div><div class="filter-name">Halal</div></div>
+      <div class="filter-item"><div class="filter-box">🍿</div><div class="filter-name">Snacks</div></div>
+      <div class="filter-item"><div class="filter-box">🔥</div><div class="filter-name">Grill</div></div>
+      <div class="filter-item"><div class="filter-box">🍕</div><div class="filter-name">Pizza</div></div>
+      <div class="filter-item"><div class="filter-box">🥘</div><div class="filter-name">Local Food</div></div>
+      <div class="filter-item"><div class="filter-box">🍰</div><div class="filter-name">Desserts</div></div>
+      <div class="filter-item"><div class="filter-box">☕</div><div class="filter-name">Tea & Coffee</div></div>
+      <div class="filter-item"><div class="filter-box">🌐</div><div class="filter-name">International</div></div>
+      <div class="filter-item"><div class="filter-box">🍛</div><div class="filter-name">Indians</div></div>
+      <div class="filter-item"><div class="filter-box">🍲</div><div class="filter-name">Traditional</div></div>
+      <div class="filter-item"><div class="filter-box">🦞</div><div class="filter-name">Seafood</div></div>
+      <div class="filter-item"><div class="filter-box">🍱</div><div class="filter-name">Asian</div></div>
+      <div class="filter-item"><div class="filter-box">🇮🇹</div><div class="filter-name">Italian</div></div>
+      <div class="filter-item"><div class="filter-box">🥡</div><div class="filter-name">Chinese</div></div>
+      <div class="filter-item"><div class="filter-box">🍷</div><div class="filter-name">Alcohol</div></div>
+      <div class="filter-item"><div class="filter-box">🍝</div><div class="filter-name">Pasta</div></div>
+      <div class="filter-item"><div class="filter-box">🥐</div><div class="filter-name">Bakery</div></div>
+      <div class="filter-item"><div class="filter-box">🥙</div><div class="filter-name">Kebab</div></div>
+      <div class="filter-item"><div class="filter-box">🌮</div><div class="filter-name">Mexican</div></div>
+    </div>
+    <div class="text-filter-scroll">
+      <div class="text-filter-btn">Food Types</div>
+      <div class="text-filter-btn"><span>🚶</span>Takeaway</div>
+      <div class="text-filter-btn">Sort by <span>▼</span></div>
+      <div class="text-filter-btn"><span>👑</span>Top Rated</div>
+    </div>
+    <div class="brands-section">
+      <div class="pref-header-row">
+        <div class="pref-title">Popular Brands</div>
+        <div class="see-all-btn" id="brandsSeeAllBtn">See All</div>
+      </div>
+      <div class="brands-scroll" id="brandsScroll">
+        <div class="brand-container">
+          <div class="brand-item">
+            <div class="brand-image"><span>🍔</span></div>
+          </div>
+          <div class="brand-name">McDonald's</div>
+          <div class="brand-delivery-info"><span class="bike-icon">🚴‍♂️</span><span>Free delivery</span></div>
+        </div>
+        <div class="brand-container">
+          <div class="brand-item">
+            <div class="brand-image"><span>🍗</span></div>
+          </div>
+          <div class="brand-name">KFC</div>
+          <div class="brand-delivery-info"><span class="bike-icon">🚴‍♂️</span><span>Free delivery</span></div>
+        </div>
+        <div class="brand-container">
+          <div class="brand-item">
+            <div class="brand-image"><span>🍕</span></div>
+          </div>
+          <div class="brand-name">Pizza Hut</div>
+          <div class="brand-delivery-info"><span class="bike-icon">🚴‍♂️</span><span>Free delivery</span></div>
+        </div>
+        <div class="brand-container">
+          <div class="brand-item">
+            <div class="brand-image"><span>☕</span></div>
+          </div>
+          <div class="brand-name">Starbucks</div>
+          <div class="brand-delivery-info"><span class="bike-icon">🚴‍♂️</span><span>Free delivery</span></div>
+        </div>
+        <div class="brand-container">
+          <div class="brand-item">
+            <div class="brand-image"><span>🥪</span></div>
+          </div>
+          <div class="brand-name">Subway</div>
+          <div class="brand-delivery-info"><span class="bike-icon">🚴‍♂️</span><span>Free delivery</span></div>
+        </div>
+      </div>
+      <div class="brands-pagination" id="brandsPagination"></div>
+    </div>
+    <div class="pref-header-row">
+      <div class="pref-title">For You</div>
+      <div class="see-all-btn" id="prefSeeAllBtn">See All</div>
+    </div>
+    <div class="pref-scroll" id="prefScroll">
+      <!-- Populated by JS -->
+    </div>
+    <div class="pref-pagination" id="prefPagination"></div>
+    <div class="restaurant-list-section">
+      <h3>All Restaurants</h3>
+      <div id="restaurantList"></div>
+    </div>
+  </div>
+</div>
+<div id="restaurantScreen">
+  <div class="res-cover-header">
+    <div class="res-action-btn" id="resBackBtn">⬅️</div>
+    <div class="res-cover-actions-right">
+      <div class="res-action-btn" id="resShareBtn">🔗</div>
+      <div class="res-action-btn" id="resCloseBtn">✖</div>
+    </div>
+  </div>
+  <div class="res-cover">
+    <div class="res-cover-bg">🍽️</div>
+  </div>
+  <div class="res-header-content">
+    <div class="res-profile-pic">🏪</div>
+    <div class="res-screen-name" id="resScreenName">Restaurant Name</div>
+    <div class="res-badges-row">
+      <div class="res-badge-discount"><span>🏷️</span> -20% some items</div>
+      <div class="res-badge-top"><span>👑</span> Top Rated</div>
+    </div>
+    <div class="res-meta-row">
+      <div class="res-meta-item">
+        <span>👍</span>
+        <span id="resLikes">300</span>
+      </div>
+      <div class="res-meta-item">
+        <span>🕒</span>
+        <span id="resTime">20-30 Mins</span>
+      </div>
+      <div class="res-meta-item">
+        <span class="bike-icon-right">🚴‍♂️</span>
+        <div>
+          <span class="delivery-fee-cross">200</span>
+          <span class="delivery-free">Free</span>
+        </div>
+      </div>
+    </div>
+    <div class="res-price-disclaimer">Crossed-out prices show the lowest price in the last 3 days before reduction</div>
+  </div>
+  
+  <div class="res-menu-nav" id="resMenuNav">
+    <div class="res-menu-item active">Promotions</div>
+    <div class="res-menu-item">Top sellers</div>
+    <div class="res-menu-item">Breakfast</div>
+    <div class="res-menu-item">Star signatures (NEW!!)</div>
+    <div class="res-menu-item">STA PIZZA MENUE (NEW!!!)</div>
+    <div class="res-menu-item">STA chicken meals and combo</div>
+    <div class="res-menu-item">chicken Buckets Crispy pieces - For Sharing & Feasting</div>
+    <div class="res-menu-item">Juicy Burgers & Tasty Wraps</div>
+    <div class="res-menu-item">Grilled chicken shawarma STA Xpress Indomi Noodle Bowls</div>
+    <div class="res-menu-item">Soft drinks</div>
+  </div>
+  
+  <div class="res-menu-content" id="resMenuContent">
+    <div class="res-category-title">Promotions</div>
+    
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Family Feast Combo</div>
+        <div class="res-item-desc">2 Large Pizzas, 2 sides of Garlic Bread, and a large bottle of Soft Drink. Perfect for sharing!</div>
+        <div class="res-item-price-row">
+          <span class="res-item-old-price">120.00</span>
+          <span class="res-item-current-price">85.00</span>
+        </div>
+      </div>
+      <div class="res-item-img-box">
+        🍕
+        <div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Double Crispy Burger Meal</div>
+        <div class="res-item-desc">Two crispy chicken patties, cheddar cheese, lettuce, and our secret sauce. Includes fries.</div>
+        <div class="res-item-price-row">
+          <span class="res-item-old-price">45.00</span>
+          <span class="res-item-current-price">35.00</span>
+        </div>
+      </div>
+      <div class="res-item-img-box">
+        🍔
+        <div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Mega Snack Box</div>
+        <div class="res-item-desc">5 chicken wings, 5 nuggets, onion rings and spicy dip. A crunchy delight.</div>
+        <div class="res-item-price-row">
+          <span class="res-item-old-price">55.00</span>
+          <span class="res-item-current-price">40.00</span>
+        </div>
+      </div>
+      <div class="res-item-img-box">
+        🍗
+        <div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="res-category-title">Top sellers</div>
+
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Classic Cheeseburger</div>
+        <div class="res-item-desc">A juicy beef patty with melted cheese, pickles, onions, ketchup, and mustard on a toasted bun.</div>
+        <div class="res-item-price-row">
+          <span class="res-item-current-price">38.00</span>
+        </div>
+      </div>
+      <div class="res-item-img-box">
+        🍔
+        <div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Margherita Pizza</div>
+        <div class="res-item-desc">Classic Italian pizza with fresh mozzarella, San Marzano tomatoes, fresh basil, and a drizzle of olive oil.</div>
+        <div class="res-item-price-row">
+          <span class="res-item-current-price">55.00</span>
+        </div>
+      </div>
+      <div class="res-item-img-box">
+        🍕
+        <div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="res-category-title">Breakfast</div>
+
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Pancakes with Syrup</div>
+        <div class="res-item-desc">Fluffy buttermilk pancakes served with a side of maple syrup and butter. A morning classic.</div>
+        <div class="res-item-price-row">
+          <span class="res-item-current-price">25.00</span>
+        </div>
+      </div>
+      <div class="res-item-img-box">
+        🥞
+        <div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="res-category-title">Star signatures (NEW!!)</div>
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Star Special Burger</div>
+        <div class="res-item-desc">Our signature burger with double cheese, truffle mayo, and caramelized onions.</div>
+        <div class="res-item-price-row"><span class="res-item-current-price">58.00</span></div>
+      </div>
+      <div class="res-item-img-box">⭐<div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div></div>
+    </div>
+
+    <div class="res-category-title">STA PIZZA MENUE (NEW!!!)</div>
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">BBQ Chicken Pizza</div>
+        <div class="res-item-desc">Grilled chicken, red onions, cilantro, and tangy BBQ sauce.</div>
+        <div class="res-item-price-row"><span class="res-item-current-price">62.00</span></div>
+      </div>
+      <div class="res-item-img-box">🍕<div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div></div>
+    </div>
+
+    <div class="res-category-title">STA chicken meals and combo</div>
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">3pc Chicken Meal</div>
+        <div class="res-item-desc">3 pieces of fried chicken, coleslaw, bun and a drink.</div>
+        <div class="res-item-price-row"><span class="res-item-current-price">45.00</span></div>
+      </div>
+      <div class="res-item-img-box">🍗<div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div></div>
+    </div>
+
+    <div class="res-category-title">chicken Buckets Crispy pieces - For Sharing & Feasting</div>
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">12pc Family Bucket</div>
+        <div class="res-item-desc">12 pieces of our signature crispy chicken. Great for sharing.</div>
+        <div class="res-item-price-row"><span class="res-item-current-price">95.00</span></div>
+      </div>
+      <div class="res-item-img-box">🥡<div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div></div>
+    </div>
+
+    <div class="res-category-title">Juicy Burgers & Tasty Wraps</div>
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Zinger Wrap</div>
+        <div class="res-item-desc">Crispy chicken strip wrapped in a tortilla with lettuce and mayo.</div>
+        <div class="res-item-price-row"><span class="res-item-current-price">22.00</span></div>
+      </div>
+      <div class="res-item-img-box">🌯<div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div></div>
+    </div>
+
+    <div class="res-category-title">Grilled chicken shawarma STA Xpress Indomi Noodle Bowls</div>
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Chicken Shawarma Plate</div>
+        <div class="res-item-desc">Sliced roasted chicken served with garlic sauce, pickles, and fries.</div>
+        <div class="res-item-price-row"><span class="res-item-current-price">35.00</span></div>
+      </div>
+      <div class="res-item-img-box">🥙<div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div></div>
+    </div>
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Spicy Indomi Bowl</div>
+        <div class="res-item-desc">Indomi noodles stir-fried with vegetables and a spicy kick.</div>
+        <div class="res-item-price-row"><span class="res-item-current-price">18.00</span></div>
+      </div>
+      <div class="res-item-img-box">🍜<div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div></div>
+    </div>
+
+    <div class="res-category-title">Soft drinks</div>
+    <div class="res-item-card">
+      <div class="res-item-info">
+        <div class="res-item-title">Cola</div>
+        <div class="res-item-desc">Refreshing carbonated soft drink.</div>
+        <div class="res-item-price-row"><span class="res-item-current-price">5.00</span></div>
+      </div>
+      <div class="res-item-img-box">🥤<div class="res-item-add-btn">
+          <span class="initial-plus">+</span>
+          <div class="quantity-selector">
+            <span class="quantity-btn minus">-</span>
+            <span class="quantity-value">1</span>
+            <span class="quantity-btn plus">+</span>
+          </div>
+        </div></div>
+    </div>
+  </div>
+  <div id="resBackToTopBtn">⬆️</div>
+</div>
+
+<div id="dishDetailScreen">
+  <div class="dish-header">
+    <div id="dishCloseBtn" class="dish-close-btn">✖</div>
+  </div>
+  <div class="dish-content">
+    <div class="dish-image-large" id="dishDetailImage"></div>
+    <h2 class="dish-title-large" id="dishDetailTitle"></h2>
+    <p class="dish-desc-full" id="dishDetailDesc"></p>
+    <div class="dish-addons" id="dishDetailAddons">
+      <h3>Add-ons</h3>
+      <label class="addon-item"><div class="addon-info"><span class="addon-name">Extra Cheese</span><span class="addon-price" data-price="5.00">+ 5.00</span></div><input type="checkbox" class="addon-checkbox"><span class="custom-checkbox"></span></label>
+      <label class="addon-item"><div class="addon-info"><span class="addon-name">Spicy Sauce</span><span class="addon-price" data-price="2.50">+ 2.50</span></div><input type="checkbox" class="addon-checkbox"><span class="custom-checkbox"></span></label>
+    </div>
+    <div class="dish-price-large" id="dishDetailPrice"></div>
+  </div>
+  <div class="dish-footer">
+    <div class="quantity-selector-large">
+      <span class="quantity-btn-large minus">-</span>
+      <span class="quantity-value-large">1</span>
+      <span class="quantity-btn-large plus">+</span>
+    </div>
+    <button class="add-to-cart-large-btn">Add to cart</button>
+  </div>
+</div>
+
+<div id="cartScreen">
+  <div class="cart-header">
+    <div class="cart-back-btn" id="cartBackBtn">⬅️</div>
+    <div class="cart-title">Checkout</div>
+  </div>
+  <div class="cart-content" id="cartContent">
+    <!-- Cart items populated by JS -->
+  </div>
+  <div class="cart-footer">
+    <div class="cart-total-row">
+      <span>Total</span>
+      <span id="cartTotalAmount">0.00</span>
+    </div>
+    <button class="checkout-btn">Checkout</button>
+  </div>
+</div>
+
+<div id="checkoutActionScreen">
+  <div class="checkout-header">
+    <div class="checkout-back-btn" id="checkoutBackBtn">⬅️</div>
+    <div class="checkout-title">Checkout</div>
+  </div>
+  <div class="checkout-content">
+    <!-- Content populated by JS -->
+  </div>
+  <div class="checkout-footer"><button class="place-order-btn" id="placeOrderBtn">Place Order</button></div>
+</div>
+
+<div id="allergyScreen">
+  <div class="allergy-header">
+    <div class="allergy-back-btn" id="allergyBackBtn">⬅️</div>
+    <div class="allergy-title">Allergies</div>
+  </div>
+  <div class="allergy-content">
+    <p>Please list any allergies or dietary restrictions. The restaurant will do its best to accommodate them.</p>
+    <textarea id="allergyInput" placeholder="e.g., allergic to peanuts, gluten-free..."></textarea>
+  </div>
+  <div class="allergy-footer">
+    <button id="saveAllergyBtn">Save</button>
+  </div>
+</div>
+
+<div id="recipientScreen">
+  <div class="recipient-header">
+    <div class="recipient-title">Recipient Details</div>
+    <div id="recipientCloseBtn" class="recipient-close-btn">✖</div>
+  </div>
+  <div class="recipient-content">
+    <label for="recipientName">Recipient Name</label>
+    <input type="text" id="recipientName" placeholder="Enter full name">
+    
+    <label>Phone Number</label>
+    <div class="phone-input-group">
+      <input type="text" id="phonePrefix" placeholder="+971" value="+971">
+      <input type="tel" id="phoneNumber" placeholder="50 123 4567">
+    </div>
+  </div>
+  <div class="recipient-footer">
+    <button id="saveRecipientBtn">Save Details</button>
+  </div>
+</div>
+
+<div id="userPhoneScreen">
+  <div class="user-phone-header">
+    <div class="user-phone-title">Your Phone Number</div>
+    <div id="userPhoneCloseBtn" class="user-phone-close-btn">✖</div>
+  </div>
+  <div class="user-phone-content">
+    <p>We will send you a message to validate your number.</p>
+    <label>Phone Number</label>
+    <div class="phone-input-group">
+      <input type="text" id="userPhonePrefix" placeholder="+971" value="+971">
+      <input type="tel" id="userPhoneNumberInput" placeholder="50 123 4567">
+    </div>
+  </div>
+  <div class="user-phone-footer">
+    <button id="saveUserPhoneBtn">Save Number</button>
+  </div>
+</div>
+
+<div id="favoritesScreen" class="generic-screen">
+  <div class="generic-header">
+    <div class="generic-back-btn" id="favBackBtn">⬅️</div>
+    <div class="generic-title">My Favorites</div>
+  </div>
+  <div class="generic-content" id="favoritesContent">
+    <!-- Populated by JS -->
+  </div>
+</div>
+
+<div id="profileScreen">
+  <div class="profile-header">
+    <div class="profile-title">Profile</div>
+    <div class="profile-back-btn" id="profileBackBtn">✖</div>
+  </div>
+  <div class="profile-content">
+    <div class="profile-card">
+      <div class="profile-pic" id="profilePic">👤</div>
+      <input type="file" id="profilePicInput" accept="image/*" style="display: none;">
+      <div class="profile-info">
+        <div class="profile-name" id="profileNameDisplay">Guest User</div>
+        <div class="profile-phone" id="profilePhoneDisplay">No phone set</div>
+      </div>
+    </div>
+    
+    <div class="profile-section-title">Account</div>
+    <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        <div class="profile-menu-item" id="profileSavedAddressesBtn">
+            <div><span class="menu-icon">📍</span> Saved Addresses</div>
+            <span>></span>
+        </div>
+        <div class="profile-menu-item" id="profileEditPhoneBtn">
+            <div><span class="menu-icon">📱</span> Update Phone Number</div>
+            <span>></span>
+        </div>
+        <div class="profile-menu-item" id="profileFavoritesBtn">
+            <div><span class="menu-icon">❤️</span> My Favorites</div>
+            <span>></span>
+        </div>
+        <div class="profile-menu-item">
+            <div><span class="menu-icon">💳</span> Payment Methods</div>
+            <span>></span>
+        </div>
+    </div>
+
+    <div class="profile-section-title">General</div>
+    <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        <div class="profile-menu-item">
+            <div><span class="menu-icon">💬</span> Help & Support</div>
+            <span>></span>
+        </div>
+        <div class="profile-menu-item">
+            <div><span class="menu-icon">📜</span> Terms of Service</div>
+            <span>></span>
+        </div>
+    </div>
+    
+    <div style="margin-top: 25px; text-align: center; color: #999; font-size: 0.9em;">
+        Version 1.0.0
+    </div>
+  </div>
+</div>
+
+<div id="sideMenuOverlay"></div>
+
+<div id="paymentOverlay"></div>
+<div id="paymentSheet">
+  <h3>Select Payment Method</h3>
+  <div class="payment-options-list">
+    <label class="payment-option-item">
+      <div class="payment-option-info">
+        <span class="payment-icon">💵</span>
+        <span>Cash on Delivery</span>
+      </div>
+      <input type="radio" name="paymentMethod" value="cod" data-icon="💵" data-text="Cash on Delivery" checked>
+    </label>
+    <label class="payment-option-item">
+      <div class="payment-option-info">
+        <span class="payment-icon" style="color: #ffcb00;">●</span>
+        <span>MTN Mobile Money</span>
+      </div>
+      <input type="radio" name="paymentMethod" value="mtn" data-icon="📱" data-text="MTN Mobile Money">
+    </label>
+    <label class="payment-option-item">
+      <div class="payment-option-info">
+        <span class="payment-icon" style="color: #ed1c24;">●</span>
+        <span>Airtel Money</span>
+      </div>
+      <input type="radio" name="paymentMethod" value="airtel" data-icon="📱" data-text="Airtel Money">
+    </label>
+  </div>
+</div>
+
+<div id="savedAddressScreen">
+  <div class="sa-header">
+    <div class="sa-back-btn" id="savedAddressBackBtn">⬅️</div>
+    <div class="sa-title">Saved Addresses</div>
+  </div>
+  <div class="sa-content">
+    <div class="saved-addr-card">
+      <div class="saved-addr-icon">🏠</div>
+      <div class="saved-addr-info">
+        <div class="saved-addr-type">Home</div>
+        <div class="saved-addr-text">Flat 402, Building A, Al Majaz 2, Sharjah</div>
+        <div class="saved-addr-actions">
+          <div class="saved-addr-action">Edit</div>
+          <div class="saved-addr-action" style="color:#ff4757;">Delete</div>
+        </div>
+      </div>
+    </div>
+    <div class="saved-addr-card">
+      <div class="saved-addr-icon">🏢</div>
+      <div class="saved-addr-info">
+        <div class="saved-addr-type">Work</div>
+        <div class="saved-addr-text">Office 1205, Business Tower, Downtown Dubai</div>
+        <div class="saved-addr-actions">
+          <div class="saved-addr-action">Edit</div>
+          <div class="saved-addr-action" style="color:#ff4757;">Delete</div>
+        </div>
+      </div>
+    </div>
+    <div class="saved-addr-card">
+      <div class="saved-addr-icon">📍</div>
+      <div class="saved-addr-info">
+        <div class="saved-addr-type">Other</div>
+        <div class="saved-addr-text">Villa 12, Street 45, Jumeirah 1</div>
+        <div class="saved-addr-actions">
+          <div class="saved-addr-action">Edit</div>
+          <div class="saved-addr-action" style="color:#ff4757;">Delete</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="riderScreen" class="generic-screen">
+  <div id="riderMap" class="rider-map-container"></div>
+  
+  <div class="rider-overlay-ui">
+    <div class="rider-header-controls">
+        <div class="generic-back-btn" id="riderBackBtn" style="background:#fff; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.1);">⬅️</div>
+        <div id="riderStatusToggle" class="rider-status-badge offline">
+            <span class="status-dot" style="width:10px; height:10px; background:#ff4757; border-radius:50%;"></span>
+            <span class="status-text">GO ONLINE</span>
+        </div>
+    </div>
+
+    <!-- Bottom Panel -->
+    <div id="riderBottomPanel" class="rider-bottom-panel">
+        <!-- State: Offline/Online Idle -->
+        <div id="riderDashboardState">
+            <h3 style="margin-bottom:15px; font-weight:800; font-size:1.3em; color:#333;">Today's Performance</h3>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                <div style="background:#f9f9f9; padding:15px; border-radius:12px; text-align:center;">
+                    <div style="font-size:0.9em; color:#666;">Earnings</div>
+                    <div style="font-size:1.4em; font-weight:900; color:#333; margin-top:5px;">UGX <span id="riderEarningsToday">0.00</span></div>
+                </div>
+                <div style="background:#f9f9f9; padding:15px; border-radius:12px; text-align:center;">
+                    <div style="font-size:0.9em; color:#666;">Trips</div>
+                    <div style="font-size:1.4em; font-weight:900; color:#333; margin-top:5px;" id="riderTripsToday">0</div>
+                </div>
+            </div>
+            <div style="margin-top:20px; font-size:0.9em; color:#888; text-align:center; padding: 10px; background: #f0f0f0; border-radius: 8px;" id="riderIdleMsg">
+                Go Online to start receiving orders.
+            </div>
+        </div>
+
+        <!-- State: Active Delivery -->
+        <div id="riderDeliveryState" style="display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="font-weight:800; color:#333;">Current Delivery</h3>
+                <span style="background:#e0f2f1; color:#019E81; padding:4px 10px; border-radius:10px; font-size:0.85em; font-weight:bold;">#8821</span>
+            </div>
+            
+            <div class="step-card active" id="riderStepPickup">
+                <div style="font-weight:bold; font-size:0.8em; color:#666;">PICKUP</div>
+                <div style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Burger King, Mall Branch</div>
+                <div style="font-size:0.85em; color:#888; margin-top:2px;">Order ready for pickup</div>
+            </div>
+            
+            <div class="step-card" id="riderStepDropoff">
+                <div style="font-weight:bold; font-size:0.8em; color:#666;">DROPOFF</div>
+                <div style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Flat 402, Al Majaz 2</div>
+                <div style="font-size:0.85em; color:#888; margin-top:2px;">Cash to collect: UGX 15,000</div>
+            </div>
+
+            <div class="swipe-container" id="riderSwipeBtn">
+                <div class="swipe-text" id="riderSwipeText">SWIPE TO PICK UP</div>
+                <div class="swipe-knob" id="riderSwipeKnob">➜</div>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <!-- Incoming Order Modal -->
+  <div id="riderOrderModal">
+    <div class="timer-bar"><div class="timer-fill" id="riderTimerFill"></div></div>
+    <div style="text-align:center; font-weight:bold; color:#019E81; font-size: 0.9em;">NEW DELIVERY REQUEST</div>
+    <div class="order-price">UGX 4,500</div>
+    <div class="order-meta">
+        <span>🕒 15 min</span>
+        <span>📏 2.5 km</span>
+        <span>📦 2 items</span>
+    </div>
+    <div class="rest-info">
+        <div style="font-size:2em;">🍔</div>
+        <div>
+            <div style="font-weight:bold; color:#333;">Burger King</div>
+            <div style="font-size:0.85em; color:#666;">Mall Branch • 1.2km away</div>
+        </div>
+    </div>
+    <div class="rest-info">
+        <div style="font-size:2em;">🏠</div>
+        <div>
+            <div style="font-weight:bold; color:#333;">Customer</div>
+            <div style="font-size:0.85em; color:#666;">Flat 402, Al Majaz 2</div>
+        </div>
+    </div>
+    <div class="btn-row">
+        <button class="btn-decline" id="riderDeclineBtn">Decline</button>
+        <button class="btn-accept" id="riderAcceptBtn">Accept Order</button>
+    </div>
+  </div>
+</div>
+
+<div id="adminScreen" class="generic-screen">
+  <div class="generic-header">
+    <div class="generic-back-btn" onclick="document.getElementById('adminScreen').classList.remove('active')">⬅️</div>
+    <div class="generic-title">Admin Panel</div>
+  </div>
+  <div class="generic-content">
+    <div class="dashboard-card">
+      <h3>Platform Stats</h3>
+      <div style="display:flex; justify-content:space-between; margin-top:10px;">
+        <div>Orders Today</div>
+        <div style="font-weight:bold;">0</div>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-top:5px;">
+        <div>Active Riders</div>
+        <div style="font-weight:bold;">0</div>
+      </div>
+    </div>
+    <div class="dashboard-card">
+      <div style="padding:10px; background:#f0f0f0; border-radius:8px; text-align:center;">Manage Users</div>
+    </div>
+  </div>
+</div>
+
+<div id="shopPortalScreen" class="generic-screen">
+  <div class="generic-header">
+    <div class="generic-back-btn" onclick="document.getElementById('shopPortalScreen').classList.remove('active')">⬅️</div>
+    <div class="generic-title">Merchant Portal</div>
+  </div>
+  <div class="generic-content">
+    <div class="dashboard-card">
+      <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 10px;">Store Status: 🟢 Open</div>
+      <button style="width:100%; padding:10px; background:#ff4757; color:white; border:none; border-radius:8px; font-weight:bold;">Close Store</button>
+    </div>
+    <div class="dashboard-card">
+        <h3 style="margin-bottom: 20px; font-weight: 800;">Analytics</h3>
+        <div style="margin-bottom: 30px;">
+            <h4 style="font-size: 1em; color: #555; margin-bottom: 10px;">Daily Sales (UGX)</h4>
+            <canvas id="dailySalesChart"></canvas>
+        </div>
+        <div>
+            <h4 style="font-size: 1em; color: #555; margin-bottom: 10px;">Top Selling Items</h4>
+            <div style="max-width: 250px; margin: auto;">
+                <canvas id="topItemsChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="dashboard-card" id="merchantOrdersBtn" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-weight:bold; font-size:1.1em;">📜 Past Orders</div>
+      <span style="font-size:1.2em;">></span>
+    </div>
+    <div class="dashboard-card" id="merchantManageMenuBtn" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-weight:bold; font-size:1.1em;">🍔 Manage Menu</div>
+      <span style="font-size:1.2em;">></span>
+    </div>
+    <div class="dashboard-card">
+      <h3>Active Orders</h3>
+      <p style="color:#666; margin-top:10px;">No active orders pending.</p>
+    </div>
+  </div>
+</div>
+
+<div id="merchantMenuScreen" class="generic-screen">
+  <div class="generic-header">
+    <div class="generic-back-btn" id="merchantMenuBackBtn">⬅️</div>
+    <div class="generic-title">Manage Menu</div>
+    <div style="margin-left:auto; font-size:1.5em; cursor:pointer;" id="merchantAddMenuBtn">➕</div>
+  </div>
+  <div class="generic-content" id="merchantMenuList">
+    <!-- Items populated by JS -->
+  </div>
+</div>
+
+<div id="merchantEditItemScreen" class="generic-screen">
+  <div class="generic-header">
+    <div class="generic-back-btn" id="editItemBackBtn">⬅️</div>
+    <div class="generic-title" id="editItemTitle">Edit Item</div>
+  </div>
+  <div class="generic-content">
+    <div class="dashboard-card">
+        <label for="editItemName">Item Name</label>
+        <input type="text" id="editItemName" placeholder="e.g., Classic Burger">
+        <label for="editItemPrice">Price (UGX)</label>
+        <input type="number" id="editItemPrice" placeholder="e.g., 25.00">
+        <label for="editItemImg">Image (Emoji)</label>
+        <input type="text" id="editItemImg" placeholder="e.g., 🍔">
+        <input type="hidden" id="editItemId">
+    </div>
+  </div>
+  <div class="edit-footer" style="padding:20px; border-top: 1px solid #eee; background: #fff; display:flex; gap:15px;"><button id="deleteItemBtn" style="background:#ff4757;">Delete</button><button id="saveItemBtn" style="background:#019E81;">Save Changes</button></div>
+</div>
+
+<div id="merchantOrdersScreen" class="generic-screen">
+  <div class="generic-header">
+    <div class="generic-back-btn" id="merchantOrdersBackBtn">⬅️</div>
+    <div class="generic-title">Order History</div>
+  </div>
+  <div class="generic-content" id="merchantOrdersList"></div>
+</div>
+
+<div id="viewCartBtn">
+  <div style="position: relative;">🛒<span id="cartItemCount" style="position: absolute; top: -10px; right: -10px; background: #ff4757; color: white; border-radius: 50%; padding: 4px 8px; font-size: 0.5em; min-width: 20px; text-align: center;">0</span></div>
+</div>
+
+<div id="toast"></div>
+
+<audio id="orderNotificationSound" src="data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAZAAAAn4AA1Z3j9gAADUAAAAAn4AB1Z3j9gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//tAwc/83RgtwAAAAAAD/9dwYwQkAAAQAAAACAAADSAAAA0gAAA1AAAASgAAAEgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFg" ></audio>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
