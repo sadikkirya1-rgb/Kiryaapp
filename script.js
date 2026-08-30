@@ -1,14 +1,31 @@
 
-let map, marker;
-let cart = [];
-let suggestedScrollInterval;
-let favorites = new Set();
-let isCheckoutAccordionOpen = false; let allergyNotes = ''; let recipientDetails = { name: '', phone: '' }; let userPhoneNumber = ''; let selectedPaymentMethod = { value: 'cod', icon: '💵', text: 'Cash on Delivery' }; let tipPercentage = 0;
-let riderMarker, riderRoutePolyline, riderProgressPolyline, routeAnimationFrame;
-let dailySalesChartInstance, topItemsChartInstance;
+import { appState, ui } from './modules/state.js';
+import { updateAddressSummary } from './modules/mapHelpers.js';
+import { computeCartSummary } from './modules/cartHelpers.js';
+import { getBearing, interpolatePosition } from './modules/riderHelpers.js';
 
-function hideMap(){ const m=document.getElementById('map'); if(m) m.style.display='none'; }
-function showMap(){ const m=document.getElementById('map'); if(m) m.style.display='block'; }
+// --- Shared app state ---
+
+let map = appState.map;
+let marker = appState.marker;
+let cart = appState.cart;
+let suggestedScrollInterval = appState.suggestedScrollInterval;
+let favorites = appState.favorites;
+let isCheckoutAccordionOpen = appState.isCheckoutAccordionOpen;
+let allergyNotes = appState.allergyNotes;
+let recipientDetails = appState.recipientDetails;
+let userPhoneNumber = appState.userPhoneNumber;
+let selectedPaymentMethod = appState.selectedPaymentMethod;
+let tipPercentage = appState.tipPercentage;
+let riderMarker = appState.riderMarker;
+let riderRoutePolyline = appState.riderRoutePolyline;
+let riderProgressPolyline = appState.riderProgressPolyline;
+let routeAnimationFrame = appState.routeAnimationFrame;
+let dailySalesChartInstance = appState.dailySalesChartInstance;
+let topItemsChartInstance = appState.topItemsChartInstance;
+
+function hideMap(){ const m=ui.get('map'); if(m) m.style.display='none'; }
+function showMap(){ const m=ui.get('map'); if(m) m.style.display='block'; }
 function updateAddAddressBtn(){
   const btn = document.getElementById('addAddressBtn');
   if(!btn) return;
@@ -22,6 +39,7 @@ function updateAddAddressBtn(){
   }
 }
 
+// --- App startup and navigation ---
 /* Splash */
 document.addEventListener('DOMContentLoaded',()=>{
   setTimeout(()=>{
@@ -75,12 +93,12 @@ function reverseGeocode(latlng){
 }
 
 function updateSelectedAddressCard(){
-  const addrText = document.getElementById('selectedAddress').textContent;
-  if(addrText && addrText !== 'Select a location on the map'){
-    document.getElementById('selectedAddressText').textContent = addrText;
-  } else {
-    document.getElementById('selectedAddressText').textContent = 'Set delivery address';
-  }
+  const addrText = document.getElementById('selectedAddress')?.textContent || '';
+  document.getElementById('selectedAddressText').textContent = addrText && addrText !== 'Select a location on the map'
+    ? addrText
+    : 'Set delivery address';
+
+  updateAddressSummary();
 }
 
 // Consolidated back navigation logic
@@ -414,6 +432,7 @@ if(csBackBtn) {
     });
 }
 
+// --- Catalog and discovery screens ---
 /* Category Screen Logic */
 const categoryScreen = document.getElementById('categoryScreen');
 const catTitle = document.getElementById('catTitle');
@@ -1150,18 +1169,9 @@ function updateCartView() {
         viewCartBtn.style.display = 'none'; 
     }
 
-    let totalItems = 0;
-    let totalPrice = 0;
-    cart.forEach(item => {
-        totalItems += item.quantity;
-        let itemPrice = item.basePrice;
-        if (item.addons) {
-            item.addons.forEach(addon => {
-                itemPrice += addon.price;
-            });
-        }
-        totalPrice += itemPrice * item.quantity;
-    });
+    const cartSummary = computeCartSummary(cart);
+    const totalItems = cartSummary.itemCount;
+    const totalPrice = cartSummary.total;
 
     if (totalItems > 0 && restaurantScreen.classList.contains('active')) {
         document.getElementById('cartItemCount').textContent = totalItems;
@@ -1170,6 +1180,10 @@ function updateCartView() {
     } else {
         viewCartBtn.classList.remove('active');
         viewCartBtn.style.display = 'none';
+    }
+
+    if (totalPrice > 0 && document.getElementById('cartTotalAmount')) {
+        document.getElementById('cartTotalAmount').textContent = totalPrice.toFixed(2);
     }
 }
 
@@ -1328,6 +1342,7 @@ function showToast(message) {
     setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
 }
 
+// --- Cart and checkout flow ---
 /* Cart Screen Logic */
 const cartScreen = document.getElementById('cartScreen');
 const cartBackBtn = document.getElementById('cartBackBtn');
@@ -2274,6 +2289,7 @@ if(profileEditPhoneBtn) {
     });
 }
 
+// --- Rider operations ---
 /* Rider Dashboard Logic */
 let isRiderOnline = false;
 let riderMap;
@@ -2370,23 +2386,6 @@ document.getElementById('riderAcceptBtn').addEventListener('click', () => {
     document.getElementById('riderOrderModal').classList.remove('active');
     startRiderDelivery();
 });
-
-function getBearing(start, end) {
-    const startLat = start.lat * Math.PI / 180;
-    const startLng = start.lng * Math.PI / 180;
-    const endLat = end.lat * Math.PI / 180;
-    const endLng = end.lng * Math.PI / 180;
-    const y = Math.sin(endLng - startLng) * Math.cos(endLat);
-    const x = Math.cos(startLat) * Math.sin(endLat) - Math.sin(startLat) * Math.cos(endLat) * Math.cos(endLng - startLng);
-    const brng = Math.atan2(y, x);
-    return (brng * 180 / Math.PI + 360) % 360;
-}
-
-function interpolatePosition(start, end, factor) {
-    const lat = start.lat + (end.lat - start.lat) * factor;
-    const lng = start.lng + (end.lng - start.lng) * factor;
-    return L.latLng(lat, lng);
-}
 
 function startRouteSimulation() {
     if (!riderMap) return;
@@ -2649,6 +2648,7 @@ function initMerchantCharts() {
     });
 }
 
+// --- Merchant tools ---
 /* Merchant Menu Logic */
 const merchantManageMenuBtn = document.getElementById('merchantManageMenuBtn');
 const merchantMenuScreen = document.getElementById('merchantMenuScreen');
