@@ -65,17 +65,26 @@ document.getElementById('openMapBtn').addEventListener('click',()=>{
         iconSize: [30, 30],
         iconAnchor: [15, 30]
     });
-    // Use a reliable map tile source that loads in this environment.
-    const streetTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap contributors © CARTO',
-      subdomains: 'abcd',
+    // Open, no-key map layers for a professional delivery app.
+        const streetTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; OpenStreetMap contributors &copy; Esri',
+            maxZoom: 19
+    });
+    const cycleTiles = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CyclOSM',
+      subdomains: 'abc',
       maxZoom: 20
     });
-    const terrainTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      attribution: 'Tiles © Esri',
+    const satelliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri',
       maxZoom: 19
     });
-    L.control.layers({ 'Street Map': streetTiles, 'Satellite': terrainTiles }, null, { position: 'bottomright' }).addTo(map);
+    const baseLayers = {
+      'Street Map': streetTiles,
+      'Cycle Map': cycleTiles,
+      'Satellite': satelliteTiles
+    };
+    L.control.layers(baseLayers, null, { position: 'bottomright' }).addTo(map);
     streetTiles.addTo(map);
     marker=L.marker([24.4539,54.3773],{draggable:true, icon: deliveryPinIcon}).addTo(map);
     marker.on('dragend', ()=>{
@@ -1682,9 +1691,8 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
         setTimeout(() => {
             const center = marker ? marker.getLatLng() : [24.4539,54.3773];
             const miniMap = L.map('checkoutMiniMap', { zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, attributionControl:false }).setView(center, 16);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                subdomains: 'abcd',
-                maxZoom: 20,
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
                 attribution: ''
             }).addTo(miniMap);
             const pinIcon = L.divIcon({ html: '📍', className: 'delivery-pin-icon', iconSize: [30, 30], iconAnchor: [15, 30] });
@@ -2338,18 +2346,23 @@ let riderCurrentStep = 0; // 0: Idle, 1: Pickup, 2: Dropoff
 function initRiderMap() {
     if(riderMap) return;
     
-    // Define Layers with providers that are reachable in this environment.
-    const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap contributors © CARTO',
-      subdomains: 'abcd',
+    // Use open, no-key map layers for a professional rider view.
+        const streetLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; OpenStreetMap contributors &copy; Esri',
+            maxZoom: 19
+    });
+    const cycleLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CyclOSM',
+      subdomains: 'abc',
       maxZoom: 20
     });
-    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri', maxZoom: 19 });
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 19 });
 
     riderMap = L.map('riderMap', { zoomControl: false, layers: [streetLayer] }).setView([24.4539, 54.3773], 14);
 
     const baseMaps = {
         "Street View": streetLayer,
+        "Cycle Map": cycleLayer,
         "Satellite": satelliteLayer
     };
     L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(riderMap);
