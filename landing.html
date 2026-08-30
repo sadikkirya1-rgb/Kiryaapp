@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kirya Map Selection</title>
+  <style>
+    :root {
+      --bg: #07151a;
+      --bg-2: #0d1d26;
+      --panel: rgba(15, 22, 30, 0.9);
+      --panel-soft: rgba(20, 29, 38, 0.75);
+      --card: rgba(11, 18, 23, 0.9);
+      --primary: #18c9a5;
+      --primary-soft: rgba(24, 201, 165, 0.14);
+      --text: #edf6ff;
+      --muted: #a9b7c4;
+      --line: rgba(255,255,255,0.08);
+      --shadow: 0 30px 60px rgba(0,0,0,0.32);
+      --green: #30d38d;
+      --yellow: #ffca66;
+      --purple: #9a7cff;
+      --blue: #4aa7ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top left, rgba(24, 201, 165, 0.12), transparent 25%),
+        linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 100%);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(1180px, 100%);
+      background: rgba(11, 17, 22, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 32px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.01);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--primary), #0dc1a0);
+      color: #02241f;
+      font-size: 1.2rem;
+      box-shadow: 0 10px 20px rgba(24, 201, 165, 0.25);
+    }
+
+    .brand small {
+      display: block;
+      color: var(--muted);
+      letter-spacing: 0.18em;
+      font-size: 0.65rem;
+      margin-top: 2px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(24, 201, 165, 0.12);
+      border: 1px solid rgba(24, 201, 165, 0.25);
+      color: #c5fff0;
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 14px rgba(48, 211, 141, 0.8);
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1fr 1.1fr;
+      gap: 28px;
+      padding: 28px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 24px;
+      min-height: 660px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel.left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(24, 201, 165, 0.12);
+      color: #d3fff3;
+      border: 1px solid rgba(24, 201, 165, 0.2);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 20px 0 16px;
+      font-size: clamp(2.5rem, 5vw, 4.2rem);
+      line-height: 0.95;
+      letter-spacing: -0.07em;
+    }
+
+    .lead {
+      color: var(--muted);
+      font-size: 1.04rem;
+      line-height: 1.7;
+      max-width: 500px;
+    }
+
+    .cta { margin-top: 26px; }
+
+    .primary-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      text-decoration: none;
+      background: linear-gradient(135deg, var(--primary), #13b097);
+      color: #04251f;
+      padding: 16px 22px;
+      border-radius: 16px;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      box-shadow: 0 18px 35px rgba(24, 201, 165, 0.28);
+    }
+
+    .secondary-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.02);
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+
+    .mini-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .summary-box {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+    }
+
+    .summary-box .label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .summary-box strong {
+      font-size: 1.3rem;
+      letter-spacing: -0.04em;
+    }
+
+    .map-panel {
+      position: relative;
+      min-height: 660px;
+      border-radius: 28px;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        radial-gradient(circle at 20% 20%, rgba(24, 201, 165, 0.12), transparent 20%),
+        linear-gradient(135deg, #111c22, #101c1d 42%, #142a32 100%);
+      background-size: 38px 38px, 38px 38px, auto, auto;
+      border: 1px solid var(--line);
+      overflow: hidden;
+    }
+
+    .map-grid {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(115deg, transparent 0 42%, rgba(255,255,255,0.08) 42.5%, transparent 43%) ,
+        linear-gradient(75deg, transparent 0 63%, rgba(255,255,255,0.05) 63.5%, transparent 64%),
+        linear-gradient(90deg, transparent 0 52%, rgba(255,255,255,0.04) 52.5%, transparent 53%);
+      opacity: 0.8;
+    }
+
+    .map-point {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 0.8rem;
+      background: white;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+      border: 4px solid rgba(24, 201, 165, 0.9);
+      color: #0e1c20;
+    }
+
+    .map-point.one { left: 30%; top: 34%; }
+    .map-point.two { left: 65%; top: 48%; }
+    .map-point.three { left: 54%; top: 72%; }
+
+    .floating-card {
+      position: absolute;
+      left: 30px;
+      right: 30px;
+      bottom: 24px;
+      background: rgba(12, 18, 23, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .small-title {
+      font-size: 0.8rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .location-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(24, 201, 165, 0.1);
+      color: #d6fff5;
+      border: 1px solid rgba(24, 201, 165, 0.2);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .address {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--line);
+      margin-bottom: 14px;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .address .pin {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: rgba(24, 201, 165, 0.12);
+      color: #c9fff0;
+    }
+
+    .actions-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .map-btn {
+      flex: 1;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .map-btn.primary {
+      background: linear-gradient(135deg, var(--primary), #12af96);
+      color: #04251f;
+    }
+
+    .map-btn.secondary {
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    .app-links {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    .app-links a {
+      text-decoration: none;
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.02);
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    @media (max-width: 900px) {
+      .content {
+        grid-template-columns: 1fr;
+      }
+
+      .panel, .map-panel {
+        min-height: 500px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">K</div>
+        <div>
+          KIRYA
+          <small>Delivery</small>
+        </div>
+      </div>
+      <div class="status"><span class="status-dot"></span> Live map</div>
+    </header>
+
+    <div class="content">
+      <section class="panel left">
+        <div class="eyebrow">Delivery access</div>
+        <h1>Where should we deliver to?</h1>
+        <p class="lead">
+          Choose your delivery location to unlock nearby restaurants, shops, and rider service coverage.
+        </p>
+
+        <div class="cta">
+          <a href="index.html" class="primary-btn">Open map selection</a>
+        </div>
+
+        <div class="secondary-row">
+          <div class="chip">📍 Use my location</div>
+          <div class="chip">🔎 Search by area</div>
+          <div class="chip">🚴‍♂️ Rider ready</div>
+        </div>
+
+        <div class="mini-summary">
+          <div class="summary-box">
+            <span class="label">Coverage</span>
+            <strong>87%</strong>
+          </div>
+          <div class="summary-box">
+            <span class="label">Drivers</span>
+            <strong>1.4K</strong>
+          </div>
+          <div class="summary-box">
+            <span class="label">Avg ETA</span>
+            <strong>22 min</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="map-panel" aria-label="Map preview">
+        <div class="map-grid"></div>
+        <div class="map-point one">📍</div>
+        <div class="map-point two">🏪</div>
+        <div class="map-point three">🍽️</div>
+
+        <div class="floating-card">
+          <div class="card-head">
+            <div class="small-title">Delivery address</div>
+            <div class="location-pill">📍 Nearby</div>
+          </div>
+
+          <div class="address">
+            <div class="pin">📍</div>
+            <span>Al Ain, Abu Dhabi, United Arab Emirates</span>
+          </div>
+
+          <div class="actions-row">
+            <button class="map-btn primary" onclick="window.location.href='index.html'">Use this location</button>
+            <button class="map-btn secondary" onclick="window.location.href='index.html'">Search area</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="app-links">
+      <a href="apps/user/index.html">User App</a>
+      <a href="apps/rider/index.html">Rider App</a>
+      <a href="apps/merchant/index.html">Merchant App</a>
+      <a href="apps/admin/index.html">Admin App</a>
+    </div>
+  </div>
+</body>
+</html>
