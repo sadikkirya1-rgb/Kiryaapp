@@ -65,12 +65,18 @@ document.getElementById('openMapBtn').addEventListener('click',()=>{
         iconSize: [30, 30],
         iconAnchor: [15, 30]
     });
-    // Use CartoDB tile layer with English language support
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/positron/{z}/{x}/{y}{r}.png',{
-      attribution: '© CartoDB © OpenStreetMap',
-      maxZoom: 19,
-      subdomains: 'abcd'
-    }).addTo(map);
+    // Use a reliable map tile source that loads in this environment.
+    const streetTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap contributors © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 20
+    });
+    const terrainTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles © Esri',
+      maxZoom: 19
+    });
+    L.control.layers({ 'Street Map': streetTiles, 'Satellite': terrainTiles }, null, { position: 'bottomright' }).addTo(map);
+    streetTiles.addTo(map);
     marker=L.marker([24.4539,54.3773],{draggable:true, icon: deliveryPinIcon}).addTo(map);
     marker.on('dragend', ()=>{
       reverseGeocode(marker.getLatLng());
@@ -277,14 +283,24 @@ document.getElementById('closeSearch').addEventListener('click', closeSearchUI);
 
 /* Current Location */
 document.getElementById('currentLocationBtn').addEventListener('click',()=>{
+  const locationBtn = document.getElementById('currentLocationBtn');
+  locationBtn.classList.add('locating');
+
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(pos=>{
       const lat=pos.coords.latitude, lng=pos.coords.longitude;
       marker.setLatLng([lat,lng]);
       reverseGeocode({lat,lng});
       map.setView([lat,lng],15);
-    },()=>alert("Unable to access your location."));
-  } else { alert("Geolocation not supported."); }
+      locationBtn.classList.remove('locating');
+    },()=>{
+      locationBtn.classList.remove('locating');
+      alert("Unable to access your location.");
+    });
+  } else {
+    locationBtn.classList.remove('locating');
+    alert("Geolocation not supported.");
+  }
 });
 
 /* Back button */
@@ -1666,7 +1682,11 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
         setTimeout(() => {
             const center = marker ? marker.getLatLng() : [24.4539,54.3773];
             const miniMap = L.map('checkoutMiniMap', { zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, attributionControl:false }).setView(center, 16);
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                subdomains: 'abcd',
+                maxZoom: 20,
+                attribution: ''
+            }).addTo(miniMap);
             const pinIcon = L.divIcon({ html: '📍', className: 'delivery-pin-icon', iconSize: [30, 30], iconAnchor: [15, 30] });
             L.marker(center, {icon: pinIcon}).addTo(miniMap);
         }, 300);
@@ -2318,9 +2338,13 @@ let riderCurrentStep = 0; // 0: Idle, 1: Pickup, 2: Dropoff
 function initRiderMap() {
     if(riderMap) return;
     
-    // Define Layers
-    const streetLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' });
-    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' });
+    // Define Layers with providers that are reachable in this environment.
+    const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap contributors © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 20
+    });
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri', maxZoom: 19 });
 
     riderMap = L.map('riderMap', { zoomControl: false, layers: [streetLayer] }).setView([24.4539, 54.3773], 14);
 

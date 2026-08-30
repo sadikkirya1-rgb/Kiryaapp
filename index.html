@@ -15,14 +15,20 @@
 <body>
 
 <div id="splash">
-  <span class="letter">K</span><span class="letter">I</span><span class="letter">R</span><span class="letter">Y</span><span class="letter">A</span>
-  <span class="bike">🚴‍♂️</span>
+  <div class="splash-brand" aria-label="Food Courier splash icon">
+    <img src="assets/Food%20Courier.svg" alt="Food Courier" class="splash-logo">
+  </div>
 </div>
 
 <div id="home">
   <div class="card">
-    <div class="address-card" id="openMapBtn">Enter delivery Address <span class="icon">📍</span></div>
-    <div class="logo">🏠</div>
+    <div class="address-card" id="openMapBtn">
+      <span>Enter delivery Address</span>
+      <img src="assets/Location%20Pin.svg" alt="Location pin" class="map-pin-badge">
+    </div>
+    <div class="logo">
+      <img src="assets/Delivery%20Address.svg" alt="Delivery address" class="delivery-address-icon">
+    </div>
     <div class="title">Out of delivery area</div>
     <div class="subtitle">We can't deliver to this location yet.</div>
   </div>
@@ -41,13 +47,15 @@
 <div id="mapScreen">
   <div id="backBtn" title="Go back">⬅️</div>
   <div id="map"></div>
-  <div id="currentLocationBtn" title="Go to my location">📍</div>
+  <div id="currentLocationBtn" title="Go to my location" aria-label="Locate me">
+    <img src="assets/Location%20Pin.svg" alt="Locate me" class="location-pin-btn-icon">
+  </div>
 
   <div id="bottomCard">
     <div>
       <h2>Where Shall We Deliver to?</h2>
       <div class="subtitle">
-        <span class="icon">🏠</span>
+        <img src="assets/Location%20Pin.svg" alt="Location pin" class="map-pin-badge">
         <span id="selectedAddress">Select a location on the map</span>
       </div>
     </div>
@@ -58,7 +66,7 @@
     <div id="searchNormalContent">
       <div class="search-title">Trouble using the Location? <br> try using search instead</div>
       <div class="search-bar">
-        <span class="search-icon">🔍</span>
+        <img src="assets/Location%20Pin.svg" alt="Location search" class="search-icon map-pin-badge">
         <input type="text" placeholder="Search city, Streets, Districts" id="searchInput" autocomplete="off"/>
         <span id="closeSearch" class="close-btn">✖</span>
       </div>
@@ -77,7 +85,7 @@
   <div class="header">
     <div id="newHomeBackBtn" title="Go back">⬅️</div>
     <div class="selected-address-card" id="selectedAddressCard">
-      <span class="home-icon">🏠</span>
+      <img src="assets/Delivery%20Address.svg" alt="Delivery address" class="home-icon">
       <span id="selectedAddressText">Selected address not set</span>
     </div>
     <div class="top-grid">
@@ -137,7 +145,7 @@
   <div class="cs-header">
     <div id="csBackBtn" style="font-size: 1.5em; cursor: pointer; padding: 5px;">⬅️</div>
     <div class="cs-search-bar">
-      <span>🔍</span>
+      <img src="assets/Location%20Pin.svg" alt="Search by location" class="map-pin-badge">
       <input type="text" placeholder="Search food, groceries, shops..." id="contentSearchInput">
     </div>
   </div>
@@ -154,11 +162,11 @@
   <div class="cat-header">
     <div class="back-btn" id="catBackBtn" title="Go back">⬅️</div>
     <div class="cat-address-card">
-      <span class="home-icon">🏠</span>
+      <img src="assets/Delivery%20Address.svg" alt="Delivery address" class="home-icon">
       <span id="catAddressText">...</span>
     </div>
     <div class="cat-header-search">
-      <span>🔍</span>
+      <img src="assets/Location%20Pin.svg" alt="Search by location" class="map-pin-badge">
       <input type="text" placeholder="Search in category..." id="headerSearchInput">
     </div>
   </div>
@@ -166,7 +174,7 @@
     <div class="cat-title" id="catTitle">Category</div>
     <div class="cat-search-wrapper">
       <div class="cat-search-bar">
-        <span>🔍</span>
+        <img src="assets/Location%20Pin.svg" alt="Search by location" class="map-pin-badge">
         <input type="text" placeholder="Search in category..." id="mainCatSearchInput">
       </div>
     </div>
