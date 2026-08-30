@@ -65,7 +65,12 @@ document.getElementById('openMapBtn').addEventListener('click',()=>{
         iconSize: [30, 30],
         iconAnchor: [15, 30]
     });
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+    // Use CartoDB tile layer with English language support
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/positron/{z}/{x}/{y}{r}.png',{
+      attribution: '© CartoDB © OpenStreetMap',
+      maxZoom: 19,
+      subdomains: 'abcd'
+    }).addTo(map);
     marker=L.marker([24.4539,54.3773],{draggable:true, icon: deliveryPinIcon}).addTo(map);
     marker.on('dragend', ()=>{
       reverseGeocode(marker.getLatLng());
@@ -82,11 +87,25 @@ document.getElementById('openMapBtn').addEventListener('click',()=>{
 
 /* Reverse geocoding */
 function reverseGeocode(latlng){
-  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat}&lon=${latlng.lng}&format=json&accept-language=en`)
+  // Reverse geocoding with English language preference and structured address
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat}&lon=${latlng.lng}&format=json&accept-language=en&language=en`)
     .then(res=>res.json())
     .then(data=>{
       if(data && data.display_name){
-        document.getElementById('selectedAddress').textContent = data.display_name;
+        // Extract clean English address without Arabic characters
+        let address = data.display_name;
+        // Ensure we're using the English version
+        if(data.address){
+          // Build address from components for better English formatting
+          const addr_parts = [];
+          if(data.address.road) addr_parts.push(data.address.road);
+          if(data.address.village) addr_parts.push(data.address.village);
+          if(data.address.city) addr_parts.push(data.address.city);
+          if(data.address.state) addr_parts.push(data.address.state);
+          if(data.address.country) addr_parts.push(data.address.country);
+          if(addr_parts.length > 0) address = addr_parts.join(', ');
+        }
+        document.getElementById('selectedAddress').textContent = address;
         updateSelectedAddressCard();
       }
     });
@@ -292,7 +311,7 @@ searchInput.addEventListener('input',()=>{
   const value = searchInput.value.trim();
   if(!value){ suggList.innerHTML=''; return; }
 
-  fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&addressdetails=1&limit=5&accept-language=en`)
+  fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&addressdetails=1&limit=5&accept-language=en&language=en`)
     .then(res=>res.json())
     .then(data=>{
       suggList.innerHTML='';
