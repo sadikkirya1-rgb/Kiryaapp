@@ -1,147 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kirya User App - Order Food & Essentials</title>
-  <link rel="stylesheet" href="../../packages/shared/app-theme.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kirya User App</title>
   <style>
-    :root {
-      --role-color: var(--user-color);
-    }
-
-    .app-brand-icon {
-      background: linear-gradient(135deg, var(--user-color), #0db096);
-      color: #04251f;
-    }
-
-    .app-btn-primary {
-      background: linear-gradient(135deg, var(--user-color), #13b097);
-      color: #04251f;
-    }
-
-    .app-status {
-      background: rgba(24, 201, 165, 0.12);
-      border-color: rgba(24, 201, 165, 0.25);
-      color: #c5fff0;
-    }
-
-    .feature-card {
-      border-top: 3px solid transparent;
-      transition: border-color 0.3s, background 0.3s;
-    }
-
-    .feature-card:hover {
-      border-top-color: var(--user-color);
-      background: rgba(24, 201, 165, 0.06);
-    }
+    html, body, iframe { width: 100%; height: 100%; margin: 0; border: 0; display: block; }
+    body { overflow: hidden; }
   </style>
 </head>
 <body>
-  <div class="app-container">
-    <header class="app-header">
-      <div class="app-brand">
-        <div class="app-brand-icon">🛒</div>
-        <div class="app-brand-text">
-          KIRYA USER
-          <small>Customer App</small>
-        </div>
-      </div>
-      <div class="app-status">📍 Ready to order</div>
-    </header>
-
-    <div class="app-content">
-      <div class="app-hero">
-        <section class="app-panel">
-          <div class="app-eyebrow">Welcome back</div>
-          <h1 class="app-title">Hungry?</h1>
-          <p class="app-subtitle">
-            Browse thousands of restaurants, food shops, and essentials. Order in minutes and get delivery in less than 30 minutes.
-          </p>
-
-          <div class="app-actions">
-            <a href="../../index.html" class="app-btn app-btn-primary">Browse restaurants</a>
-            <a href="../../index.html" class="app-btn app-btn-secondary">View favorites</a>
-          </div>
-
-          <div class="app-metrics">
-            <div class="metric-box">
-              <span class="metric-label">Orders</span>
-              <strong class="metric-value">24</strong>
-            </div>
-            <div class="metric-box">
-              <span class="metric-label">Rating</span>
-              <strong class="metric-value">4.8/5</strong>
-            </div>
-            <div class="metric-box">
-              <span class="metric-label">Saved</span>
-              <strong class="metric-value">12</strong>
-            </div>
-          </div>
-        </section>
-
-        <section class="app-panel" style="background: linear-gradient(135deg, rgba(24, 201, 165, 0.12), rgba(24, 201, 165, 0.06));">
-          <div style="text-align: center;">
-            <div style="font-size: 3.5rem; margin-bottom: 12px;">🏪</div>
-            <h2 style="margin: 0 0 12px; font-size: 1.4rem;">Top-rated near you</h2>
-            <p style="color: var(--muted); margin: 0 0 20px; font-size: 0.95rem;">
-              Fast delivery from trusted restaurants in your area
-            </p>
-            <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(24, 201, 165, 0.1); border: 1px solid rgba(24, 201, 165, 0.2); border-radius: 12px; padding: 10px 14px;">
-              <span>📍 Al Ain</span>
-              <span style="color: var(--muted);">•</span>
-              <span>2.4K+ shops</span>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <div class="app-features">
-        <div class="feature-card">
-          <div class="feature-icon">🚚</div>
-          <h3>Fast Delivery</h3>
-          <p>Average 22 minutes to your door</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">💰</div>
-          <h3>Best Prices</h3>
-          <p>Exclusive deals and discounts daily</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">⭐</div>
-          <h3>Quality Assured</h3>
-          <p>Top-rated restaurants with real reviews</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">🔐</div>
-          <h3>Safe Payment</h3>
-          <p>Multiple secure payment methods</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">📞</div>
-          <h3>24/7 Support</h3>
-          <p>Real-time order tracking and help</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">🎁</div>
-          <h3>Rewards</h3>
-          <p>Earn points on every order</p>
-        </div>
-      </div>
-
-      <footer class="app-footer">
-        <a href="../../landing.html" class="app-link">← Back to platform</a>
-        <a href="../../index.html" class="app-link">Full app</a>
-        <a href="../../apps/rider/index.html" class="app-link">Become a rider</a>
-      </footer>
-    </div>
-  </div>
-
-  <script type="module" src="app.js"></script>
+  <iframe src="../../index.html#user" title="Kirya User App"></iframe>
 </body>
 </html>

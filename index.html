@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Delivery Map Selection</title>
+<link rel="icon" type="image/svg+xml" href="assets/Food%20Courier.svg">
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,13 +35,13 @@
   </div>
 
   <nav>
-    <div class="nav-item active">🏠<span>Home</span></div>
-    <div class="nav-item">🔍<span>Discover</span></div>
-    <div class="nav-item">🛒<span>Cart</span></div>
-    <div class="nav-item">👤<span>Profile</span></div>
-    <div class="nav-item">🚴‍♂️<span>Rider</span></div>
-    <div class="nav-item">🏪<span>Shop</span></div>
-    <div class="nav-item">🛎️<span>Admin</span></div>
+    <div class="nav-item active" data-role-app="home">🏠<span>Home</span></div>
+    <div class="nav-item" data-role-app="discover">🔍<span>Discover</span></div>
+    <div class="nav-item" data-role-app="cart">🛒<span>Cart</span></div>
+    <div class="nav-item" data-role-app="profile">👤<span>Profile</span></div>
+    <div class="nav-item" data-role-app="rider">🚴‍♂️<span>Rider</span></div>
+    <div class="nav-item" data-role-app="merchant">🏪<span>Shop</span></div>
+    <div class="nav-item" data-role-app="admin">🛎️<span>Admin</span></div>
   </nav>
 </div>
 
@@ -836,7 +837,6 @@
   
   <div class="rider-overlay-ui">
     <div class="rider-header-controls">
-        <div class="generic-back-btn" id="riderBackBtn" style="background:#fff; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.1);">⬅️</div>
         <div id="riderStatusToggle" class="rider-status-badge offline">
             <span class="status-dot" style="width:10px; height:10px; background:#ff4757; border-radius:50%;"></span>
             <span class="status-text">GO ONLINE</span>
@@ -923,7 +923,6 @@
 
 <div id="adminScreen" class="generic-screen">
   <div class="generic-header">
-    <div class="generic-back-btn" onclick="document.getElementById('adminScreen').classList.remove('active')">⬅️</div>
     <div class="generic-title">Admin Panel</div>
   </div>
   <div class="generic-content">
@@ -946,7 +945,6 @@
 
 <div id="shopPortalScreen" class="generic-screen">
   <div class="generic-header">
-    <div class="generic-back-btn" onclick="document.getElementById('shopPortalScreen').classList.remove('active')">⬅️</div>
     <div class="generic-title">Merchant Portal</div>
   </div>
   <div class="generic-content">

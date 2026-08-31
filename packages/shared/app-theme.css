@@ -288,6 +288,58 @@ body {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.role-bottom-nav {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 18px 18px;
+  background: rgba(7, 21, 26, 0.92);
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.role-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px 8px;
+  border-radius: 16px;
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.02);
+  transition: all 0.2s ease;
+}
+
+.role-nav-item:hover {
+  color: var(--text);
+  border-color: var(--line);
+  transform: translateY(-1px);
+}
+
+.role-nav-item.is-active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.role-nav-item .nav-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.role-nav-item .nav-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 @media (max-width: 900px) {
   .app-hero {
     grid-template-columns: 1fr;

@@ -40,8 +40,47 @@ function updateAddAddressBtn(){
 }
 
 // --- App startup and navigation ---
+function openRoleScreenFromHash() {
+  const hash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
+  const roleScreens = {
+    user: () => {
+      const splash = document.getElementById('splash');
+      const home = document.getElementById('home');
+      if (splash) splash.style.display = 'none';
+      if (home) home.style.display = 'block';
+    },
+    rider: openRider,
+    admin: openAdmin,
+    merchant: openShopPortal
+  };
+
+  if (!roleScreens[hash]) return false;
+
+  const splash = document.getElementById('splash');
+  const home = document.getElementById('home');
+
+    if (splash) {
+        splash.style.display = 'flex';
+        splash.style.opacity = '1';
+    }
+  if (home) home.style.display = 'none';
+
+    setTimeout(() => {
+        if (splash) {
+            splash.style.opacity = '0';
+            setTimeout(() => {
+                splash.style.display = 'none';
+            }, 500);
+        }
+        roleScreens[hash]();
+    }, 1800);
+  return true;
+}
+
 /* Splash */
 document.addEventListener('DOMContentLoaded',()=>{
+  if (openRoleScreenFromHash()) return;
+
   setTimeout(()=>{
     document.getElementById('splash').style.opacity=0;
     setTimeout(()=>{
@@ -2302,7 +2341,8 @@ function setupGlobalNavigation() {
         const span = item.querySelector('span');
         if (!span) return;
         const text = span.textContent.trim();
-        
+        const roleApp = item.dataset.roleApp;
+
         if (['Cart', 'Rider', 'Admin', 'Shop', 'Profile'].includes(text)) {
             item.addEventListener('click', () => {
                 if (text === 'Cart') openCart();
@@ -2311,6 +2351,14 @@ function setupGlobalNavigation() {
                 else if (text === 'Shop') openShopPortal();
                 else if (text === 'Profile') openProfile();
             });
+        }
+
+        if (roleApp === 'rider') {
+            item.title = 'Open rider screen';
+        } else if (roleApp === 'admin') {
+            item.title = 'Open admin screen';
+        } else if (roleApp === 'merchant') {
+            item.title = 'Open merchant screen';
         }
     });
 }
@@ -2633,11 +2681,6 @@ function completeSwipe() {
 }
 
 document.getElementById('riderStatusToggle').addEventListener('click', toggleRiderStatus);
-document.getElementById('riderBackBtn').addEventListener('click', () => {
-    document.getElementById('riderScreen').classList.remove('active');
-    clearRouteSimulation();
-});
-
 // Initialize map when rider screen opens
 document.querySelector('.nav-item:nth-child(5)').addEventListener('click', () => {
     setTimeout(initRiderMap, 300);

@@ -877,6 +877,7 @@ input:checked + .slider:before { transform: translateX(22px); }
 /* Rider, Admin, Shop Portal Screens */
 .generic-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f9f9f9; z-index: 6000; display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.3s ease-in-out; }
 .generic-screen.active { transform: translateX(0); }
+#riderScreen, #adminScreen, #shopPortalScreen { transition: none; }
 .generic-header { padding: 15px; background: #fff; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 15px; height: 60px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 .generic-back-btn { font-size: 1.5em; cursor: pointer; padding: 5px; }
 .generic-title { font-size: 1.4em; font-weight: 800; color: #333; }
