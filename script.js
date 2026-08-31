@@ -2331,9 +2331,210 @@ function openAdmin() {
     document.getElementById('adminScreen').classList.add('active');
 }
 
+const adminDashboardData = [
+    { merchant: 'Spice Corner', order: '#8821', amount: 1250000, status: 'Cleared', type: 'revenue', role: 'merchant' },
+    { merchant: 'Blue Bowl', order: '#8817', amount: 980000, status: 'Pending', type: 'orders', role: 'merchant' },
+    { merchant: 'Pizza Kingdom', order: '#8799', amount: 1740000, status: 'Cleared', type: 'revenue', role: 'merchant' },
+    { merchant: 'Fresh Mart', order: '#8783', amount: 640000, status: 'Flagged', type: 'compliance', role: 'merchant' },
+    { merchant: 'Moses Rider', order: '#8771', amount: 420000, status: 'Verified', type: 'users', role: 'rider' },
+    { merchant: 'Grace Admin', order: '#8759', amount: 310000, status: 'Active', type: 'users', role: 'user' },
+    { merchant: 'Boda Hub', order: '#8745', amount: 2100000, status: 'Pending', type: 'orders', role: 'merchant' },
+    { merchant: 'Kampala Eats', order: '#8732', amount: 1180000, status: 'Cleared', type: 'revenue', role: 'merchant' }
+];
+
+const adminUserData = [
+    { name: 'J. Smith', role: 'Verified rider', group: 'riders', initials: 'JS', tone: 'green', action: 'View' },
+    { name: 'A. Muwonge', role: 'Merchant', group: 'merchants', initials: 'AM', tone: 'blue', action: 'View' },
+    { name: 'H. Kato', role: 'Customer', group: 'users', initials: 'HK', tone: 'amber', action: 'View' },
+    { name: 'L. Gikonyo', role: 'Suspended', group: 'compliance', initials: 'LG', tone: 'red', action: 'Review' }
+];
+
+const adminNavConfig = [
+    { section: 'overview', icon: '◉', label: 'Overview', count: () => adminDashboardData.length + adminUserData.length },
+    { section: 'users', icon: '👥', label: 'Users', count: () => adminUserData.length },
+    { section: 'riders', icon: '🏍', label: 'Riders', count: () => 86 },
+    { section: 'merchants', icon: '🏪', label: 'Merchants', count: () => 28 },
+    { section: 'payouts', icon: '💰', label: 'Payouts', count: () => 18 },
+    { section: 'settings', icon: '⚙', label: 'Settings', count: () => 3 }
+];
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function getStatusClass(status) {
+    if (status === 'Cleared' || status === 'Verified' || status === 'Active') return 'success';
+    if (status === 'Pending') return 'pending';
+    return 'danger';
+}
+
+function renderAdminTable() {
+    const tableBody = document.getElementById('adminTableBody');
+    if (!tableBody) return;
+
+    const search = (document.getElementById('adminSearchInput')?.value || '').trim().toLowerCase();
+    const selectedFilter = document.querySelector('.admin-chip.active')?.dataset.filter || 'all';
+    const sortValue = document.getElementById('adminSortSelect')?.value || 'newest';
+
+    let rows = [...adminDashboardData].filter((row) => {
+        const haystack = `${row.merchant} ${row.order} ${row.status} ${row.type}`.toLowerCase();
+        const matchesSearch = !search || haystack.includes(search);
+        const matchesFilter = selectedFilter === 'all' || row.type === selectedFilter || row.role === selectedFilter;
+        return matchesSearch && matchesFilter;
+    });
+
+    rows.sort((a, b) => {
+        if (sortValue === 'amount') return b.amount - a.amount;
+        if (sortValue === 'merchant') return a.merchant.localeCompare(b.merchant);
+        if (sortValue === 'status') return a.status.localeCompare(b.status);
+        return b.amount - a.amount;
+    });
+
+    if (!rows.length) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="4" class="empty-row">No transactions match this filter.</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = rows.map((row) => `
+        <tr>
+            <td>${escapeHtml(row.merchant)}</td>
+            <td>${escapeHtml(row.order)}</td>
+            <td>UGX ${escapeHtml((row.amount / 1000000).toFixed(2))}M</td>
+            <td><span class="status-badge ${getStatusClass(row.status)}">${escapeHtml(row.status)}</span></td>
+        </tr>
+    `).join('');
+}
+
+function renderAdminUsers() {
+    const list = document.getElementById('adminUserList');
+    if (!list) return;
+
+    const search = (document.getElementById('adminSearchInput')?.value || '').trim().toLowerCase();
+    const selectedFilter = document.querySelector('.admin-chip.active')?.dataset.filter || 'all';
+
+    let users = [...adminUserData].filter((user) => {
+        const haystack = `${user.name} ${user.role} ${user.group}`.toLowerCase();
+        const matchesSearch = !search || haystack.includes(search);
+        const matchesFilter = selectedFilter === 'all' || user.group === selectedFilter || user.role.toLowerCase().includes(selectedFilter);
+        return matchesSearch && matchesFilter;
+    });
+
+    if (!users.length) {
+        list.innerHTML = '<div class="empty-state">No matching users found.</div>';
+        return;
+    }
+
+    list.innerHTML = users.map((user) => `
+        <div class="user-row">
+            <div class="user-meta">
+                <span class="user-avatar ${user.tone}">${escapeHtml(user.initials)}</span>
+                <div>
+                    <strong>${escapeHtml(user.name)}</strong>
+                    <small>${escapeHtml(user.role)}</small>
+                </div>
+            </div>
+            <button class="mini-btn ${user.action === 'Review' ? 'danger' : ''}" type="button">${escapeHtml(user.action)}</button>
+        </div>
+    `).join('');
+}
+
+function bindAdminDashboard() {
+    const adminSearchInput = document.getElementById('adminSearchInput');
+    const adminSortSelect = document.getElementById('adminSortSelect');
+    const adminChips = document.querySelectorAll('.admin-chip');
+
+    if (!adminSearchInput || !adminSortSelect || !adminChips.length) return;
+
+    const refreshAdminDashboard = () => {
+        renderAdminTable();
+        renderAdminUsers();
+    };
+
+    adminSearchInput.addEventListener('input', refreshAdminDashboard);
+    adminSortSelect.addEventListener('change', refreshAdminDashboard);
+
+    adminChips.forEach((chip) => {
+        chip.addEventListener('click', () => {
+            adminChips.forEach((item) => item.classList.toggle('active', item === chip));
+            refreshAdminDashboard();
+        });
+    });
+
+    refreshAdminDashboard();
+}
+
 function openShopPortal() {
     document.getElementById('shopPortalScreen').classList.add('active');
     setTimeout(initMerchantCharts, 300); // Delay to ensure canvas is visible
+}
+
+function renderAdminNav() {
+    const nav = document.getElementById('adminSidebarNav');
+    if (!nav) return;
+
+    const activeSection = document.querySelector('.admin-nav-item.active')?.dataset.section || 'overview';
+    nav.innerHTML = adminNavConfig.map(({ section, label, icon, count }) => `
+        <button class="admin-nav-item ${section === activeSection ? 'active' : ''}" data-section="${section}" type="button">
+            <span class="admin-nav-label"><span class="admin-nav-icon">${icon}</span>${label}</span>
+            <span class="admin-nav-badge">${count()}</span>
+        </button>
+    `).join('');
+
+    bindAdminSectionNavigation();
+}
+
+function bindAdminSectionNavigation() {
+    const navItems = document.querySelectorAll('.admin-nav-item');
+    const sections = document.querySelectorAll('.admin-section');
+
+    if (!navItems.length || !sections.length) return;
+
+    navItems.forEach((item) => {
+        item.addEventListener('click', () => {
+            const sectionName = item.dataset.section;
+            navItems.forEach((nav) => nav.classList.toggle('active', nav === item));
+            sections.forEach((section) => {
+                section.classList.toggle('active', section.dataset.section === sectionName);
+            });
+            const adminShell = document.querySelector('.admin-shell');
+            if (adminShell && window.innerWidth <= 820) {
+                adminShell.classList.remove('sidebar-open');
+                const backdrop = document.getElementById('adminSidebarBackdrop');
+                if (backdrop) backdrop.classList.remove('active');
+            }
+            if (sectionName === 'overview') {
+                renderAdminTable();
+                renderAdminUsers();
+            }
+        });
+    });
+}
+
+function setupAdminMobileSidebar() {
+    const toggleButton = document.getElementById('adminMobileNavToggle');
+    const backdrop = document.getElementById('adminSidebarBackdrop');
+    const adminShell = document.querySelector('.admin-shell');
+
+    if (!toggleButton || !backdrop || !adminShell) return;
+
+    toggleButton.addEventListener('click', () => {
+        const isOpen = adminShell.classList.toggle('sidebar-open');
+        backdrop.classList.toggle('active', isOpen);
+    });
+
+    backdrop.addEventListener('click', () => {
+        adminShell.classList.remove('sidebar-open');
+        backdrop.classList.remove('active');
+    });
 }
 
 function setupGlobalNavigation() {
@@ -2362,7 +2563,10 @@ function setupGlobalNavigation() {
         }
     });
 }
+renderAdminNav();
+setupAdminMobileSidebar();
 setupGlobalNavigation();
+bindAdminDashboard();
 
 const sideMenuOverlay = document.getElementById('sideMenuOverlay');
 if(sideMenuOverlay) sideMenuOverlay.addEventListener('click', closeProfile);

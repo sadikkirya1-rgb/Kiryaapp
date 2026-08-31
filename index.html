@@ -922,24 +922,278 @@
 </div>
 
 <div id="adminScreen" class="generic-screen">
-  <div class="generic-header">
-    <div class="generic-title">Admin Panel</div>
-  </div>
-  <div class="generic-content">
-    <div class="dashboard-card">
-      <h3>Platform Stats</h3>
-      <div style="display:flex; justify-content:space-between; margin-top:10px;">
-        <div>Orders Today</div>
-        <div style="font-weight:bold;">0</div>
+  <div class="admin-shell">
+    <div class="admin-sidebar-backdrop" id="adminSidebarBackdrop"></div>
+    <aside class="admin-sidebar" id="adminSidebar">
+      <div class="admin-sidebar-logo">K</div>
+      <nav class="admin-nav" id="adminSidebarNav"></nav>
+      <div class="admin-user-card">
+        <div class="avatar">SA</div>
+        <div>
+          <strong>Super Admin</strong>
+          <small>Operations</small>
+        </div>
       </div>
-      <div style="display:flex; justify-content:space-between; margin-top:5px;">
-        <div>Active Riders</div>
-        <div style="font-weight:bold;">0</div>
+    </aside>
+
+    <main class="admin-main">
+      <div class="generic-header admin-header">
+        <div class="admin-brand">
+          <button class="admin-mobile-toggle" id="adminMobileNavToggle" type="button" aria-label="Toggle menu">☰</button>
+          <div>
+            <div class="admin-eyebrow">Operations</div>
+            <div class="generic-title">Admin Panel</div>
+          </div>
+        </div>
+        <div class="admin-header-actions">
+          <label class="admin-search-wrap">
+            <input id="adminSearchInput" type="search" placeholder="Search merchants, riders, orders..." aria-label="Search admin dashboard" />
+          </label>
+          <div class="admin-status-pill"><span class="live-dot"></span> Live</div>
+        </div>
       </div>
-    </div>
-    <div class="dashboard-card">
-      <div style="padding:10px; background:#f0f0f0; border-radius:8px; text-align:center;">Manage Users</div>
-    </div>
+
+      <div class="generic-content admin-dashboard">
+        <div class="admin-section active" data-section="overview">
+          <div class="admin-toolbar">
+            <div class="admin-chip-row">
+              <button class="admin-chip active" data-filter="all" type="button">All</button>
+              <button class="admin-chip" data-filter="revenue" type="button">Revenue</button>
+              <button class="admin-chip" data-filter="orders" type="button">Orders</button>
+              <button class="admin-chip" data-filter="users" type="button">Users</button>
+              <button class="admin-chip" data-filter="compliance" type="button">Compliance</button>
+            </div>
+            <div class="admin-sort-controls">
+              <label for="adminSortSelect">Sort by</label>
+              <select id="adminSortSelect">
+                <option value="newest">Newest</option>
+                <option value="amount">Highest amount</option>
+                <option value="merchant">Merchant A–Z</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="admin-summary-grid" id="adminSummaryGrid">
+            <div class="dashboard-card stat-card accent">
+              <div class="stat-label">Gross revenue</div>
+              <div class="stat-value" data-metric="revenue">UGX 2.85B</div>
+              <div class="stat-trend positive">+12.4% vs last week</div>
+            </div>
+            <div class="dashboard-card stat-card">
+              <div class="stat-label">Active riders</div>
+              <div class="stat-value" data-metric="riders">1,350</div>
+              <div class="stat-trend positive">+86 online now</div>
+            </div>
+            <div class="dashboard-card stat-card">
+              <div class="stat-label">Orders today</div>
+              <div class="stat-value" data-metric="orders">4,822</div>
+              <div class="stat-trend neutral">96.8% completion</div>
+            </div>
+            <div class="dashboard-card stat-card warning">
+              <div class="stat-label">Open alerts</div>
+              <div class="stat-value" data-metric="alerts">03</div>
+              <div class="stat-trend negative">2 payment issues</div>
+            </div>
+          </div>
+
+          <div class="admin-insight-row">
+            <div class="dashboard-card measure-card">
+              <div class="section-header">
+                <h3>Performance snapshot</h3>
+                <span class="tiny-pill success">+15.2%</span>
+              </div>
+              <svg id="adminSparkline" viewBox="0 0 320 140" preserveAspectRatio="none" aria-label="Admin performance sparkline">
+                <defs>
+                  <linearGradient id="sparkGradient" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.4" />
+                    <stop offset="100%" stop-color="#60a5fa" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d="M0,110 L40,96 L80,88 L120,74 L160,70 L200,54 L240,50 L280,34 L320,18 L320,140 L0,140 Z" fill="url(#sparkGradient)" opacity="0.9"></path>
+                <path d="M0,110 L40,96 L80,88 L120,74 L160,70 L200,54 L240,50 L280,34 L320,18" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+              <div class="stat-inline-row">
+                <span>Week 1</span>
+                <strong>UGX 1.6B</strong>
+                <span>Week 2</span>
+                <strong>UGX 1.9B</strong>
+              </div>
+            </div>
+
+            <div class="dashboard-card measure-card">
+              <div class="section-header">
+                <h3>Regional mix</h3>
+                <span class="tiny-pill">Live</span>
+              </div>
+              <div class="region-bars">
+                <div class="region-item"><span>Kampala</span><div class="bar-track"><i style="width: 82%"></i></div><strong>82%</strong></div>
+                <div class="region-item"><span>Mbale</span><div class="bar-track"><i style="width: 64%"></i></div><strong>64%</strong></div>
+                <div class="region-item"><span>Gulu</span><div class="bar-track"><i style="width: 56%"></i></div><strong>56%</strong></div>
+                <div class="region-item"><span>Jinja</span><div class="bar-track"><i style="width: 47%"></i></div><strong>47%</strong></div>
+              </div>
+            </div>
+
+            <div class="dashboard-card measure-card">
+              <div class="section-header">
+                <h3>Conversion funnel</h3>
+                <span class="tiny-pill">Target</span>
+              </div>
+              <div class="funnel-list">
+                <div class="funnel-row"><span>Visitors</span><div class="funnel-bar"><i style="width: 100%"></i></div><strong>18.4K</strong></div>
+                <div class="funnel-row"><span>Checkout</span><div class="funnel-bar"><i style="width: 72%"></i></div><strong>13.2K</strong></div>
+                <div class="funnel-row"><span>Orders</span><div class="funnel-bar"><i style="width: 57%"></i></div><strong>10.5K</strong></div>
+                <div class="funnel-row"><span>Returned</span><div class="funnel-bar"><i style="width: 33%"></i></div><strong>6.1K</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-two-col">
+            <div class="dashboard-card">
+              <div class="section-header">
+                <h3>Recent transactions</h3>
+                <button class="ghost-btn" type="button">Download</button>
+              </div>
+              <div class="table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Merchant</th>
+                      <th>Order</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="dashboard-card">
+              <div class="section-header">
+                <h3>User management</h3>
+                <span class="tiny-pill" id="adminUserTotal">24.8K</span>
+              </div>
+              <div class="user-list" id="adminUserList"></div>
+            </div>
+          </div>
+
+          <div class="dashboard-card">
+            <div class="section-header">
+              <h3>Active alerts</h3>
+              <span class="tiny-pill">3</span>
+            </div>
+            <div class="alert-list">
+              <div class="alert-item warning">
+                <div class="alert-icon">⚠</div>
+                <div>
+                  <strong>Payment gateway latency</strong>
+                  <p>Response time above 900ms in East region.</p>
+                </div>
+              </div>
+              <div class="alert-item info">
+                <div class="alert-icon">ℹ</div>
+                <div>
+                  <strong>Merchant onboarding</strong>
+                  <p>Spice Corner approved and live in Kampala.</p>
+                </div>
+              </div>
+              <div class="alert-item success">
+                <div class="alert-icon">✓</div>
+                <div>
+                  <strong>System health</strong>
+                  <p>API, DB and notification services are healthy.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-section" data-section="users">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <h3>User directory</h3>
+              <button class="ghost-btn" type="button">Add user</button>
+            </div>
+            <div class="user-list expanded-list">
+              <div class="user-row"><div class="user-meta"><span class="user-avatar green">JS</span><div><strong>J. Smith</strong><small>Verified rider</small></div></div><button class="mini-btn" type="button">View</button></div>
+              <div class="user-row"><div class="user-meta"><span class="user-avatar blue">AM</span><div><strong>A. Muwonge</strong><small>Merchant</small></div></div><button class="mini-btn" type="button">View</button></div>
+              <div class="user-row"><div class="user-meta"><span class="user-avatar amber">HK</span><div><strong>H. Kato</strong><small>Customer</small></div></div><button class="mini-btn" type="button">View</button></div>
+              <div class="user-row"><div class="user-meta"><span class="user-avatar red">LG</span><div><strong>L. Gikonyo</strong><small>Suspended</small></div></div><button class="mini-btn danger" type="button">Review</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-section" data-section="riders">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <h3>Rider operations</h3>
+              <button class="ghost-btn" type="button">Assign</button>
+            </div>
+            <div class="stat-inline-row">
+              <span>Online</span><strong>86</strong>
+              <span>Delivering</span><strong>44</strong>
+              <span>Idle</span><strong>31</strong>
+            </div>
+            <div class="alert-list" style="margin-top: 18px;">
+              <div class="alert-item success"><div class="alert-icon">✓</div><div><strong>Rider J. Smith</strong><p>Completed 18 trips today.</p></div></div>
+              <div class="alert-item info"><div class="alert-icon">⏱</div><div><strong>Rider M. Kasozi</strong><p>Average ETA is 11 minutes.</p></div></div>
+              <div class="alert-item warning"><div class="alert-icon">⚠</div><div><strong>Rider P. Ndugwa</strong><p>Route delay in downtown zone.</p></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-section" data-section="merchants">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <h3>Merchant performance</h3>
+              <button class="ghost-btn" type="button">Manage</button>
+            </div>
+            <div class="region-bars">
+              <div class="region-item"><span>Spice Corner</span><div class="bar-track"><i style="width: 91%"></i></div><strong>91%</strong></div>
+              <div class="region-item"><span>Blue Bowl</span><div class="bar-track"><i style="width: 76%"></i></div><strong>76%</strong></div>
+              <div class="region-item"><span>Pizza Kingdom</span><div class="bar-track"><i style="width: 82%"></i></div><strong>82%</strong></div>
+              <div class="region-item"><span>Fresh Mart</span><div class="bar-track"><i style="width: 68%"></i></div><strong>68%</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-section" data-section="payouts">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <h3>Payout center</h3>
+              <button class="ghost-btn" type="button">Run batch</button>
+            </div>
+            <div class="admin-summary-grid">
+              <div class="dashboard-card stat-card">
+                <div class="stat-label">Pending payouts</div>
+                <div class="stat-value">UGX 84.6M</div>
+                <div class="stat-trend neutral">18 merchants</div>
+              </div>
+              <div class="dashboard-card stat-card accent">
+                <div class="stat-label">This week</div>
+                <div class="stat-value">UGX 234M</div>
+                <div class="stat-trend positive">+8.1% uplift</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-section" data-section="settings">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <h3>Platform settings</h3>
+              <button class="ghost-btn" type="button">Save</button>
+            </div>
+            <div class="alert-list">
+              <div class="alert-item info"><div class="alert-icon">⚙</div><div><strong>Delivery fee policy</strong><p>Optimized for peak-hour demand.</p></div></div>
+              <div class="alert-item success"><div class="alert-icon">🔐</div><div><strong>Security</strong><p>2FA and fraud checks are active.</p></div></div>
+              <div class="alert-item warning"><div class="alert-icon">📣</div><div><strong>Promotions</strong><p>Campaign review scheduled for Friday.</p></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
   </div>
 </div>
 
