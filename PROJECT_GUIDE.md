@@ -6,14 +6,16 @@ A modern, role-based delivery platform built with **HTML5, CSS3, and vanilla Jav
 
 ## 📋 Project Overview
 
-Kirya is a **production-ready architecture** for a multi-role delivery ecosystem:
+Kirya is a **browser-based frontend prototype** for a multi-role delivery ecosystem:
 
 | Role | App | Purpose | Status |
 |------|-----|---------|--------|
-| 🛒 **User** | Customer App | Browse restaurants, place orders, track delivery | ✅ Ready |
-| 🏍️ **Rider** | Driver App | Accept deliveries, navigate, earn income | ✅ Ready |
-| 🏪 **Merchant** | Seller Dashboard | Manage menu, orders, and sales analytics | ✅ Ready |
-| 🛡️ **Admin** | Platform Control | Monitor users, revenue, and system health | ✅ Ready |
+| 🛒 **User** | Customer App | Place prototype orders and track merchant/rider status | 🧪 Prototype |
+| 🏍️ **Rider** | Driver App | Manage availability, review offers, advance assignments | 🧪 Prototype |
+| 🏪 **Merchant** | Seller Dashboard | Manage orders, pickup location, customers, and dispatch | 🧪 Prototype |
+| 🛡️ **Admin** | Platform Control | Inspect platform dashboard prototype | 🧪 Prototype |
+
+The role-specific entry pages embed `index.html`. In this prototype, all customer marketplace restaurant selections enter the single Al Reef demo merchant queue; the order retains its selected restaurant name, and riders use the configured demo pickup address. Merchant orders, customer tracking, rider assignments, and rider GPS locations share browser `localStorage` when opened on the same origin. The rider, merchant assignments, and customer order maps show recent rider GPS while the rider is online; customers only see the rider assigned to their active order. GPS requires location permission and HTTPS (or localhost). This does not synchronize across devices or provide authenticated identities, server-side concurrency, push notifications, turn-by-turn navigation, or configured rider payouts.
 
 ---
 
@@ -96,26 +98,29 @@ Kiryaapp/
 - Manage saved addresses
 - Cart management
 - Checkout flow
-- Order tracking
+- Order tracking with merchant preparation and rider-delivery status
+- Active-order badge in customer navigation
 - Favorite restaurants
 - Order history
 - Profile management
 
 ### Rider App 🏍️
 - Online/offline status toggle
-- Accept available orders
-- Real-time location tracking
-- Route navigation
-- Earnings tracking
-- Trip history
-- Performance rating
-- Weekly payouts
+- Rider bottom navigation: Home, Orders, Earnings, and Account
+- Review assigned merchant offers and accept or decline with a required reason
+- Share current device GPS while online and advance deliveries through pickup, in-transit, and delivered
+- Customer address and tap-to-call contact on accepted deliveries
+- Completed-delivery history; payout amounts remain unconfigured
+- Live rider marker on the rider map; GPS stops being shared when the rider goes offline
 
 ### Merchant App 🏪
 - Dashboard with sales metrics
 - Menu management
 - Incoming order queue
 - Order status updates
+- Store pickup address shared with rider offers and customer tracking
+- Live map of assigned riders with recent GPS locations
+- Customer orders and rider dispatch linked in the browser prototype
 - Sales analytics
 - Customer ratings
 - Promotion management
@@ -159,33 +164,9 @@ Kiryaapp/
 
 Each app includes comprehensive state management:
 
-### User App (`apps/user/app.js`)
-```javascript
-userState = {
-  userId: 'user_xxx',
-  orders: [],           // Order history
-  favorites: [],        // Favorite restaurants
-  savedAddresses: [],   // Delivery addresses
-  cart: [],            // Current cart items
-  totalOrders: 24,     // Stats
-  rating: 4.8,
-  savedItems: 12
-}
-```
+### Customer and Rider Workflows
 
-### Rider App (`apps/rider/app.js`)
-```javascript
-riderState = {
-  riderId: 'rider_xxx',
-  status: 'offline',           // online/offline/delivering
-  location: {},                // GPS coordinates
-  activeOrder: null,           // Current delivery
-  completedTrips: 1300,        // Career stats
-  earnings: { today, week, month },
-  rating: 4.9,
-  availableOrders: []          // Order queue
-}
-```
+The active customer and rider interfaces are routed from `index.html`; the role entry pages embed that application. Customer checkout records delivery orders in the merchant order register, and rider actions update the same browser-stored delivery records. The rider bottom navigation exposes Home, Orders, Earnings, and Account. `apps/user/app.js` and `apps/rider/app.js` are legacy scaffolds and are not loaded by the current entry pages.
 
 ### Merchant App (`apps/merchant/app.js`)
 ```javascript

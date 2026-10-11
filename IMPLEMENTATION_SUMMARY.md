@@ -1,10 +1,10 @@
-# 🎉 Kirya Platform - Implementation Complete!
+# Kirya Platform - Frontend Prototype
 
 ## ✅ What Has Been Built
 
-You now have a **complete, production-ready frontend architecture** for a multi-role delivery platform with:
+This repository contains a multi-role delivery frontend prototype. Role entry pages embed the main application; this is not a production backend or cross-device service.
 
-### 📱 5 Fully Functional Applications
+### 📱 Role Interfaces
 
 1. **🎯 Landing Page** (`landing.html`)
    - Map-selection entry point
@@ -15,20 +15,25 @@ You now have a **complete, production-ready frontend architecture** for a multi-
 2. **🛒 User App** (`apps/user/index.html`)
    - Browse restaurants
    - Place orders
-   - Track deliveries
+   - Track merchant preparation and rider-delivery status, pickup address, and live assigned-rider location
+   - See active-order count in customer navigation
    - Manage favorites & addresses
    - View order history
 
 3. **🏍️ Rider App** (`apps/rider/index.html`)
-   - Accept delivery orders
-   - Track earnings
-   - Manage availability
-   - View trip history
-   - Location-based order discovery
+   - Bottom navigation for Home, Orders, Earnings, and Account
+   - Manage availability against the merchant rides-partner roster
+   - Receive merchant-assigned offers; accept or decline with a reason
+   - Share device GPS while online and confirm pickup, in-transit, and delivery milestones
+   - View completed deliveries; rider payout amounts are not configured
+   - Show the rider's live GPS marker on the rider map
 
 4. **🏪 Merchant App** (`apps/merchant/index.html`)
    - Dashboard with sales metrics
    - Order management
+   - Store pickup location used in rider offers
+   - Customer checkout orders flow into merchant orders in the same browser
+   - Rider assignment changes flow back to customer tracking
    - Menu control
    - Analytics & reports
    - Performance tracking
@@ -39,6 +44,10 @@ You now have a **complete, production-ready frontend architecture** for a multi-
    - Financial tracking
    - System monitoring
    - Alert management
+
+Merchant, rider, and customer workflow records and live rider GPS are stored in browser `localStorage` and can synchronize between same-origin tabs. GPS requires rider permission and a secure context; merchant maps show assigned riders, and customer maps show only the rider assigned to that active order. Authentication, server-side authorization/concurrency, cross-device sync, push notifications, turn-by-turn navigation, and rider payout configuration require backend integration.
+
+The demo storefront exposes multiple sample restaurant names but has one merchant workspace: all customer marketplace orders enter the shared Al Reef demo queue, retain their selected restaurant label, and use the merchant-configured pickup address for rider offers. Production must route by merchant/store ID instead.
 
 ### 🎨 Professional Design System
 

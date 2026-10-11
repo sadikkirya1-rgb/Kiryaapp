@@ -10,10 +10,6 @@ export const appState = {
   userPhoneNumber: '',
   selectedPaymentMethod: { value: 'cod', icon: '💵', text: 'Cash on Delivery' },
   tipPercentage: 0,
-  riderMarker: null,
-  riderRoutePolyline: null,
-  riderProgressPolyline: null,
-  routeAnimationFrame: null,
   dailySalesChartInstance: null,
   topItemsChartInstance: null,
 };

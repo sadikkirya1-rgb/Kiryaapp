@@ -2,7 +2,6 @@
 import { appState, ui } from './modules/state.js';
 import { updateAddressSummary } from './modules/mapHelpers.js';
 import { computeCartSummary } from './modules/cartHelpers.js';
-import { getBearing, interpolatePosition } from './modules/riderHelpers.js';
 
 // --- Shared app state ---
 
@@ -17,10 +16,6 @@ let recipientDetails = appState.recipientDetails;
 let userPhoneNumber = appState.userPhoneNumber;
 let selectedPaymentMethod = appState.selectedPaymentMethod;
 let tipPercentage = appState.tipPercentage;
-let riderMarker = appState.riderMarker;
-let riderRoutePolyline = appState.riderRoutePolyline;
-let riderProgressPolyline = appState.riderProgressPolyline;
-let routeAnimationFrame = appState.routeAnimationFrame;
 let dailySalesChartInstance = appState.dailySalesChartInstance;
 let topItemsChartInstance = appState.topItemsChartInstance;
 let orderStatusChartInstance;
@@ -2020,11 +2015,26 @@ if (placeOrderBtn) {
             const cutlery = document.getElementById('cutlerySwitch') && document.getElementById('cutlerySwitch').checked ? 'Yes' : 'No';
             message += `*Cutlery:* ${cutlery}\n`;
 
+            const order = createCustomerMarketplaceOrder({
+                restaurant: resName,
+                items: cart.map(item => `${item.quantity}x ${item.title}`),
+                subtotal: subTotal,
+                deliveryFee,
+                tipAmount,
+                total: totalToPay,
+                customerName,
+                customerPhone: contactPhone,
+                deliveryAddress,
+                paymentMethod: selectedPaymentMethod.text,
+                notes: allergyNotes
+            });
+            if (!order) return;
+
             const whatsappNumber = '971562889428'; // Business WhatsApp Number
             const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
             window.open(whatsappUrl, '_blank');
 
-            showToast("Order placed successfully! 🎉");
+            showToast(`Order ${order.id} placed. Track merchant and rider updates in Orders.`);
             cart = [];
             updateCartView();
             document.getElementById('checkoutActionScreen').classList.remove('active');
@@ -2327,7 +2337,128 @@ function openProfile() {
 
 function openRider() {
     document.getElementById('riderScreen').classList.add('active');
+    initializeRiderWorkspace();
 }
+
+function readCustomerWorkflowCollections() {
+    try {
+        const parseCollection = key => {
+            const raw = localStorage.getItem(key);
+            if (raw === null) return [];
+            const records = JSON.parse(raw);
+            if (!Array.isArray(records)) throw new Error(`Saved ${key} data is not a list.`);
+            return records;
+        };
+        return {
+            active: parseCollection('kiryaMerchantActiveOrders'),
+            past: parseCollection('kiryaMerchantPastOrders'),
+            deliveries: parseCollection('kiryaMerchantDeliveries')
+        };
+    } catch (error) {
+        console.error('Unable to load customer order tracking.', error);
+        showToast('Order tracking could not be loaded. Please refresh and try again.');
+        return null;
+    }
+}
+
+function renderCustomerOrders() {
+    const list = document.getElementById('customerOrdersList');
+    if (!list) return;
+    const collections = readCustomerWorkflowCollections();
+    if (!collections) return;
+
+    let phone = userPhoneNumber || recipientDetails.phone || '';
+    if (!phone) {
+        try {
+            phone = localStorage.getItem('kiryaCustomerPhone') || '';
+        } catch (error) {
+            console.error('Unable to read the saved customer contact.', error);
+            showToast('Saved customer details could not be loaded.');
+            return;
+        }
+    }
+    const phoneKey = merchantPhoneKey(phone);
+    const orders = [...collections.active, ...collections.past]
+        .filter(order => phoneKey && merchantPhoneKey(order.phone || '') === phoneKey)
+        .map(order => {
+            const delivery = collections.deliveries.find(item => item.order === order.id);
+            return {
+                ...order,
+                deliveryId: delivery?.id || null,
+                deliveryStatus: delivery?.status || '',
+                rider: delivery?.driver || '',
+                partnerId: delivery?.partnerId || null
+            };
+        })
+        .sort((first, second) => Date.parse(second.createdAt || '') - Date.parse(first.createdAt || ''));
+    customerTrackingOrders = orders;
+    const activeCount = orders.filter(order => !['Delivered', 'Cancelled'].includes(order.status)).length;
+    const orderBadge = document.getElementById('customerActiveOrderCount');
+    if (orderBadge) {
+        orderBadge.textContent = String(activeCount);
+        orderBadge.hidden = activeCount === 0;
+    }
+
+    if (!orders.length) {
+        clearCustomerTrackingMaps();
+        list.innerHTML = `<div class="rider-empty-state">${phoneKey
+            ? 'No orders for this phone number yet. Orders placed in this browser will appear here.'
+            : 'Add your phone number during checkout to see order updates here.'}</div>`;
+        return;
+    }
+    const orderSteps = ['new', 'preparing', 'ready', 'delivered'];
+    clearCustomerTrackingMaps();
+    list.innerHTML = orders.map(order => {
+        const completedThrough = order.deliveryStatus === 'delivered' || order.status === 'Delivered'
+            ? 3
+            : order.status === 'ready' ? 2
+                : order.status === 'preparing' ? 1 : 0;
+        const deliveryLabel = {
+            offered: 'Rider offered',
+            accepted: 'Rider accepted',
+            assigned: 'Rider accepted',
+            'picked-up': 'Picked up',
+            'in-transit': 'On the way',
+            delivered: 'Delivered',
+            declined: 'Rider declined; merchant can reassign',
+            failed: 'Delivery issue; merchant will follow up',
+            cancelled: 'Delivery cancelled'
+        }[order.deliveryStatus] || '';
+        const progress = orderSteps.map((step, index) =>
+            `<span class="${index <= completedThrough ? 'complete' : ''}">${step === 'new' ? 'Received' : step[0].toUpperCase() + step.slice(1)}</span>`
+        ).join('');
+        const status = deliveryLabel || ({
+            new: 'Order received',
+            preparing: 'Being prepared',
+            ready: 'Ready for rider',
+            Delivered: 'Delivered',
+            Cancelled: 'Cancelled'
+        }[order.status] || order.status);
+        const showLiveMap = order.deliveryId && ['accepted', 'assigned', 'picked-up', 'in-transit'].includes(order.deliveryStatus);
+        const pickupAddress = order.pickupAddress || merchantPickupAddress;
+        return `<article class="customer-order-card">
+          <div class="customer-order-heading"><span>${escapeMerchantText(order.id)} · ${escapeMerchantText(order.merchant || 'Kirya merchant')}</span><span class="customer-order-status">${escapeMerchantText(status)}</span></div>
+          <p>${escapeMerchantText(order.items || '')}<br>${escapeMerchantText(order.total || '')}</p>
+          ${pickupAddress ? `<p><strong>Pickup:</strong> ${escapeMerchantText(pickupAddress)}</p>` : ''}
+          ${order.deliveryAddress ? `<p>Delivering to ${escapeMerchantText(order.deliveryAddress)}</p>` : ''}
+          ${deliveryLabel ? `<p>${escapeMerchantText(deliveryLabel)}${order.rider ? ` · ${escapeMerchantText(order.rider)}` : ''}</p>` : ''}
+          ${showLiveMap ? `<div class="customer-order-map" data-customer-order-map="${escapeMerchantText(order.id)}" role="region" aria-label="Live map for order ${escapeMerchantText(order.id)}"></div><p class="customer-order-map-status" data-customer-order-map-status="${escapeMerchantText(order.id)}">Waiting for the assigned rider's GPS location.</p>` : ''}
+          ${order.cancellationReason ? `<p>Reason: ${escapeMerchantText(order.cancellationReason)}</p>` : ''}
+          <div class="customer-order-progress">${progress}</div>
+        </article>`;
+    }).join('');
+    initializeCustomerTrackingMaps();
+    refreshLiveRiderMaps();
+}
+
+function openCustomerOrders() {
+    renderCustomerOrders();
+    document.getElementById('customerOrdersScreen').classList.add('active');
+}
+
+document.getElementById('customerOrdersBack')?.addEventListener('click', () => {
+    document.getElementById('customerOrdersScreen').classList.remove('active');
+});
 
 function openAdmin() {
     document.getElementById('adminScreen').classList.add('active');
@@ -2475,7 +2606,7 @@ function bindAdminDashboard() {
 }
 
 function openShopPortal() {
-    document.getElementById('shopPortalScreen').classList.add('active');
+    navigateMerchantView('dashboard');
     setTimeout(initMerchantCharts, 300); // Delay to ensure canvas is visible
 }
 
@@ -2546,13 +2677,20 @@ function setupGlobalNavigation() {
         const text = span.textContent.trim();
         const roleApp = item.dataset.roleApp;
 
-        if (['Cart', 'Rider', 'Admin', 'Shop', 'Profile'].includes(text)) {
+        if (['Cart', 'Orders', 'Rider', 'Admin', 'Shop', 'Profile'].includes(text)) {
             item.addEventListener('click', () => {
                 if (text === 'Cart') openCart();
+                else if (text === 'Orders') openCustomerOrders();
                 else if (text === 'Rider') openRider();
                 else if (text === 'Admin') openAdmin();
                 else if (text === 'Shop') openShopPortal();
                 else if (text === 'Profile') openProfile();
+            });
+            if (roleApp === 'orders') item.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openCustomerOrders();
+                }
             });
         }
 
@@ -2594,8 +2732,780 @@ if(profileEditPhoneBtn) {
 /* Rider Dashboard Logic */
 let isRiderOnline = false;
 let riderMap;
+let riderLocationWatchId = null;
+let riderLocationMarker = null;
 let riderOrderTimer;
+let riderPollTimer;
 let riderCurrentStep = 0; // 0: Idle, 1: Pickup, 2: Dropoff
+let riderSelectedPartnerId = null;
+let riderPendingOfferId = null;
+let riderWorkspaceInitialized = false;
+let riderRenderedDeliveryKey = null;
+let merchantRiderTrackingMap = null;
+let merchantRiderTrackingMarkers = new Map();
+let customerTrackingMaps = new Map();
+let liveRiderMapRefreshTimer = null;
+const riderLocationStorageKey = 'kiryaRiderLiveLocations';
+const riderLocationMaxAgeMs = 120000;
+let customerTrackingOrders = [];
+
+const riderPartnerFallback = [
+    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', availability: 'off-duty' },
+    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', availability: 'off-duty' }
+];
+const riderActiveStatuses = ['accepted', 'assigned', 'picked-up', 'in-transit'];
+
+function readRiderCollection(key, fallback = []) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (raw === null) return fallback.map(record => ({ ...record }));
+        const records = JSON.parse(raw);
+        if (!Array.isArray(records)) throw new Error(`Saved ${key} data is not a list.`);
+        return records;
+    } catch (error) {
+        console.error(`Unable to read rider workflow data for ${key}.`, error);
+        showToast('Rider data could not be loaded. Refresh and try again.');
+        return null;
+    }
+}
+
+function readLiveRiderLocations() {
+    try {
+        const raw = localStorage.getItem(riderLocationStorageKey);
+        if (raw === null) return [];
+        const locations = JSON.parse(raw);
+        if (!Array.isArray(locations) || locations.some(location =>
+            !location || !Number.isInteger(Number(location.partnerId)) ||
+            !Number.isFinite(location.latitude) || Math.abs(location.latitude) > 90 ||
+            !Number.isFinite(location.longitude) || Math.abs(location.longitude) > 180 ||
+            !Number.isFinite(Date.parse(location.updatedAt))
+        )) throw new Error('Saved rider locations are invalid.');
+        return locations;
+    } catch (error) {
+        console.error('Unable to read live rider locations.', error);
+        showToast('Live rider locations could not be loaded.');
+        return null;
+    }
+}
+
+function writeLiveRiderLocations(locations) {
+    try {
+        localStorage.setItem(riderLocationStorageKey, JSON.stringify(locations));
+        return true;
+    } catch (error) {
+        console.error('Unable to share the live rider location.', error);
+        showToast('Your live location could not be shared on this device.');
+        return false;
+    }
+}
+
+function liveRiderMarkerIcon() {
+    return L.divIcon({
+        className: 'live-rider-marker',
+        html: '<span aria-hidden="true">🛵</span>',
+        iconSize: [38, 38],
+        iconAnchor: [19, 19]
+    });
+}
+
+function createTrackingMap(element) {
+    const streetLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; OpenStreetMap contributors &copy; Esri',
+        maxZoom: 19
+    });
+    return L.map(element, { zoomControl: true, layers: [streetLayer] }).setView([0.3476, 32.5825], 12);
+}
+
+function ensureLiveRiderMapRefresh() {
+    if (liveRiderMapRefreshTimer === null) {
+        liveRiderMapRefreshTimer = setInterval(refreshLiveRiderMaps, 30000);
+    }
+}
+
+function getFreshRiderLocation(locations, partnerId) {
+    const location = locations.find(record => String(record.partnerId) === String(partnerId));
+    return location && Date.now() - Date.parse(location.updatedAt) <= riderLocationMaxAgeMs
+        ? location
+        : null;
+}
+
+function updateRiderMapLocation(location) {
+    if (!riderMap) return;
+    if (!location) {
+        riderLocationMarker?.remove();
+        riderLocationMarker = null;
+        return;
+    }
+    const position = [location.latitude, location.longitude];
+    if (!riderLocationMarker) {
+        riderLocationMarker = L.marker(position, { icon: liveRiderMarkerIcon() })
+            .addTo(riderMap)
+            .bindPopup(`${escapeMerchantText(location.name)} · your live location`);
+        riderMap.setView(position, 16);
+    } else {
+        riderLocationMarker.setLatLng(position);
+    }
+}
+
+function updateMerchantRiderTrackingMap(locations) {
+    if (!merchantRiderTrackingMap) return;
+    const current = new Set();
+    merchantDeliveries.filter(delivery =>
+        merchantActiveDeliveryStatuses.includes(delivery.status)
+    ).forEach(delivery => {
+        const partner = merchantAssignmentPartner(delivery);
+        const location = partner?.status === 'active' && partner.availability === 'available'
+            ? getFreshRiderLocation(locations, partner.id)
+            : null;
+        if (!partner || !location) return;
+        const markerKey = String(partner.id);
+        current.add(markerKey);
+        const order = demoActiveOrders.find(record => record.id === delivery.order);
+        const pickupAddress = order?.pickupAddress || delivery.pickupAddress || merchantPickupAddress;
+        const popup = `${escapeMerchantText(partner.name)} · ${escapeMerchantText(delivery.order)} · ${escapeMerchantText(merchantDeliveryStatusLabels[delivery.status] || delivery.status)}${pickupAddress ? `<br>Pickup: ${escapeMerchantText(pickupAddress)}` : ''}`;
+        const position = [location.latitude, location.longitude];
+        const marker = merchantRiderTrackingMarkers.get(markerKey);
+        if (marker) {
+            marker.setLatLng(position);
+            marker.setPopupContent(popup);
+        } else {
+            merchantRiderTrackingMarkers.set(markerKey,
+                L.marker(position, { icon: liveRiderMarkerIcon() }).addTo(merchantRiderTrackingMap).bindPopup(popup)
+            );
+            if (merchantRiderTrackingMarkers.size === 1) merchantRiderTrackingMap.setView(position, 14);
+        }
+    });
+    merchantRiderTrackingMarkers.forEach((marker, key) => {
+        if (!current.has(key)) {
+            marker.remove();
+            merchantRiderTrackingMarkers.delete(key);
+        }
+    });
+    const status = document.getElementById('merchantRiderLiveMapStatus');
+    if (status) status.textContent = current.size
+        ? `${current.size} assigned rider${current.size === 1 ? '' : 's'} sharing a recent location. Pickup addresses are shown on each order.`
+        : 'Waiting for assigned riders to share their location.';
+}
+
+function initializeCustomerTrackingMaps() {
+    const list = document.getElementById('customerOrdersList');
+    list?.querySelectorAll('[data-customer-order-map]').forEach(element => {
+        const orderId = element.dataset.customerOrderMap;
+        const order = customerTrackingOrders.find(record => record.id === orderId);
+        if (!order || !order.deliveryId) return;
+        const mapInstance = createTrackingMap(element);
+        customerTrackingMaps.set(orderId, { map: mapInstance, marker: null, partnerId: order.partnerId });
+        setTimeout(() => mapInstance.invalidateSize(), 0);
+    });
+}
+
+function clearCustomerTrackingMaps() {
+    customerTrackingMaps.forEach(record => record.map.remove());
+    customerTrackingMaps.clear();
+}
+
+function updateCustomerTrackingMaps(locations) {
+    customerTrackingMaps.forEach((record, orderId) => {
+        const partner = merchantPartners.find(item => String(item.id) === String(record.partnerId));
+        const location = partner?.status === 'active' && partner.availability === 'available'
+            ? getFreshRiderLocation(locations, record.partnerId)
+            : null;
+        if (!location) {
+            record.marker?.remove();
+            record.marker = null;
+            const status = [...document.querySelectorAll('[data-customer-order-map-status]')]
+                .find(element => element.dataset.customerOrderMapStatus === orderId);
+            if (status) status.textContent = 'Waiting for the assigned rider to share a recent GPS location.';
+            return;
+        }
+        const position = [location.latitude, location.longitude];
+        if (record.marker) {
+            record.marker.setLatLng(position);
+        } else {
+            const order = customerTrackingOrders.find(item => item.id === orderId);
+            const pickupAddress = order?.pickupAddress || merchantPickupAddress;
+            record.marker = L.marker(position, { icon: liveRiderMarkerIcon() })
+                .addTo(record.map)
+                .bindPopup(`${escapeMerchantText(location.name)} · assigned rider${pickupAddress ? `<br>Pickup: ${escapeMerchantText(pickupAddress)}` : ''}`);
+            record.map.setView(position, 15);
+        }
+        const status = [...document.querySelectorAll('[data-customer-order-map-status]')]
+            .find(element => element.dataset.customerOrderMapStatus === orderId);
+        if (status) status.textContent = location
+            ? `Live location updated ${new Date(location.updatedAt).toLocaleTimeString()}.`
+            : 'Waiting for the assigned rider to share a recent GPS location.';
+    });
+}
+
+function refreshLiveRiderMaps() {
+    const locations = readLiveRiderLocations();
+    if (!locations) return;
+    const partner = riderCurrentPartner();
+    updateRiderMapLocation(partner?.status === 'active' && partner.availability === 'available'
+        ? getFreshRiderLocation(locations, partner.id)
+        : null);
+    updateMerchantRiderTrackingMap(locations);
+    updateCustomerTrackingMaps(locations);
+}
+
+function stopRiderLocationTracking(partnerId) {
+    if (riderLocationWatchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(riderLocationWatchId);
+        riderLocationWatchId = null;
+    }
+    const locations = readLiveRiderLocations();
+    if (!locations) return;
+    if (writeLiveRiderLocations(locations.filter(location => String(location.partnerId) !== String(partnerId)))) {
+        updateRiderMapLocation(null);
+        refreshLiveRiderMaps();
+    }
+}
+
+function startRiderLocationTracking(partner) {
+    if (riderLocationWatchId !== null || !partner) return;
+    const status = document.getElementById('riderLocationStatus');
+    if (!navigator.geolocation || !window.isSecureContext) {
+        if (status) status.textContent = 'Live GPS requires location permission and a secure (HTTPS) connection.';
+        showToast('Live rider tracking requires GPS permission and HTTPS.');
+        return;
+    }
+    if (status) status.textContent = 'Waiting for GPS permission and location…';
+    try {
+        riderLocationWatchId = navigator.geolocation.watchPosition(position => {
+            const currentPartner = riderCurrentPartner();
+            if (!currentPartner || String(currentPartner.id) !== String(partner.id) ||
+                currentPartner.availability !== 'available') {
+                stopRiderLocationTracking(partner.id);
+                return;
+            }
+            const location = {
+                partnerId: partner.id,
+                name: partner.name,
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                updatedAt: new Date(position.timestamp || Date.now()).toISOString()
+            };
+            const locations = readLiveRiderLocations();
+            if (!locations) return;
+            const nextLocations = [
+                ...locations.filter(record => String(record.partnerId) !== String(partner.id)),
+                location
+            ];
+            if (!writeLiveRiderLocations(nextLocations)) return;
+            if (status) status.textContent = `Sharing live location · updated ${new Date(location.updatedAt).toLocaleTimeString()}.`;
+            refreshLiveRiderMaps();
+        }, error => {
+            console.error('Rider GPS tracking failed.', error);
+            if (status) status.textContent = 'Live GPS unavailable. Check location permission and try again.';
+            showToast('Rider GPS is unavailable. Location sharing has stopped.');
+            riderLocationWatchId = null;
+            setRiderAvailability(false, true);
+        }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+        ensureLiveRiderMapRefresh();
+    } catch (error) {
+        console.error('Unable to start rider GPS tracking.', error);
+        if (status) status.textContent = 'Live GPS could not start. Check browser location settings.';
+        showToast('Rider GPS could not start. Location sharing has stopped.');
+        setRiderAvailability(false, true);
+    }
+}
+
+function readRiderDeliveries() {
+    return readRiderCollection('kiryaMerchantDeliveries', merchantDeliveries);
+}
+
+function readRiderActiveOrders() {
+    return readRiderCollection('kiryaMerchantActiveOrders', demoActiveOrders);
+}
+
+function readRiderPastOrders() {
+    return readRiderCollection('kiryaMerchantPastOrders', dummyPastOrders);
+}
+
+function riderCurrentPartner(partners = readRiderCollection('kiryaMerchantPartners', riderPartnerFallback)) {
+    if (!partners) return null;
+    return partners.find(partner => String(partner.id) === String(riderSelectedPartnerId)) ||
+        partners.find(partner => partner.status === 'active') || null;
+}
+
+function riderOwnsDelivery(delivery, partner) {
+    return Boolean(partner && (
+        String(delivery.partnerId) === String(partner.id) ||
+        merchantPhoneKey(delivery.phone || '') === merchantPhoneKey(partner.phone || '')
+    ));
+}
+
+function setRiderAvailability(isAvailable, forceOffline = false) {
+    const partners = readRiderCollection('kiryaMerchantPartners', riderPartnerFallback);
+    const partner = riderCurrentPartner(partners);
+    if (!partners || !partner || partner.status !== 'active') {
+        showToast('Select an active rides partner account before changing availability.');
+        return false;
+    }
+    if (isAvailable && (!navigator.geolocation || !window.isSecureContext)) {
+        showToast('Going online requires GPS support, location permission, and an HTTPS connection.');
+        return false;
+    }
+    const deliveries = readRiderDeliveries();
+    if (!deliveries) return false;
+    const hasActiveDelivery = deliveries.some(delivery =>
+        riderOwnsDelivery(delivery, partner) && riderActiveStatuses.includes(delivery.status)
+    );
+    if (!isAvailable && hasActiveDelivery && !forceOffline) {
+        showToast('Complete the active delivery before going offline.');
+        return false;
+    }
+    const updatedPartners = partners.map(record => String(record.id) === String(partner.id)
+        ? { ...record, availability: isAvailable ? 'available' : 'off-duty', updatedAt: new Date().toISOString() }
+        : record
+    );
+    if (!saveMerchantCollection('kiryaMerchantPartners', updatedPartners)) return false;
+    refreshMerchantAfterRiderWrite({ partners: updatedPartners });
+    riderSelectedPartnerId = partner.id;
+    isRiderOnline = isAvailable;
+    if (!isAvailable) stopRiderLocationTracking(partner.id);
+    renderRiderAvailability();
+    refreshRiderWorkflow();
+    return true;
+}
+
+function renderRiderAvailability() {
+    const button = document.getElementById('riderStatusToggle');
+    const partner = riderCurrentPartner();
+    if (!button || !partner) return;
+    const isActive = partner.status === 'active' && partner.availability === 'available';
+    isRiderOnline = isActive;
+    const locationStatus = document.getElementById('riderLocationStatus');
+    if (isActive) startRiderLocationTracking(partner);
+    else if (locationStatus) locationStatus.textContent = 'Location sharing starts when you go online.';
+    button.classList.toggle('online', isActive);
+    button.classList.toggle('offline', !isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+    button.querySelector('.status-text').textContent = isActive ? 'ONLINE' : 'GO ONLINE';
+    button.querySelector('.status-dot').style.background = isActive ? '#019E81' : '#ff4757';
+    const name = document.getElementById('riderHeaderName');
+    if (name) name.textContent = partner.name;
+    const vehicle = document.getElementById('riderVehicleSummary');
+    if (vehicle) vehicle.textContent = partner.vehicle || 'Not recorded';
+    const area = document.getElementById('riderAreaSummary');
+    if (area) area.textContent = partner.area || 'Not recorded';
+    const idleMessage = document.getElementById('riderIdleMsg');
+    if (idleMessage && document.getElementById('riderDeliveryState').style.display !== 'none') return;
+    if (idleMessage) idleMessage.textContent = isActive
+        ? 'You are online. New offers assigned by the merchant appear here.'
+        : partner.status === 'active' ? 'Go online to receive delivery offers.' : 'This partner account is inactive. Contact the merchant.';
+}
+
+function refreshMerchantAfterRiderWrite({ partners, deliveries, activeOrders, pastOrders } = {}) {
+    if (partners) merchantPartners = partners;
+    if (deliveries) merchantDeliveries = deliveries;
+    if (activeOrders) demoActiveOrders = activeOrders;
+    if (pastOrders) dummyPastOrders = pastOrders;
+    if (partners || deliveries) {
+        renderMerchantPartners();
+        populateMerchantAssignmentOptions();
+    }
+    if (deliveries || activeOrders || pastOrders) {
+        renderMerchantActiveOrders();
+        if (merchantAssignedRidersScreen?.classList.contains('active')) renderMerchantDeliveries();
+        updateMerchantOrderMetrics();
+        renderCustomerOrders();
+    }
+    refreshLiveRiderMaps();
+}
+
+function renderRiderPartnerOptions() {
+    const partners = readRiderCollection('kiryaMerchantPartners', riderPartnerFallback);
+    const select = document.getElementById('riderPartnerSelect');
+    if (!partners || !select) return;
+    const eligiblePartners = partners.filter(partner => partner && Number.isInteger(partner.id) && typeof partner.name === 'string');
+    if (!eligiblePartners.length) {
+        select.innerHTML = '<option value="">No partner accounts found</option>';
+        select.disabled = true;
+        return;
+    }
+    select.disabled = false;
+    select.innerHTML = eligiblePartners.map(partner =>
+        `<option value="${escapeMerchantText(partner.id)}">${escapeMerchantText(partner.name)}${partner.status === 'active' ? '' : ' (inactive)'}</option>`
+    ).join('');
+    if (riderSelectedPartnerId === null) {
+        try {
+            riderSelectedPartnerId = localStorage.getItem('kiryaRiderPartnerId');
+        } catch (error) {
+            console.error('Unable to load the selected rider account.', error);
+            showToast('Saved rider account selection could not be loaded.');
+        }
+    }
+    const selected = eligiblePartners.find(partner => String(partner.id) === String(riderSelectedPartnerId)) ||
+        eligiblePartners.find(partner => partner.status === 'active') || eligiblePartners[0];
+    riderSelectedPartnerId = selected.id;
+    select.value = String(selected.id);
+    try {
+        localStorage.setItem('kiryaRiderPartnerId', String(selected.id));
+    } catch (error) {
+        console.error('Unable to save the selected rider account.', error);
+        showToast('Rider account selection could not be saved.');
+    }
+    renderRiderAvailability();
+}
+
+function setRiderTab(tab) {
+    const riderScreen = document.getElementById('riderScreen');
+    riderScreen.classList.toggle('rider-tab-secondary', tab !== 'home');
+    document.querySelectorAll('#riderScreen [data-rider-tab]').forEach(button => {
+        const active = button.dataset.riderTab === tab;
+        button.classList.toggle('active', active);
+        if (active) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+    });
+    document.getElementById('riderOrdersView').hidden = tab !== 'orders';
+    document.getElementById('riderEarningsView').hidden = tab !== 'earnings';
+    document.getElementById('riderAccountView').hidden = tab !== 'account';
+    if (tab === 'orders' || tab === 'earnings') refreshRiderWorkflow();
+}
+
+function initializeRiderWorkspace() {
+    if (!riderWorkspaceInitialized) {
+        riderWorkspaceInitialized = true;
+        renderRiderPartnerOptions();
+        document.querySelector('.rider-bottom-nav')?.addEventListener('click', event => {
+            const button = event.target.closest('[data-rider-tab]');
+            if (button) setRiderTab(button.dataset.riderTab);
+        });
+        document.getElementById('riderOrdersList')?.addEventListener('click', event => {
+            const acceptButton = event.target.closest('[data-rider-accept]');
+            if (acceptButton) {
+                const deliveries = readRiderDeliveries();
+                const offer = deliveries?.find(record => String(record.id) === acceptButton.dataset.riderAccept);
+                if (offer) showRiderOffer(offer);
+            }
+            if (event.target.closest('[data-rider-go-home]')) setRiderTab('home');
+        });
+        document.getElementById('riderPartnerSelect')?.addEventListener('change', event => {
+            const current = riderCurrentPartner();
+            const deliveries = readRiderDeliveries();
+            if (current && deliveries?.some(delivery =>
+                riderOwnsDelivery(delivery, current) && riderActiveStatuses.includes(delivery.status)
+            )) {
+                event.target.value = String(current.id);
+                showToast('Finish this rider’s active delivery before switching accounts.');
+                return;
+            }
+            if (isRiderOnline && !setRiderAvailability(false)) return;
+            riderSelectedPartnerId = Number(event.target.value);
+            renderRiderPartnerOptions();
+            refreshRiderWorkflow();
+        });
+        document.getElementById('riderSupportButton')?.addEventListener('click', () =>
+            showToast('Contact your merchant dispatcher for rider account or delivery support.')
+        );
+        window.addEventListener('storage', event => {
+            if (['kiryaMerchantPartners', 'kiryaMerchantDeliveries', 'kiryaMerchantActiveOrders', 'kiryaMerchantPastOrders'].includes(event.key)) {
+                renderRiderPartnerOptions();
+                refreshRiderWorkflow();
+            }
+        });
+        riderPollTimer = setInterval(refreshRiderWorkflow, 3000);
+    }
+    initRiderMap();
+    setTimeout(() => riderMap?.invalidateSize(), 100);
+    setRiderTab('home');
+    refreshRiderWorkflow();
+}
+
+function getRiderActiveDelivery(deliveries, partner) {
+    return deliveries.find(delivery =>
+        riderOwnsDelivery(delivery, partner) && riderActiveStatuses.includes(delivery.status)
+    ) || null;
+}
+
+function renderRiderOrders(deliveries, partner, activeDelivery) {
+    const list = document.getElementById('riderOrdersList');
+    const count = document.getElementById('riderOrderCount');
+    const badge = document.getElementById('riderOrdersBadge');
+    if (!list || !count || !badge) return;
+    const riderOrders = deliveries
+        .filter(delivery => riderOwnsDelivery(delivery, partner))
+        .sort((first, second) => Date.parse(second.updatedAt || second.assignedAt || '') - Date.parse(first.updatedAt || first.assignedAt || ''));
+    const outstandingOffers = riderOrders.filter(delivery =>
+        delivery.status === 'offered' && (!delivery.offerExpiresAt || Date.parse(delivery.offerExpiresAt) > Date.now())
+    ).length;
+    count.textContent = String(riderOrders.length);
+    badge.textContent = String(outstandingOffers);
+    badge.hidden = outstandingOffers === 0;
+    list.innerHTML = riderOrders.length ? riderOrders.map(delivery => {
+        const linkedOrder = readRiderActiveOrders()?.find(order => order.id === delivery.order) ||
+            readRiderPastOrders()?.find(order => order.id === delivery.order);
+        const isOffer = delivery.status === 'offered' && (!delivery.offerExpiresAt || Date.parse(delivery.offerExpiresAt) > Date.now());
+        const isCurrent = activeDelivery && activeDelivery.id === delivery.id;
+        const statusLabel = delivery.status === 'in-transit' ? 'On the way' :
+            delivery.status === 'picked-up' ? 'Picked up' :
+                delivery.status === 'delivered' ? 'Delivered' :
+                    delivery.status === 'offered' && !isOffer ? 'Offer expired' :
+                        delivery.status[0].toUpperCase() + delivery.status.slice(1);
+        return `<article class="rider-order-card">
+          <div class="rider-order-card-top"><span>${escapeMerchantText(delivery.order)}</span><span class="rider-order-status">${escapeMerchantText(statusLabel)}</span></div>
+          <p>${escapeMerchantText(linkedOrder?.merchant || 'Merchant')}${linkedOrder?.items ? `<br>${escapeMerchantText(linkedOrder.items)}` : ''}<br>Deliver to ${escapeMerchantText(delivery.customer)} · ${escapeMerchantText(delivery.address)}</p>
+          ${delivery.statusHistory?.at(-1)?.reason ? `<p>Reason: ${escapeMerchantText(delivery.statusHistory.at(-1).reason)}</p>` : ''}
+          ${isOffer && !activeDelivery ? isRiderOnline
+            ? `<button type="button" data-rider-accept="${escapeMerchantText(delivery.id)}">Review delivery offer</button>`
+            : '<p class="rider-order-status">Go online to review this offer.</p>' : ''}
+          ${isCurrent ? '<button type="button" data-rider-go-home>Continue current delivery</button>' : ''}
+        </article>`;
+    }).join('') : '<div class="rider-empty-state">No delivery offers yet. Stay online and ask the merchant to assign a ready delivery order.</div>';
+}
+
+function renderRiderEarnings(deliveries, partner) {
+    const completed = deliveries.filter(delivery =>
+        riderOwnsDelivery(delivery, partner) && delivery.status === 'delivered' &&
+        new Date(delivery.updatedAt || delivery.assignedAt).toDateString() === new Date().toDateString()
+    );
+    const completedCount = deliveries.filter(delivery =>
+        riderOwnsDelivery(delivery, partner) && delivery.status === 'delivered'
+    ).length;
+    document.getElementById('riderTripsToday').textContent = String(completed.length);
+    document.getElementById('riderCompletedSummary').textContent = `${completedCount} completed deliveries · payout rates are not configured`;
+    document.getElementById('riderEarningsToday').textContent = 'Payout n/a';
+    document.getElementById('riderEarningsSummary').textContent = 'Payout not configured';
+    const earningsList = document.getElementById('riderEarningsList');
+    earningsList.innerHTML = completed.length ? completed.map(delivery =>
+        `<article class="rider-earning-card"><div class="rider-earning-card-top"><span>${escapeMerchantText(delivery.order)}</span><span>Delivered</span></div><p>Completed ${escapeMerchantText(new Date(delivery.updatedAt || delivery.assignedAt).toLocaleString())}. Payout amount is managed outside this prototype.</p></article>`
+    ).join('') : '<div class="rider-empty-state">No completed deliveries today. Completed trip history will appear here.</div>';
+}
+
+function renderRiderCurrentDelivery(delivery, partner) {
+    const deliveryState = document.getElementById('riderDeliveryState');
+    const dashboardState = document.getElementById('riderDashboardState');
+    const idleMessage = document.getElementById('riderIdleMsg');
+    if (!delivery) {
+        deliveryState.style.display = 'none';
+        dashboardState.style.display = 'block';
+        riderCurrentStep = 0;
+        riderRenderedDeliveryKey = null;
+        return;
+    }
+    const order = readRiderActiveOrders()?.find(record => record.id === delivery.order);
+    const deliveryKey = `${delivery.id}:${delivery.status}`;
+    deliveryState.style.display = 'block';
+    dashboardState.style.display = 'none';
+    riderCurrentStep = delivery.status === 'accepted' || delivery.status === 'assigned' ? 1 : 2;
+    document.getElementById('riderCurrentOrderNumber').textContent = delivery.order;
+    document.getElementById('riderPickupName').textContent = order?.merchant || 'Merchant';
+    document.getElementById('riderPickupAddress').textContent = order?.pickupAddress || delivery.pickupAddress || 'Pickup address not recorded';
+    document.getElementById('riderCustomerName').textContent = delivery.customer || 'Customer';
+    document.getElementById('riderDropoffAddress').textContent = delivery.address;
+    const callLink = document.getElementById('riderCustomerCall');
+    const phone = String(delivery.customerPhone || '').replace(/[^\d+]/g, '');
+    callLink.href = phone ? `tel:${phone}` : '#';
+    callLink.hidden = !phone;
+    const atPickup = riderCurrentStep === 1;
+    document.getElementById('riderStepPickup').classList.toggle('active', atPickup);
+    document.getElementById('riderStepPickup').style.opacity = atPickup ? '1' : '0.55';
+    document.getElementById('riderStepDropoff').classList.toggle('active', !atPickup);
+    if (riderRenderedDeliveryKey !== deliveryKey) {
+        resetSwipeButton(atPickup ? 'CONFIRM PICKUP' : 'CONFIRM DELIVERY');
+        riderRenderedDeliveryKey = deliveryKey;
+    }
+    if (idleMessage) idleMessage.textContent = `${partner.name} · ${delivery.status === 'in-transit' ? 'In transit' : delivery.status === 'picked-up' ? 'Picked up' : 'Accepted'}`;
+}
+
+function refreshRiderWorkflow() {
+    if (!riderWorkspaceInitialized && !document.getElementById('riderScreen').classList.contains('active')) return;
+    const partners = readRiderCollection('kiryaMerchantPartners', riderPartnerFallback);
+    const deliveries = readRiderDeliveries();
+    const partner = riderCurrentPartner(partners);
+    if (!partners || !deliveries || !partner) return;
+    const activeDelivery = getRiderActiveDelivery(deliveries, partner);
+    renderRiderAvailability();
+    renderRiderCurrentDelivery(activeDelivery, partner);
+    renderRiderOrders(deliveries, partner, activeDelivery);
+    renderRiderEarnings(deliveries, partner);
+    const pendingOffer = deliveries.find(delivery => String(delivery.id) === String(riderPendingOfferId));
+    const pendingOfferIsValid = pendingOffer?.status === 'offered' &&
+        riderOwnsDelivery(pendingOffer, partner) &&
+        (!pendingOffer.offerExpiresAt || Date.parse(pendingOffer.offerExpiresAt) > Date.now());
+    if (!isRiderOnline || activeDelivery || (riderPendingOfferId && !pendingOfferIsValid)) {
+        clearInterval(riderOrderTimer);
+        document.getElementById('riderOrderModal').classList.remove('active');
+        riderPendingOfferId = null;
+    }
+    if (isRiderOnline && !activeDelivery) triggerRiderOrder();
+}
+
+function showRiderOffer(delivery) {
+    riderPendingOfferId = delivery.id;
+    const order = readRiderActiveOrders()?.find(record => record.id === delivery.order);
+    document.getElementById('riderOfferOrderNumber').textContent = delivery.order;
+    document.getElementById('riderOfferMerchant').textContent = order?.merchant || 'Merchant';
+    document.getElementById('riderOfferPickup').textContent = order?.pickupAddress || delivery.pickupAddress || 'Pickup address not recorded';
+    document.getElementById('riderOfferCustomer').textContent = delivery.customer || 'Customer';
+    document.getElementById('riderOfferAddress').textContent = delivery.address;
+    document.getElementById('riderOfferItems').textContent = order?.items || '';
+    document.getElementById('riderOrderModal').classList.add('active');
+    const timerFill = document.getElementById('riderTimerFill');
+    const deadline = Date.parse(delivery.offerExpiresAt || '') || Date.now() + 5 * 60 * 1000;
+    clearInterval(riderOrderTimer);
+    const updateTimer = () => {
+        const remaining = Math.max(0, deadline - Date.now());
+        timerFill.style.width = `${Math.min(100, remaining / (5 * 60 * 1000) * 100)}%`;
+        if (remaining === 0) {
+            clearInterval(riderOrderTimer);
+            riderPendingOfferId = null;
+            document.getElementById('riderOrderModal').classList.remove('active');
+            showToast('This delivery offer expired. The merchant can reassign it.');
+            refreshRiderWorkflow();
+        }
+    };
+    updateTimer();
+    riderOrderTimer = setInterval(updateTimer, 1000);
+}
+
+function updateRiderDelivery(deliveryId, nextStatus, reason = '') {
+    const partner = riderCurrentPartner();
+    const deliveries = readRiderDeliveries();
+    if (!partner || !deliveries) return false;
+    const delivery = deliveries.find(record => String(record.id) === String(deliveryId));
+    if (!delivery || !riderOwnsDelivery(delivery, partner)) {
+        showToast('This delivery is no longer assigned to the selected rider.');
+        return false;
+    }
+    const transitions = {
+        accepted: ['picked-up'],
+        assigned: ['picked-up'],
+        'picked-up': ['in-transit'],
+        'in-transit': ['delivered']
+    };
+    if (!transitions[delivery.status]?.includes(nextStatus)) {
+        showToast('This delivery has changed. Refresh the rider workspace and try again.');
+        return false;
+    }
+    const now = new Date().toISOString();
+    const updatedDelivery = {
+        ...delivery,
+        status: nextStatus,
+        updatedAt: now,
+        statusHistory: [...(delivery.statusHistory || []), {
+            status: nextStatus,
+            at: now,
+            actor: partner.name
+        }]
+    };
+    const nextDeliveries = deliveries.map(record => record.id === delivery.id ? updatedDelivery : record);
+    const collections = { kiryaMerchantDeliveries: nextDeliveries };
+    if (nextStatus === 'delivered') {
+        const orders = readRiderActiveOrders();
+        const pastOrders = readRiderPastOrders();
+        if (!orders || !pastOrders) return false;
+        const order = orders.find(record => record.id === delivery.order);
+        if (order) {
+            const updatedOrder = {
+                ...order,
+                status: 'Delivered',
+                statusColor: '#019E81',
+                date: `Today, ${order.received || new Date(now).toLocaleTimeString('en-UG', { hour: 'numeric', minute: '2-digit' })}`,
+                deliveredAt: now,
+                statusHistory: [...(order.statusHistory || []), {
+                    status: 'Delivered',
+                    at: now,
+                    actor: partner.name
+                }]
+            };
+            collections.kiryaMerchantActiveOrders = orders.filter(record => record.id !== order.id);
+            collections.kiryaMerchantPastOrders = [updatedOrder, ...pastOrders];
+        }
+    }
+    if (!saveMerchantCollections(collections)) return false;
+    refreshMerchantAfterRiderWrite({
+        deliveries: nextDeliveries,
+        ...(collections.kiryaMerchantActiveOrders ? { activeOrders: collections.kiryaMerchantActiveOrders } : {}),
+        ...(collections.kiryaMerchantPastOrders ? { pastOrders: collections.kiryaMerchantPastOrders } : {})
+    });
+    document.getElementById('riderOrderModal').classList.remove('active');
+    riderPendingOfferId = null;
+    refreshRiderWorkflow();
+    showToast(nextStatus === 'delivered' ? 'Delivery completed and customer order updated.' :
+        nextStatus === 'picked-up' ? 'Pickup confirmed. Continue to the customer.' : 'Delivery marked in transit.');
+    return true;
+}
+
+function acceptRiderDelivery(deliveryId) {
+    if (!deliveryId || !isRiderOnline) {
+        showToast('Go online before accepting a delivery offer.');
+        return;
+    }
+    const deliveries = readRiderDeliveries();
+    const partner = riderCurrentPartner();
+    const delivery = deliveries?.find(record => String(record.id) === String(deliveryId));
+    if (!delivery || !partner || delivery.status !== 'offered' || !riderOwnsDelivery(delivery, partner)) {
+        showToast('This offer is no longer available for this rider.');
+        refreshRiderWorkflow();
+        return;
+    }
+    if (delivery.offerExpiresAt && Date.parse(delivery.offerExpiresAt) <= Date.now()) {
+        showToast('This delivery offer expired. The merchant can reassign it.');
+        refreshRiderWorkflow();
+        return;
+    }
+    if (deliveries.some(record => riderOwnsDelivery(record, partner) && riderActiveStatuses.includes(record.status))) {
+        showToast('Complete your current delivery before accepting another offer.');
+        return;
+    }
+    const now = new Date().toISOString();
+    const updated = {
+        ...delivery,
+        status: 'accepted',
+        updatedAt: now,
+        acceptedAt: now,
+        statusHistory: [...(delivery.statusHistory || []), { status: 'accepted', at: now, actor: partner.name }]
+    };
+    const nextDeliveries = deliveries.map(record => record.id === delivery.id ? updated : record);
+    if (!saveMerchantCollection('kiryaMerchantDeliveries', nextDeliveries)) return;
+    refreshMerchantAfterRiderWrite({ deliveries: nextDeliveries });
+    clearInterval(riderOrderTimer);
+    document.getElementById('riderOrderModal').classList.remove('active');
+    riderPendingOfferId = null;
+    setRiderTab('home');
+    refreshRiderWorkflow();
+    showToast(`Delivery ${delivery.order} accepted.`);
+}
+
+function declineRiderDelivery() {
+    if (!riderPendingOfferId) return;
+    const reason = prompt('Why are you declining this delivery offer?')?.trim();
+    if (!reason) {
+        showToast('A reason is required to decline the offer.');
+        return;
+    }
+    const deliveries = readRiderDeliveries();
+    const partner = riderCurrentPartner();
+    const delivery = deliveries?.find(record => String(record.id) === String(riderPendingOfferId));
+    if (!deliveries || !partner || !delivery || delivery.status !== 'offered' || !riderOwnsDelivery(delivery, partner)) {
+        showToast('This delivery offer is no longer available.');
+        refreshRiderWorkflow();
+        return;
+    }
+    if (delivery.offerExpiresAt && Date.parse(delivery.offerExpiresAt) <= Date.now()) {
+        showToast('This delivery offer expired. The merchant can reassign it.');
+        refreshRiderWorkflow();
+        return;
+    }
+    const now = new Date().toISOString();
+    const updated = {
+        ...delivery,
+        status: 'declined',
+        updatedAt: now,
+        declineReason: reason,
+        statusHistory: [...(delivery.statusHistory || []), { status: 'declined', at: now, actor: partner.name, reason }]
+    };
+    const nextDeliveries = deliveries.map(record => record.id === delivery.id ? updated : record);
+    if (!saveMerchantCollection('kiryaMerchantDeliveries', nextDeliveries)) return;
+    refreshMerchantAfterRiderWrite({ deliveries: nextDeliveries });
+    clearInterval(riderOrderTimer);
+    document.getElementById('riderOrderModal').classList.remove('active');
+    riderPendingOfferId = null;
+    refreshRiderWorkflow();
+    showToast('Offer declined. The merchant can assign another rider.');
+}
 
 function initRiderMap() {
     if(riderMap) return;
@@ -2612,7 +3522,7 @@ function initRiderMap() {
     });
     const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 19 });
 
-    riderMap = L.map('riderMap', { zoomControl: false, layers: [streetLayer] }).setView([24.4539, 54.3773], 14);
+    riderMap = L.map('riderMap', { zoomControl: false, layers: [streetLayer] }).setView([0.3476, 32.5825], 12);
 
     const baseMaps = {
         "Street View": streetLayer,
@@ -2620,187 +3530,38 @@ function initRiderMap() {
         "Satellite": satelliteLayer
     };
     L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(riderMap);
+    refreshLiveRiderMaps();
+}
+
+function initMerchantRiderTrackingMap() {
+    const element = document.getElementById('merchantRiderLiveMap');
+    if (!element || merchantRiderTrackingMap) return;
+    merchantRiderTrackingMap = createTrackingMap(element);
 }
 
 function toggleRiderStatus() {
-    isRiderOnline = !isRiderOnline;
-    const btn = document.getElementById('riderStatusToggle');
-    const dot = btn.querySelector('.status-dot');
-    const text = btn.querySelector('.status-text');
-    const msg = document.getElementById('riderIdleMsg');
-    
-    if(isRiderOnline) {
-        btn.classList.remove('offline');
-        btn.classList.add('online');
-        dot.style.background = '#fff';
-        text.textContent = 'ONLINE';
-        text.style.color = '#fff';
-        btn.style.background = '#019E81';
-        btn.style.color = '#fff';
-        btn.style.border = 'none';
-        
-        msg.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:10px;"><span>🔍</span> Finding orders nearby...</div>';
-        msg.style.background = '#e0f2f1';
-        msg.style.color = '#019E81';
-        msg.style.fontWeight = 'bold';
-        
-        // Simulate an incoming order
-        setTimeout(() => {
-            if(isRiderOnline && riderCurrentStep === 0) triggerRiderOrder();
-        }, 2500);
-    } else {
-        btn.classList.remove('online');
-        btn.classList.add('offline');
-        dot.style.background = '#ff4757';
-        text.textContent = 'GO ONLINE';
-        text.style.color = '#ff4757';
-        btn.style.background = '#fff';
-        btn.style.border = '2px solid #ff4757';
-
-        msg.textContent = 'Go Online to start receiving orders.';
-        msg.style.background = '#f0f0f0';
-        msg.style.color = '#888';
-        msg.style.fontWeight = 'normal';
-    }
+    setRiderAvailability(!isRiderOnline);
 }
 
 function triggerRiderOrder() {
-    const modal = document.getElementById('riderOrderModal');
-    const timerFill = document.getElementById('riderTimerFill');
-    modal.classList.add('active');
-    
-    // Play notification sound
-    const notificationSound = document.getElementById('orderNotificationSound');
-    if (notificationSound) {
-        // We don't need to wait for the promise to resolve, but we catch errors to prevent console logs
-        // on browsers that block autoplay until user interaction.
-        notificationSound.play().catch(error => console.log("Audio play failed (user interaction might be required)."));
-    }
-
-    // Timer Logic
-    timerFill.style.width = '100%';
-    setTimeout(() => { timerFill.style.width = '0%'; }, 100);
-    
-    riderOrderTimer = setTimeout(() => {
-        modal.classList.remove('active');
-    }, 15000); // 15 seconds to accept
+    if (!isRiderOnline || riderPendingOfferId !== null) return;
+    const partner = riderCurrentPartner();
+    const deliveries = readRiderDeliveries();
+    if (!partner || !deliveries || getRiderActiveDelivery(deliveries, partner)) return;
+    const offer = deliveries.find(delivery =>
+        delivery.status === 'offered' && riderOwnsDelivery(delivery, partner) &&
+        (!delivery.offerExpiresAt || Date.parse(delivery.offerExpiresAt) > Date.now())
+    );
+    if (offer) showRiderOffer(offer);
 }
 
 document.getElementById('riderDeclineBtn').addEventListener('click', () => {
-    clearTimeout(riderOrderTimer);
-    document.getElementById('riderOrderModal').classList.remove('active');
+    declineRiderDelivery();
 });
 
 document.getElementById('riderAcceptBtn').addEventListener('click', () => {
-    clearTimeout(riderOrderTimer);
-    document.getElementById('riderOrderModal').classList.remove('active');
-    startRiderDelivery();
+    acceptRiderDelivery(riderPendingOfferId);
 });
-
-function startRouteSimulation() {
-    if (!riderMap) return;
-    clearRouteSimulation(); // Clear any previous routes
-
-    // Sample route from Restaurant to Customer
-    const routeCoords = [
-        [24.46, 54.38], [24.462, 54.385], [24.465, 54.387], [24.468, 54.386],
-        [24.47, 54.39], [24.472, 54.395], [24.47, 54.40], [24.468, 54.405],
-        [24.465, 54.408]
-    ];
-
-    // Full route path (dashed grey)
-    riderRoutePolyline = L.polyline(routeCoords, { color: '#888', weight: 5, opacity: 0.7, dashArray: '10, 10' }).addTo(riderMap);
-
-    // Rider's progress path (solid green)
-    riderProgressPolyline = L.polyline([], { color: '#019E81', weight: 6, opacity: 0.9 }).addTo(riderMap);
-
-    // Rider's marker
-    const riderIcon = L.divIcon({ 
-        html: `<div id="riderBikeIcon" style="
-            font-size: 20px; 
-            transition: transform 0.2s linear; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            width: 30px; 
-            height: 30px; 
-            background: #019E81;
-            color: white;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 0 5px rgba(0,0,0,0.5);
-        ">▲</div>`, 
-        className: '', 
-        iconSize: [30, 30], 
-        iconAnchor: [15, 15] 
-    });
-    riderMarker = L.marker(routeCoords[0], { icon: riderIcon }).addTo(riderMap);
-
-    riderMap.fitBounds(riderRoutePolyline.getBounds(), { padding: [50, 50] });
-
-    // Smooth Animation Logic
-    let currentSegment = 0;
-    let startTime = null;
-    const speed = 0.0001; // Degrees per millisecond (approximate speed control)
-
-    function animate(timestamp) {
-        if (!startTime) startTime = timestamp;
-        
-        if (currentSegment >= routeCoords.length - 1) return; // End of route
-
-        const startPoint = L.latLng(routeCoords[currentSegment]);
-        const endPoint = L.latLng(routeCoords[currentSegment + 1]);
-        const dist = riderMap.distance(startPoint, endPoint); // Meters
-        const duration = dist * 20; // 20ms per meter (adjust for speed)
-        
-        const elapsed = timestamp - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-
-        const newPos = interpolatePosition(startPoint, endPoint, progress);
-        riderMarker.setLatLng(newPos);
-
-        // Update Rotation
-        const bearing = getBearing(startPoint, endPoint);
-        const bikeEl = document.getElementById('riderBikeIcon');
-        if(bikeEl) {
-            // The '▲' icon points up (north) by default, so we can use the bearing directly.
-            bikeEl.style.transform = `rotate(${bearing}deg)`; 
-        }
-
-        // Update Trail
-        const currentPath = routeCoords.slice(0, currentSegment + 1).map(c => L.latLng(c));
-        currentPath.push(newPos);
-        riderProgressPolyline.setLatLngs(currentPath);
-
-        if (progress < 1) {
-            routeAnimationFrame = requestAnimationFrame(animate);
-        } else {
-            currentSegment++;
-            startTime = null;
-            routeAnimationFrame = requestAnimationFrame(animate);
-        }
-    }
-    routeAnimationFrame = requestAnimationFrame(animate);
-}
-
-function startRiderDelivery() {
-    riderCurrentStep = 1; // Pickup phase
-    document.getElementById('riderDashboardState').style.display = 'none';
-    document.getElementById('riderDeliveryState').style.display = 'block';
-    document.getElementById('riderStatusToggle').style.display = 'none'; // Hide toggle during delivery
-    
-    // Reset Swipe Button
-    resetSwipeButton('SWIPE TO PICK UP');
-    startRouteSimulation();
-}
-
-function clearRouteSimulation() {
-    if(routeAnimationFrame) cancelAnimationFrame(routeAnimationFrame);
-    if (riderMarker && riderMap) riderMap.removeLayer(riderMarker);
-    if (riderRoutePolyline && riderMap) riderMap.removeLayer(riderRoutePolyline);
-    if (riderProgressPolyline && riderMap) riderMap.removeLayer(riderProgressPolyline);
-    riderMarker = riderRoutePolyline = riderProgressPolyline = null;
-}
 
 function resetSwipeButton(text) {
     const container = document.getElementById('riderSwipeBtn');
@@ -2857,47 +3618,31 @@ function completeSwipe() {
     const knob = document.getElementById('riderSwipeKnob');
     container.classList.add('completed');
     knob.style.transform = `translateX(${container.clientWidth - knob.clientWidth - 8}px)`;
-    
-    setTimeout(() => {
-        if(riderCurrentStep === 1) {
-            // Transition to Dropoff
-            riderCurrentStep = 2;
-            document.getElementById('riderStepPickup').classList.remove('active');
-            document.getElementById('riderStepPickup').style.borderLeftColor = '#ddd';
-            document.getElementById('riderStepPickup').style.opacity = '0.5';
-            document.getElementById('riderStepDropoff').classList.add('active');
-            resetSwipeButton('SWIPE TO COMPLETE');
-            showToast('Picked up order! Heading to customer.');
-        } else if(riderCurrentStep === 2) {
-            // Complete Order
-            showToast('Order Delivered! + UGX 4,500');
-            document.getElementById('riderEarningsToday').textContent = '4,500.00';
-            document.getElementById('riderTripsToday').textContent = '1';
-            clearRouteSimulation();
-            
-            // Reset UI
-            setTimeout(() => {
-                document.getElementById('riderDeliveryState').style.display = 'none';
-                document.getElementById('riderDashboardState').style.display = 'block';
-                document.getElementById('riderStatusToggle').style.display = 'flex';
-                riderCurrentStep = 0;
-            }, 1000);
-        }
-    }, 500);
+    const partner = riderCurrentPartner();
+    const deliveries = readRiderDeliveries();
+    const delivery = deliveries && partner ? getRiderActiveDelivery(deliveries, partner) : null;
+    if (!delivery) {
+        showToast('Your active delivery could not be found. Refresh and try again.');
+        refreshRiderWorkflow();
+        return;
+    }
+    const nextStatus = delivery.status === 'accepted' || delivery.status === 'assigned'
+        ? 'picked-up'
+        : delivery.status === 'picked-up' ? 'in-transit' : 'delivered';
+    window.setTimeout(() => updateRiderDelivery(delivery.id, nextStatus), 300);
 }
 
 document.getElementById('riderStatusToggle').addEventListener('click', toggleRiderStatus);
-// Initialize map when rider screen opens
-document.querySelector('.nav-item:nth-child(5)').addEventListener('click', () => {
-    setTimeout(initRiderMap, 300);
-});
 
 function initMerchantCharts() {
-    // Prevent re-initialization
     if (dailySalesChartInstance) dailySalesChartInstance.destroy();
     if (topItemsChartInstance) topItemsChartInstance.destroy();
     if (orderStatusChartInstance) orderStatusChartInstance.destroy();
     if (menuAvailabilityChartInstance) menuAvailabilityChartInstance.destroy();
+    dailySalesChartInstance = null;
+    topItemsChartInstance = null;
+    orderStatusChartInstance = null;
+    menuAvailabilityChartInstance = null;
 
     const salesCtx = document.getElementById('dailySalesChart')?.getContext('2d');
     const itemsCtx = document.getElementById('topItemsChart')?.getContext('2d');
@@ -2905,20 +3650,17 @@ function initMerchantCharts() {
     const menuAvailabilityCtx = document.getElementById('menuAvailabilityChart')?.getContext('2d');
 
     if (!salesCtx || !itemsCtx || !orderStatusCtx || !menuAvailabilityCtx) return;
+    const analytics = getMerchantAnalyticsSnapshot();
 
-    // Daily Sales Chart (Line)
     dailySalesChartInstance = new Chart(salesCtx, {
-        type: 'line',
+        type: 'bar',
         data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            labels: analytics.valueLabels,
             datasets: [{
-                label: 'Sales',
-                data: [120000, 190000, 150000, 210000, 180000, 250000, 230000],
-                backgroundColor: 'rgba(1, 158, 129, 0.1)',
-                borderColor: '#019E81',
-                borderWidth: 2,
-                tension: 0.4,
-                fill: true,
+                label: 'Order value (UGX)',
+                data: analytics.values,
+                backgroundColor: ['#e2a529', '#15966f', '#d9534f'],
+                borderRadius: 5
             }]
         },
         options: {
@@ -2947,28 +3689,27 @@ function initMerchantCharts() {
         labels: { boxWidth: 8, boxHeight: 8, padding: 10, usePointStyle: true }
     };
 
-    // Top Selling Items Chart (Doughnut)
     topItemsChartInstance = new Chart(itemsCtx, {
         type: 'doughnut',
         data: {
-            labels: ['Burgers', 'Wings', 'Fries', 'Drinks'],
+            labels: analytics.categoryLabels,
             datasets: [{
-                label: 'Top Items',
-                data: [300, 150, 100, 200],
+                label: 'Menu items',
+                data: analytics.categoryValues,
                 backgroundColor: ['#FFBF42', '#ff4757', '#2ed573', '#1e90ff'],
                 hoverOffset: 4
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: pieLegendOptions } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: pieLegendOptions }         }
     });
 
     orderStatusChartInstance = new Chart(orderStatusCtx, {
         type: 'pie',
         data: {
-            labels: ['Completed', 'Preparing', 'Cancelled'],
+            labels: analytics.statusLabels,
             datasets: [{
-                data: [52, 11, 5],
-                backgroundColor: ['#15966f', '#e2a529', '#d9534f'],
+                data: analytics.statusValues,
+                backgroundColor: ['#e2a529', '#315e9f', '#15966f', '#1b8f78', '#d9534f'],
                 borderWidth: 0
             }]
         },
@@ -2992,9 +3733,7 @@ function initMerchantCharts() {
 
 // --- Merchant tools ---
 /* Merchant Menu Logic */
-const merchantManageMenuBtn = document.getElementById('merchantManageMenuBtn');
 const merchantMenuScreen = document.getElementById('merchantMenuScreen');
-const merchantMenuBackBtn = document.getElementById('merchantMenuBackBtn');
 const merchantAddMenuBtn = document.getElementById('merchantAddMenuBtn');
 const merchantEditItemScreen = document.getElementById('merchantEditItemScreen');
 
@@ -3005,6 +3744,11 @@ let merchantMenuItems = [
     { id: 4, name: "French Fries", price: 15000, category: "Sides", img: "🍟", image: "assets/merchant-fries.jpg", description: "Golden fries with a light seasoning.", ingredients: "Potatoes, vegetable oil, sea salt", active: false },
     { id: 5, name: "Chicken Pizza", price: 35000, category: "Pizza", img: "🍕", image: "assets/merchant-pizza.jpg", description: "Stone-baked pizza topped with chicken and fresh herbs.", ingredients: "Chicken, mozzarella, tomato, red onion, herbs", active: true }
 ];
+
+merchantMenuItems = loadMerchantCollection('kiryaMerchantMenu', merchantMenuItems, item =>
+    item && Number.isInteger(item.id) && typeof item.name === 'string' &&
+    Number.isFinite(item.price) && item.price > 0 && typeof item.active === 'boolean'
+);
 
 function escapeMerchantText(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -3020,6 +3764,175 @@ function formatMerchantCurrency(value) {
     return `UGX ${Number(value).toLocaleString('en-UG')}`;
 }
 
+function loadMerchantCollection(key, fallback, isValidRecord) {
+    try {
+        const saved = localStorage.getItem(key);
+        if (!saved) return fallback.map(record => ({ ...record }));
+        const records = JSON.parse(saved);
+        if (!Array.isArray(records) || !records.every(isValidRecord)) {
+            throw new Error(`Saved ${key} data has an invalid format.`);
+        }
+        return records;
+    } catch (error) {
+        console.error(`Unable to load merchant data for ${key}.`, error);
+        showToast('Could not load saved merchant data; using sample records.');
+        return fallback.map(record => ({ ...record }));
+    }
+}
+
+function saveMerchantCollection(key, records) {
+    try {
+        localStorage.setItem(key, JSON.stringify(records));
+        return true;
+    } catch (error) {
+        console.error(`Unable to save merchant data for ${key}.`, error);
+        showToast('Changes could not be saved in this browser.');
+        return false;
+    }
+}
+
+function saveMerchantCollections(collections) {
+    const previousValues = new Map();
+    const savedKeys = [];
+    try {
+        for (const key of Object.keys(collections)) previousValues.set(key, localStorage.getItem(key));
+        for (const [key, records] of Object.entries(collections)) {
+            localStorage.setItem(key, JSON.stringify(records));
+            savedKeys.push(key);
+        }
+        return true;
+    } catch (error) {
+        console.error('Unable to save related merchant records.', error);
+        for (const key of savedKeys.reverse()) {
+            try {
+                const previousValue = previousValues.get(key);
+                if (previousValue === null) localStorage.removeItem(key);
+                else localStorage.setItem(key, previousValue);
+            } catch (rollbackError) {
+                console.error(`Unable to restore merchant data for ${key}.`, rollbackError);
+            }
+        }
+        showToast('Changes could not be saved in this browser.');
+        return false;
+    }
+}
+
+const merchantRecordPageSize = 10;
+const merchantRecordPages = { customers: 1, partners: 1, deliveries: 1 };
+const notifiedOverdueDeliveries = new Set();
+
+function paginateMerchantRecords(type, records) {
+    const pageCount = Math.max(1, Math.ceil(records.length / merchantRecordPageSize));
+    merchantRecordPages[type] = Math.min(merchantRecordPages[type], pageCount);
+    const page = merchantRecordPages[type];
+    const start = (page - 1) * merchantRecordPageSize;
+    const section = type === 'partners' ? 'Partner' : type === 'customers' ? 'Customer' : 'Delivery';
+    document.getElementById(`merchant${section}PageInfo`).textContent =
+        records.length ? `Showing ${start + 1}-${Math.min(start + merchantRecordPageSize, records.length)} of ${records.length}` : 'No records';
+    document.getElementById(`merchant${section}Prev`).disabled = page <= 1;
+    document.getElementById(`merchant${section}Next`).disabled = page >= pageCount;
+    return records.slice(start, start + merchantRecordPageSize);
+}
+
+function exportMerchantRecords(filename, records, columns) {
+    const csv = [
+        columns.map(([, label]) => label),
+        ...records.map(record => columns.map(([key]) => {
+            const value = record[key] ?? '';
+            return typeof value === 'object' ? JSON.stringify(value) : value;
+        }))
+    ].map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function merchantPhoneKey(phone) {
+    return String(phone || '').replace(/\D/g, '');
+}
+
+function createCustomerMarketplaceOrder({ restaurant, items, subtotal, deliveryFee, tipAmount, total, customerName, customerPhone, deliveryAddress, paymentMethod, notes }) {
+    const normalizedAddress = String(deliveryAddress || '').trim();
+    if (!normalizedAddress || ['Not set', 'Set delivery address'].includes(normalizedAddress)) {
+        showToast('Set a delivery address before placing your order.');
+        return false;
+    }
+    const name = String(customerName || '').trim();
+    const phone = String(customerPhone || '').trim();
+    if (merchantPhoneKey(phone).length < 8) {
+        showToast('Enter a valid customer phone number before placing the order.');
+        return false;
+    }
+    const createdAt = new Date().toISOString();
+    const customer = merchantCustomers.find(record => merchantPhoneKey(record.phone) === merchantPhoneKey(phone));
+    const customerId = customer?.id || Math.max(0, ...merchantCustomers.map(record => record.id)) + 1;
+    const order = {
+        id: `#C${Date.now().toString(36).toUpperCase()}`,
+        customer: name || 'Customer',
+        phone,
+        customerId,
+        merchant: String(restaurant || 'Kirya merchant').trim(),
+        createdAt,
+        received: new Date().toLocaleTimeString('en-UG', { hour: 'numeric', minute: '2-digit' }),
+        fulfillment: 'delivery',
+        deliveryAddress: normalizedAddress,
+        pickupAddress: merchantPickupAddress,
+        items: items.join(', '),
+        subtotal: formatMerchantCurrency(subtotal),
+        deliveryFee: formatMerchantCurrency(deliveryFee),
+        tip: formatMerchantCurrency(tipAmount),
+        total: formatMerchantCurrency(total),
+        paymentMethod,
+        customerNotes: notes || '',
+        status: 'new',
+        statusHistory: [{ status: 'new', at: createdAt, actor: 'Customer (prototype)' }]
+    };
+    const nextCustomers = customer
+        ? merchantCustomers.map(record => record.id === customer.id
+            ? {
+                ...record,
+                name: name || record.name,
+                address: normalizedAddress,
+                orders: record.orders + 1,
+                lastOrderAt: createdAt,
+                updatedAt: createdAt
+            }
+            : record)
+        : [{
+            id: customerId,
+            name: name || 'Customer',
+            phone,
+            email: '',
+            address: normalizedAddress,
+            orders: 1,
+            lastOrderAt: createdAt,
+            createdAt,
+            updatedAt: createdAt
+        }, ...merchantCustomers];
+    const nextActiveOrders = [order, ...demoActiveOrders];
+    if (!saveMerchantCollections({
+        kiryaMerchantActiveOrders: nextActiveOrders,
+        kiryaMerchantCustomers: nextCustomers
+    })) return false;
+    demoActiveOrders = nextActiveOrders;
+    merchantCustomers = nextCustomers;
+    try {
+        localStorage.setItem('kiryaCustomerPhone', phone);
+    } catch (error) {
+        console.error('Unable to save the customer order lookup contact.', error);
+        showToast('Order was recorded, but the customer contact could not be saved on this device.');
+    }
+    renderCustomerOrders();
+    renderMerchantActiveOrders();
+    renderMerchantCustomers();
+    renderMerchantAssignmentOptions();
+    updateMerchantOrderMetrics();
+    return order;
+}
+
 function updateMerchantMenuCount() {
     const count = document.getElementById('merchantAvailableMenuCount');
     const availableCount = merchantMenuItems.filter(item => item.active).length;
@@ -3028,6 +3941,7 @@ function updateMerchantMenuCount() {
         menuAvailabilityChartInstance.data.datasets[0].data = [availableCount, merchantMenuItems.length - availableCount];
         menuAvailabilityChartInstance.update();
     }
+    if (dailySalesChartInstance || topItemsChartInstance || orderStatusChartInstance) updateMerchantAnalytics();
 }
 
 updateMerchantMenuCount();
@@ -3037,15 +3951,24 @@ function renderMerchantMenuItems() {
     if(!list) return;
     updateMerchantMenuCount();
     list.innerHTML = '';
-    
-    merchantMenuItems.forEach(item => {
+    const search = document.getElementById('merchantMenuSearch').value.trim().toLowerCase();
+    const filteredItems = merchantMenuItems.filter(item =>
+        `${item.name} ${item.category || ''} ${item.description || ''}`.toLowerCase().includes(search)
+    );
+
+    if (filteredItems.length === 0) {
+        list.innerHTML = '<div class="merchant-record-empty">No menu items match your search.</div>';
+        return;
+    }
+
+    filteredItems.forEach(item => {
         const div = document.createElement('div');
-        div.style.cursor = 'pointer';
         div.className = 'menu-mgmt-item';
         const productImage = item.image
             ? `<img src="${escapeMerchantText(item.image)}" alt="" loading="lazy">`
             : escapeMerchantText(item.img || '');
         div.innerHTML = `
+            <button class="menu-mgmt-edit" type="button" aria-label="Edit ${escapeMerchantText(item.name)}">
             <div class="menu-mgmt-info">
                 <div class="menu-mgmt-img">${productImage}</div>
                 <div class="menu-mgmt-text">
@@ -3055,26 +3978,22 @@ function renderMerchantMenuItems() {
                     <div class="menu-mgmt-description">${escapeMerchantText(item.description)}</div>
                 </div>
             </div>
-            <div class="menu-mgmt-toggle ${item.active ? 'active' : ''}"></div>
+            </button>
+            <button class="menu-mgmt-toggle ${item.active ? 'active' : ''}" type="button" aria-label="${item.active ? 'Disable' : 'Enable'} ${escapeMerchantText(item.name)}" aria-pressed="${item.active}"></button>
         `;
         
-        // Event listener for the toggle switch
         div.querySelector('.menu-mgmt-toggle').addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent the main item click event
+            e.stopPropagation();
             const toggle = e.currentTarget;
-            toggle.classList.toggle('active');
-            const isActive = toggle.classList.contains('active');
-            
-            // Update the data model
             const dataItem = merchantMenuItems.find(i => i.id === item.id);
-            if (dataItem) dataItem.active = isActive;
+            if (dataItem) dataItem.active = !dataItem.active;
+            saveMerchantCollection('kiryaMerchantMenu', merchantMenuItems);
+            renderMerchantMenuItems();
             updateMerchantMenuCount();
-            
             showToast(`${item.name} status updated`);
         });
         
-        // Event listener for the whole item to open the edit screen
-        div.addEventListener('click', () => {
+        div.querySelector('.menu-mgmt-edit').addEventListener('click', () => {
             openEditItemScreen(item.id);
         });
 
@@ -3119,7 +4038,50 @@ function openEditItemScreen(itemId) {
         idInput.value = item.id;
         deleteBtn.style.display = 'block';
     }
+    updateMerchantImagePreview(imageInput.value);
     merchantEditItemScreen.classList.add('active');
+    nameInput.focus();
+}
+
+function updateMerchantImagePreview(imageUrl) {
+    const preview = document.getElementById('merchantImagePreview');
+    const status = document.getElementById('merchantImagePreviewStatus');
+    if (!preview || !status) return;
+    preview.querySelector('img')?.remove();
+    const trimmedUrl = imageUrl.trim();
+    if (!trimmedUrl) {
+        status.textContent = 'Image preview appears here';
+        preview.classList.remove('has-image', 'image-error');
+        return;
+    }
+    try {
+        if (!['http:', 'https:'].includes(new URL(trimmedUrl, window.location.href).protocol)) {
+            status.textContent = 'Use an HTTP(S) image URL or relative path.';
+            preview.classList.remove('has-image');
+            preview.classList.add('image-error');
+            return;
+        }
+    } catch {
+        status.textContent = 'Enter a valid image URL or relative path.';
+        preview.classList.remove('has-image');
+        preview.classList.add('image-error');
+        return;
+    }
+    const image = document.createElement('img');
+    image.alt = 'Menu item preview';
+    image.onload = () => {
+        status.textContent = '';
+        preview.classList.add('has-image');
+        preview.classList.remove('image-error');
+    };
+    image.onerror = () => {
+        image.remove();
+        status.textContent = 'Image could not be loaded. Check the URL.';
+        preview.classList.remove('has-image');
+        preview.classList.add('image-error');
+    };
+    image.src = trimmedUrl;
+    preview.appendChild(image);
 }
 
 function openMerchantMenu() {
@@ -3128,12 +4090,18 @@ function openMerchantMenu() {
     renderMerchantMenuItems();
 }
 
-if(merchantManageMenuBtn) merchantManageMenuBtn.addEventListener('click', openMerchantMenu);
-if(merchantMenuBackBtn) merchantMenuBackBtn.addEventListener('click', () => merchantMenuScreen.classList.remove('active'));
-if(merchantAddMenuBtn) merchantAddMenuBtn.addEventListener('click', () => openEditItemScreen(null));
+function openMerchantNewItem() {
+    [merchantKioskScreen, merchantMenuScreen, merchantEditItemScreen, merchantOrdersScreen, merchantActiveOrdersScreen]
+        .forEach(screen => screen?.classList.remove('active'));
+    setMerchantNavView('menu');
+    merchantMenuScreen?.classList.add('active');
+    openEditItemScreen(null);
+    setMerchantNavOpen(false);
+}
 
-// Listeners for the Edit Item Screen
-document.getElementById('editItemBackBtn').addEventListener('click', () => merchantEditItemScreen.classList.remove('active'));
+if(merchantAddMenuBtn) merchantAddMenuBtn.addEventListener('click', openMerchantNewItem);
+document.getElementById('merchantMenuSearch').addEventListener('input', renderMerchantMenuItems);
+document.getElementById('editItemImage').addEventListener('input', event => updateMerchantImagePreview(event.target.value));
 
 document.getElementById('saveItemBtn').addEventListener('click', () => {
     const id = document.getElementById('editItemId').value;
@@ -3144,17 +4112,34 @@ document.getElementById('saveItemBtn').addEventListener('click', () => {
     const description = document.getElementById('editItemDescription').value.trim();
     const ingredients = document.getElementById('editItemIngredients').value.trim();
     const category = document.getElementById('editItemCategory').value;
+    const imageInput = document.getElementById('editItemImage');
 
-    if (!name.trim() || !Number.isFinite(price) || price <= 0) { showToast('Enter an item name and a price greater than zero.'); return; }
+    if (!name.trim() || !Number.isFinite(price) || price <= 0 || price % 500 !== 0) { showToast('Enter an item name and a price in 500 UGX increments.'); return; }
+    let isValidImageUrl = true;
+    if (imageInput.value.trim()) {
+        try {
+            isValidImageUrl = ['http:', 'https:'].includes(new URL(imageInput.value.trim(), window.location.href).protocol);
+        } catch {
+            isValidImageUrl = false;
+        }
+    }
+    if (!isValidImageUrl) {
+        imageInput.focus();
+        showToast('Enter an HTTP(S) image URL or a valid relative path.');
+        return;
+    }
 
     if (id) { // Update existing
-        const item = merchantMenuItems.find(i => i.id == id);
+        const item = merchantMenuItems.find(i => i.id === Number(id));
         if (item) { Object.assign(item, { name: name.trim(), price, img, image, description, ingredients, category }); }
     } else { // Add new
         const newId = Math.max(0, ...merchantMenuItems.map(i => i.id)) + 1;
         merchantMenuItems.push({ id: newId, name: name.trim(), price, category, img, image, description, ingredients, active: true });
     }
+    saveMerchantCollection('kiryaMerchantMenu', merchantMenuItems);
     renderMerchantMenuItems();
+    updateMerchantAnalytics();
+    updateMerchantImagePreview('');
     merchantEditItemScreen.classList.remove('active');
     showToast('Menu updated successfully!');
 });
@@ -3163,6 +4148,7 @@ document.getElementById('deleteItemBtn').addEventListener('click', () => {
     const id = document.getElementById('editItemId').value;
     if (id && confirm('Are you sure you want to delete this item?')) {
         merchantMenuItems = merchantMenuItems.filter(i => i.id != id);
+        saveMerchantCollection('kiryaMerchantMenu', merchantMenuItems);
         renderMerchantMenuItems();
         merchantEditItemScreen.classList.remove('active');
         showToast('Item deleted.');
@@ -3170,24 +4156,56 @@ document.getElementById('deleteItemBtn').addEventListener('click', () => {
 });
 
 /* Merchant Past Orders Logic */
-const merchantOrdersBtn = document.getElementById('merchantOrdersBtn');
 const merchantOrdersScreen = document.getElementById('merchantOrdersScreen');
-const merchantOrdersBackBtn = document.getElementById('merchantOrdersBackBtn');
+const merchantActiveOrdersScreen = document.getElementById('merchantActiveOrdersScreen');
+const merchantCustomersScreen = document.getElementById('merchantCustomersScreen');
+const merchantDeliveryScreen = document.getElementById('merchantDeliveryScreen');
+const merchantAssignedRidersScreen = document.getElementById('merchantAssignedRidersScreen');
 const merchantOrdersList = document.getElementById('merchantOrdersList');
-const merchantBottomNav = document.getElementById('merchantBottomNav');
 const merchantPortalScreen = document.getElementById('shopPortalScreen');
-const merchantSidebarToggle = document.getElementById('merchantMobileNavToggle');
-const merchantSidebarCollapse = document.getElementById('merchantSidebarCollapse');
+const merchantHeaderNavToggles = document.querySelectorAll('[data-merchant-nav-toggle]');
 const merchantSidebarBackdrop = document.getElementById('merchantSidebarBackdrop');
+const merchantSidebar = document.getElementById('merchantSidebar');
+const merchantSidebarClose = document.getElementById('merchantSidebarClose');
 const merchantSidebarNav = document.querySelector('.merchant-side-nav');
 const merchantStoreToggleBtn = document.getElementById('merchantStoreToggleBtn');
+const merchantStoreStatusIndicator = document.getElementById('merchantStoreStatusIndicator');
 const merchantKioskScreen = document.getElementById('merchantKioskScreen');
-const merchantKioskBackBtn = document.getElementById('merchantKioskBackBtn');
 const merchantKioskCartJump = document.getElementById('merchantKioskCartJump');
-let merchantStoreIsOpen = true;
+function loadMerchantStoreStatus() {
+    try {
+        return localStorage.getItem('kiryaMerchantStoreOpen') !== 'false';
+    } catch (error) {
+        console.error('Unable to load merchant store status.', error);
+        showToast('Could not load the saved store status.');
+        return true;
+    }
+}
+
+let merchantStoreIsOpen = loadMerchantStoreStatus();
+
+function loadMerchantPickupAddress() {
+    try {
+        const saved = localStorage.getItem('kiryaMerchantPickupAddress');
+        if (saved === null) return '';
+        const address = JSON.parse(saved);
+        if (typeof address !== 'string') throw new Error('Saved pickup address is not text.');
+        return address;
+    } catch (error) {
+        console.error('Unable to load the merchant pickup address.', error);
+        showToast('Saved rider pickup location could not be loaded.');
+        return '';
+    }
+}
+
+let merchantPickupAddress = loadMerchantPickupAddress();
+document.getElementById('merchantPickupAddress').value = merchantPickupAddress;
+document.getElementById('merchantPickupAddressStatus').textContent = merchantPickupAddress
+    ? 'Pickup location is saved and will be included in new delivery orders.'
+    : 'Add the store address before sending rider offers.';
 
 function setMerchantNavView(view) {
-    merchantPortalScreen?.querySelectorAll('[data-merchant-view]').forEach(button => {
+    document.querySelectorAll('#merchantSidebar [data-merchant-view]').forEach(button => {
         const isActive = button.dataset.merchantView === view;
         button.classList.toggle('active', isActive);
         if (isActive) button.setAttribute('aria-current', 'page');
@@ -3195,93 +4213,1122 @@ function setMerchantNavView(view) {
     });
 }
 
-function setMerchantMobileNavOpen(isOpen) {
-    merchantPortalScreen?.classList.toggle('mobile-nav-open', isOpen);
-    merchantSidebarToggle?.setAttribute('aria-expanded', String(isOpen));
-    merchantSidebarToggle?.setAttribute('aria-label', isOpen ? 'Close vendor navigation' : 'Open vendor navigation');
+function setMerchantNavOpen(isOpen) {
+    document.body.classList.toggle('merchant-nav-open', isOpen);
+    merchantSidebar?.setAttribute('aria-hidden', String(!isOpen));
+    if (merchantSidebar) merchantSidebar.inert = !isOpen;
+    merchantHeaderNavToggles.forEach(toggle => {
+        toggle.setAttribute('aria-expanded', String(isOpen));
+        toggle.setAttribute('aria-label', isOpen ? 'Close merchant navigation' : 'Open merchant navigation');
+    });
+}
+
+function toggleMerchantHeaderNavigation() {
+    const isOpening = !document.body.classList.contains('merchant-nav-open');
+    setMerchantNavOpen(isOpening);
+    if (isOpening) merchantSidebarClose?.focus();
+}
+
+function closeMerchantNavAndReturnFocus() {
+    setMerchantNavOpen(false);
+    document.querySelector('.generic-screen.active [data-merchant-nav-toggle]')?.focus();
 }
 
 function navigateMerchantView(view) {
-    setMerchantNavView(view === 'add-item' ? 'menu' : view);
+    setMerchantNavView(view);
+    const merchantScreens = [
+        merchantPortalScreen, merchantActiveOrdersScreen, merchantOrdersScreen,
+        merchantMenuScreen, merchantEditItemScreen, merchantKioskScreen,
+        merchantDeliveryScreen, merchantAssignedRidersScreen, merchantCustomersScreen
+    ];
+    merchantScreens.forEach(screen => screen?.classList.remove('active'));
+
     if (view === 'dashboard') {
+        merchantPortalScreen?.classList.add('active');
         document.getElementById('merchantPortalContent')?.scrollTo({ top: 0 });
     } else if (view === 'kiosk') {
         openMerchantKiosk();
     } else if (view === 'orders') {
         openMerchantOrders();
+    } else if (view === 'active-orders') {
+        openMerchantActiveOrders();
     } else if (view === 'menu') {
         openMerchantMenu();
-    } else if (view === 'add-item') {
-        openMerchantMenu();
-        merchantAddMenuBtn?.click();
+    } else if (view === 'delivery') {
+        renderMerchantPartners();
+        merchantDeliveryScreen?.classList.add('active');
+    } else if (view === 'assigned-riders') {
+        populateMerchantAssignmentOptions();
+        renderMerchantDeliveries();
+        merchantAssignedRidersScreen?.classList.add('active');
+        initMerchantRiderTrackingMap();
+        setTimeout(() => merchantRiderTrackingMap?.invalidateSize(), 100);
+        refreshLiveRiderMaps();
+    } else if (view === 'customers') {
+        renderMerchantCustomers();
+        merchantCustomersScreen?.classList.add('active');
     }
-    setMerchantMobileNavOpen(false);
+    setMerchantNavOpen(false);
+    document.querySelector('.generic-screen.active [data-merchant-nav-toggle]')?.focus();
 }
 
-merchantSidebarToggle?.addEventListener('click', () => {
-    setMerchantMobileNavOpen(!merchantPortalScreen?.classList.contains('mobile-nav-open'));
-});
-
-merchantSidebarCollapse?.addEventListener('click', () => {
-    const isCollapsed = merchantPortalScreen?.classList.toggle('sidebar-collapsed');
-    merchantSidebarCollapse.setAttribute('aria-expanded', String(!isCollapsed));
-    merchantSidebarCollapse.setAttribute('aria-label', isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
-    merchantSidebarCollapse.title = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
-    merchantSidebarCollapse.querySelector('span').textContent = isCollapsed ? '›' : '‹';
-});
-
-merchantSidebarBackdrop?.addEventListener('click', () => setMerchantMobileNavOpen(false));
-merchantKioskBackBtn?.addEventListener('click', () => {
-    merchantKioskScreen?.classList.remove('active');
-    setMerchantNavView('dashboard');
+merchantHeaderNavToggles.forEach(toggle => toggle.addEventListener('click', toggleMerchantHeaderNavigation));
+merchantSidebarBackdrop?.addEventListener('click', closeMerchantNavAndReturnFocus);
+merchantSidebarClose?.addEventListener('click', closeMerchantNavAndReturnFocus);
+merchantSidebarNav?.addEventListener('click', event => {
+    const button = event.target.closest('[data-merchant-view]');
+    if (button) navigateMerchantView(button.dataset.merchantView);
 });
 merchantKioskCartJump?.addEventListener('click', () => {
     document.getElementById('merchantKioskCartPanel')?.scrollIntoView({ block: 'start' });
 });
-merchantStoreToggleBtn?.addEventListener('click', () => {
-    merchantStoreIsOpen = !merchantStoreIsOpen;
+function updateMerchantStoreStatus() {
     const action = merchantStoreIsOpen ? 'Close store' : 'Open store';
     const status = merchantStoreIsOpen ? 'Open' : 'Closed';
-    merchantStoreToggleBtn.querySelector('.merchant-side-label').textContent = action;
-    merchantStoreToggleBtn.setAttribute('aria-label', action);
-    merchantStoreToggleBtn.title = action;
-    merchantStoreToggleBtn.classList.toggle('is-closed', !merchantStoreIsOpen);
-    document.getElementById('merchantStoreStatusText').textContent = status;
-    document.getElementById('merchantStoreCard').classList.toggle('is-closed', !merchantStoreIsOpen);
-    setMerchantMobileNavOpen(false);
-    showToast(`Store is now ${status.toLowerCase()}.`);
-});
-merchantSidebarNav?.addEventListener('click', event => {
-    const button = event.target.closest('[data-merchant-view]');
-    if (!button || button.id === 'merchantOrdersBtn' || button.id === 'merchantManageMenuBtn') return;
-    navigateMerchantView(button.dataset.merchantView);
-});
-merchantBottomNav?.addEventListener('click', event => {
-    const button = event.target.closest('[data-merchant-view]');
-    if (button) navigateMerchantView(button.dataset.merchantView);
+    const label = merchantStoreToggleBtn?.querySelector('.merchant-side-label');
+    if (label) label.textContent = action;
+    merchantStoreToggleBtn?.setAttribute('aria-label', action);
+    if (merchantStoreToggleBtn) merchantStoreToggleBtn.title = action;
+    merchantStoreToggleBtn?.classList.toggle('is-closed', !merchantStoreIsOpen);
+    const storeStatusText = document.getElementById('merchantStoreStatusText');
+    if (storeStatusText) storeStatusText.textContent = status;
+    merchantStoreStatusIndicator?.classList.toggle('is-closed', !merchantStoreIsOpen);
+    const closedNotice = document.getElementById('merchantKioskClosedNotice');
+    if (closedNotice) closedNotice.hidden = merchantStoreIsOpen;
+    const placeOrderButton = document.getElementById('merchantKioskPlaceOrder');
+    if (placeOrderButton) placeOrderButton.disabled = !merchantStoreIsOpen || merchantKioskCart.size === 0;
+}
+
+merchantStoreToggleBtn?.addEventListener('click', () => {
+    merchantStoreIsOpen = !merchantStoreIsOpen;
+    try {
+        localStorage.setItem('kiryaMerchantStoreOpen', String(merchantStoreIsOpen));
+    } catch (error) {
+        console.error('Unable to save merchant store status.', error);
+        showToast('Store status could not be saved in this browser.');
+    }
+    updateMerchantStoreStatus();
+    const status = merchantStoreIsOpen ? 'open' : 'closed';
+    showToast(`Store is now ${status}.`);
 });
 
 document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && merchantPortalScreen?.classList.contains('mobile-nav-open')) {
-        setMerchantMobileNavOpen(false);
-        merchantSidebarToggle?.focus();
+    if (!document.body.classList.contains('merchant-nav-open')) return;
+    if (event.key === 'Escape') {
+        closeMerchantNavAndReturnFocus();
+        return;
+    }
+    if (event.key === 'Tab') {
+        const focusableItems = merchantSidebar?.querySelectorAll('button:not([disabled])');
+        if (!focusableItems?.length) return;
+        const first = focusableItems[0];
+        const last = focusableItems[focusableItems.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
     }
 });
 
-window.matchMedia('(min-width: 761px)').addEventListener?.('change', event => {
-    if (event.matches) setMerchantMobileNavOpen(false);
-});
-
-const demoActiveOrders = [
+let demoActiveOrders = loadMerchantCollection('kiryaMerchantActiveOrders', [
     { id: '#8912', customer: 'Sarah N.', items: '2x Chicken Biryani, 1x Mango Juice', total: 'UGX 42,000', received: '10:42 AM', status: 'new' },
     { id: '#8911', customer: 'Daniel K.', items: '1x Family Pizza, 2x Soda', total: 'UGX 68,000', received: '10:35 AM', status: 'preparing' },
     { id: '#8910', customer: 'Amina S.', items: '1x Grilled Chicken, 1x Fries', total: 'UGX 51,000', received: '10:28 AM', status: 'ready' }
+], order =>
+    order && typeof order.id === 'string' && typeof order.customer === 'string' &&
+    typeof order.items === 'string' && typeof order.total === 'string' &&
+    /\d/.test(order.total) && typeof order.received === 'string' &&
+    ['new', 'preparing', 'ready'].includes(order.status)
+);
+
+let merchantCustomers = [
+    { id: 1, name: 'Sarah N.', phone: '+256 772 123456', email: 'sarah@example.com', address: 'Kololo, Kampala', orders: 12, lastOrderAt: new Date(Date.now() - 1 * 86400000).toISOString() },
+    { id: 2, name: 'Daniel K.', phone: '+256 701 234567', email: 'daniel@example.com', address: 'Ntinda, Kampala', orders: 8, lastOrderAt: new Date(Date.now() - 4 * 86400000).toISOString() },
+    { id: 3, name: 'Amina S.', phone: '+256 783 345678', email: 'amina@example.com', address: 'Bugolobi, Kampala', orders: 5, lastOrderAt: new Date(Date.now() - 2 * 86400000).toISOString() }
 ];
 
+merchantCustomers = loadMerchantCollection('kiryaMerchantCustomers', merchantCustomers, customer =>
+    customer && Number.isInteger(customer.id) && typeof customer.name === 'string' &&
+    typeof customer.phone === 'string' && typeof customer.email === 'string' &&
+    typeof customer.address === 'string' && Number.isInteger(customer.orders) && customer.orders >= 0
+);
+
+let merchantNeedsOrderMigration = false;
+demoActiveOrders = demoActiveOrders.map(order => {
+    const customer = merchantCustomers.find(record =>
+        record.id === order.customerId ||
+        (order.phone && merchantPhoneKey(record.phone) === merchantPhoneKey(order.phone)) ||
+        record.name.toLowerCase() === order.customer.toLowerCase()
+    );
+    const fulfillment = order.fulfillment || (order.table ? 'dine-in' : 'delivery');
+    const deliveryAddress = order.deliveryAddress || (fulfillment === 'delivery' ? customer?.address || '' : '');
+    const statusHistory = Array.isArray(order.statusHistory)
+        ? order.statusHistory.filter(item => item && typeof item.status === 'string' && Number.isFinite(Date.parse(item.at)))
+        : [];
+    if (order.fulfillment !== fulfillment || order.deliveryAddress !== deliveryAddress ||
+        statusHistory.length !== (order.statusHistory?.length || 0) || !statusHistory.length) {
+        merchantNeedsOrderMigration = true;
+    }
+    return {
+        ...order,
+        fulfillment,
+        deliveryAddress,
+        statusHistory: statusHistory.length
+            ? statusHistory
+            : [{
+                status: order.status,
+                at: Number.isFinite(Date.parse(order.createdAt)) ? order.createdAt : new Date().toISOString(),
+                actor: 'Legacy record'
+            }]
+    };
+});
+if (merchantNeedsOrderMigration) saveMerchantCollection('kiryaMerchantActiveOrders', demoActiveOrders);
+
+let merchantPartners = [
+    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active' },
+    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active' }
+];
+
+merchantPartners = loadMerchantCollection('kiryaMerchantPartners', merchantPartners, partner =>
+    partner && Number.isInteger(partner.id) && typeof partner.name === 'string' &&
+    typeof partner.phone === 'string' && typeof partner.email === 'string' &&
+    typeof partner.vehicle === 'string' && typeof partner.area === 'string' &&
+    ['active', 'inactive'].includes(partner.status)
+).map(partner => ({ ...partner, availability: ['available', 'off-duty'].includes(partner.availability) ? partner.availability : 'available' }));
+
+let merchantDeliveries = [
+    { id: 1, order: '#8911', customer: 'Daniel K.', address: 'Ntinda, Kampala', driver: 'James M.', phone: '+256 700 111222', status: 'in-transit' },
+    { id: 2, order: '#8910', customer: 'Amina S.', address: 'Bugolobi, Kampala', driver: 'Grace N.', phone: '+256 780 333444', status: 'assigned' }
+];
+
+const merchantDeliveryStatusLabels = {
+    offered: 'Offered',
+    accepted: 'Accepted',
+    assigned: 'Assigned',
+    'picked-up': 'Picked up',
+    'in-transit': 'In transit',
+    delivered: 'Delivered',
+    declined: 'Declined',
+    failed: 'Failed',
+    cancelled: 'Cancelled'
+};
+
+let merchantNeedsDeliveryMigration = false;
+merchantDeliveries = loadMerchantCollection('kiryaMerchantDeliveries', merchantDeliveries, delivery =>
+    delivery && Number.isInteger(delivery.id) && typeof delivery.order === 'string' &&
+    typeof delivery.customer === 'string' && typeof delivery.address === 'string' &&
+    typeof delivery.driver === 'string' && typeof delivery.phone === 'string' &&
+    ['offered', 'accepted', 'assigned', 'picked-up', 'in-transit', 'delivered', 'declined', 'failed', 'cancelled'].includes(delivery.status)
+).map(delivery => {
+    const now = new Date().toISOString();
+    const partner = merchantPartners.find(record => merchantPhoneKey(record.phone) === merchantPhoneKey(delivery.phone));
+    const order = demoActiveOrders.find(record => record.id === delivery.order);
+    const customer = order && merchantCustomers.find(record =>
+        record.id === order.customerId ||
+        (order.phone && merchantPhoneKey(record.phone) === merchantPhoneKey(order.phone)) ||
+        record.name.toLowerCase() === order.customer.toLowerCase()
+    );
+    const assignedAt = delivery.assignedAt || delivery.createdAt || now;
+    const statusHistory = Array.isArray(delivery.statusHistory)
+        ? delivery.statusHistory.filter(item =>
+            item && merchantDeliveryStatusLabels[item.status] && Number.isFinite(Date.parse(item.at))
+        )
+        : [];
+    const status = delivery.status === 'assigned' ? 'accepted' : delivery.status;
+    const normalizedHistory = statusHistory.map(item => ({
+        ...item,
+        status: item.status === 'assigned' ? 'accepted' : item.status,
+        actor: item.actor || 'Legacy record'
+    }));
+    if (!delivery.assignedAt || !delivery.partnerId || status !== delivery.status ||
+        !statusHistory.length ||
+        normalizedHistory.length !== (delivery.statusHistory?.length || 0) ||
+        normalizedHistory.some((item, index) =>
+            item.actor !== statusHistory[index]?.actor || item.status !== statusHistory[index]?.status
+        ) ||
+        (customer && (!delivery.customerId || !delivery.customerPhone))) {
+        merchantNeedsDeliveryMigration = true;
+    }
+    return {
+        ...delivery,
+        status,
+        partnerId: delivery.partnerId || partner?.id || null,
+        customerId: delivery.customerId || customer?.id || null,
+        customerPhone: delivery.customerPhone || order?.phone || customer?.phone || '',
+        address: delivery.address || order?.deliveryAddress || customer?.address || '',
+        assignedAt,
+        updatedAt: delivery.updatedAt || assignedAt,
+        statusHistory: normalizedHistory.length
+            ? normalizedHistory
+            : [{ status, at: assignedAt, actor: 'Legacy record' }]
+    };
+});
+if (merchantNeedsDeliveryMigration) saveMerchantCollection('kiryaMerchantDeliveries', merchantDeliveries);
+
+const merchantOverdueAfterMs = 30 * 60 * 1000;
+const merchantOfferResponseAfterMs = 5 * 60 * 1000;
+const merchantRiderWorkloadLimit = 3;
+const merchantActiveDeliveryStatuses = ['offered', 'accepted', 'assigned', 'picked-up', 'in-transit'];
+const merchantDeliveryTransitions = {
+    offered: ['accepted', 'declined', 'cancelled'],
+    accepted: ['picked-up', 'failed', 'cancelled'],
+    assigned: ['picked-up', 'failed', 'cancelled'],
+    'picked-up': ['in-transit', 'failed'],
+    'in-transit': ['delivered', 'failed'],
+    delivered: [],
+    declined: [],
+    failed: [],
+    cancelled: []
+};
+
+document.getElementById('merchantPickupAddressSave').addEventListener('click', () => {
+    const input = document.getElementById('merchantPickupAddress');
+    const address = input.value.trim();
+    if (!address) {
+        input.focus();
+        showToast('Enter the full store pickup address.');
+        return;
+    }
+    const now = new Date().toISOString();
+    const nextOrders = demoActiveOrders.map(order => ({
+        ...order,
+        pickupAddress: order.fulfillment === 'delivery' && !order.pickupAddress ? address : order.pickupAddress
+    }));
+    if (!saveMerchantCollections({
+        kiryaMerchantPickupAddress: address,
+        kiryaMerchantActiveOrders: nextOrders
+    })) return;
+    merchantPickupAddress = address;
+    demoActiveOrders = nextOrders;
+    document.getElementById('merchantPickupAddressStatus').textContent =
+        `Saved ${new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. New rider offers will include this pickup location.`;
+    populateMerchantAssignmentOptions();
+    renderMerchantActiveOrders();
+    updateMerchantOrderMetrics();
+    showToast('Rider pickup location saved.');
+});
+
+function merchantPartnerWorkload(partner, excludedDeliveryId = null) {
+    return merchantDeliveries.filter(delivery =>
+        delivery.id !== excludedDeliveryId &&
+        merchantActiveDeliveryStatuses.includes(delivery.status) &&
+        (delivery.partnerId === partner.id || merchantPhoneKey(delivery.phone) === merchantPhoneKey(partner.phone))
+    ).length;
+}
+
+function merchantPartnerCoversAddress(partner, address) {
+    const addressTokens = String(address).toLowerCase().split(/[,\s]+/).filter(token => token.length > 2);
+    const areaTokens = partner.area.toLowerCase().split(/[,\s]+/).filter(token => token.length > 2);
+    return addressTokens.some(token => areaTokens.includes(token));
+}
+
+function merchantPartnerIsEligible(partner, address, excludedDeliveryId = null) {
+    return partner.status === 'active' &&
+        partner.availability === 'available' &&
+        merchantPartnerWorkload(partner, excludedDeliveryId) < merchantRiderWorkloadLimit &&
+        merchantPartnerCoversAddress(partner, address);
+}
+
+function merchantAssignmentPartner(delivery) {
+    return merchantPartners.find(partner => partner.id === delivery.partnerId) ||
+        merchantPartners.find(partner => merchantPhoneKey(partner.phone) === merchantPhoneKey(delivery.phone));
+}
+
+function merchantPartnerCompletedCount(partner) {
+    return merchantDeliveries.filter(delivery =>
+        delivery.status === 'delivered' &&
+        (delivery.partnerId === partner.id || merchantPhoneKey(delivery.phone) === merchantPhoneKey(partner.phone))
+    ).length;
+}
+
+function merchantPartnerCancelledCount(partner) {
+    return merchantDeliveries.filter(delivery =>
+        delivery.status === 'cancelled' &&
+        (delivery.partnerId === partner.id || merchantPhoneKey(delivery.phone) === merchantPhoneKey(partner.phone))
+    ).length;
+}
+
+function merchantPartnerCancellationRate(partner) {
+    const completed = merchantPartnerCompletedCount(partner);
+    const cancelled = merchantPartnerCancelledCount(partner);
+    return completed + cancelled ? Math.round(cancelled / (completed + cancelled) * 100) : 0;
+}
+
+function merchantDeliveryIsOverdue(delivery) {
+    const assignedAt = Date.parse(delivery.assignedAt);
+    const offeredDeadline = Date.parse(delivery.offerExpiresAt);
+    const timestamp = delivery.status === 'offered'
+        ? (Number.isFinite(offeredDeadline) ? offeredDeadline : assignedAt + merchantOfferResponseAfterMs)
+        : Date.parse(delivery.statusHistory?.at(-1)?.at || delivery.updatedAt || delivery.assignedAt);
+    return merchantActiveDeliveryStatuses.includes(delivery.status) && Number.isFinite(timestamp) &&
+        (delivery.status === 'offered' ? Date.now() >= timestamp : Date.now() - timestamp >= merchantOverdueAfterMs);
+}
+
+function checkMerchantOverdueDeliveries() {
+    if (document.visibilityState !== 'visible') return;
+    for (const delivery of merchantDeliveries.filter(merchantDeliveryIsOverdue)) {
+        if (notifiedOverdueDeliveries.has(delivery.id)) continue;
+        notifiedOverdueDeliveries.add(delivery.id);
+        showToast(delivery.status === 'offered'
+            ? `Rider response for ${delivery.order} is overdue. Reassign or contact the rider.`
+            : `Assignment ${delivery.order} has been active for over 30 minutes.`);
+    }
+}
+
+function refreshMerchantDeliveryReminders() {
+    checkMerchantOverdueDeliveries();
+    if (merchantAssignedRidersScreen?.classList.contains('active')) renderMerchantDeliveries();
+}
+
+setInterval(refreshMerchantDeliveryReminders, 60_000);
+document.addEventListener('visibilitychange', refreshMerchantDeliveryReminders);
+
+function recordMerchantDeliveryStatus(delivery, status, actor = 'Merchant staff') {
+    if (status === delivery.status || !merchantDeliveryTransitions[delivery.status]?.includes(status)) return false;
+    const reason = ['declined', 'failed', 'cancelled'].includes(status)
+        ? prompt(`Enter a reason for marking ${delivery.order} ${merchantDeliveryStatusLabels[status].toLowerCase()}:`)?.trim()
+        : '';
+    if (['declined', 'failed', 'cancelled'].includes(status) && !reason) {
+        renderMerchantDeliveries();
+        showToast('A reason is required for this delivery outcome.');
+        return false;
+    }
+    const updatedAt = new Date().toISOString();
+    const nextDeliveries = merchantDeliveries.map(record => record.id === delivery.id
+        ? {
+            ...record,
+            status,
+            updatedAt,
+            statusHistory: [...record.statusHistory, {
+                status,
+                at: updatedAt,
+                actor,
+                ...(reason ? { reason } : {})
+            }]
+        }
+        : record
+    );
+    const order = status === 'delivered'
+        ? demoActiveOrders.find(record => record.id === delivery.order)
+        : null;
+    const nextActiveOrders = order
+        ? demoActiveOrders.filter(record => record.id !== order.id)
+        : demoActiveOrders;
+    const nextPastOrders = order
+        ? [{
+            ...order,
+            status: 'Delivered',
+            statusHistory: [
+                ...(order.statusHistory || []),
+                { status: 'Delivered', at: updatedAt, actor: 'Rider (simulated)' }
+            ],
+            date: `Today, ${order.received}`,
+            statusColor: '#019E81',
+            deliveredAt: updatedAt
+        }, ...dummyPastOrders]
+        : dummyPastOrders;
+    const collections = { kiryaMerchantDeliveries: nextDeliveries };
+    if (order) {
+        collections.kiryaMerchantActiveOrders = nextActiveOrders;
+        collections.kiryaMerchantPastOrders = nextPastOrders;
+    }
+    if (!saveMerchantCollections(collections)) {
+        renderMerchantDeliveries();
+        return false;
+    }
+    merchantDeliveries = nextDeliveries;
+    notifiedOverdueDeliveries.delete(delivery.id);
+    if (order) {
+        demoActiveOrders = nextActiveOrders;
+        dummyPastOrders = nextPastOrders;
+    }
+    renderMerchantActiveOrders();
+    renderMerchantDeliveries();
+    renderMerchantPartners();
+    renderMerchantAssignmentOptions();
+    updateMerchantOrderMetrics();
+    renderCustomerOrders();
+    showToast(`${delivery.order}: ${merchantDeliveryStatusLabels[status].toLowerCase()}.`);
+    return true;
+}
+
+function renderMerchantCustomers() {
+    const rows = document.getElementById('merchantCustomerRows');
+    const search = document.getElementById('merchantCustomerSearch').value.trim().toLowerCase();
+    const sort = document.getElementById('merchantCustomerSort').value;
+    const filter = document.getElementById('merchantCustomerFilter').value;
+    const filtered = merchantCustomers.filter(customer =>
+        `${customer.name} ${customer.phone} ${customer.email} ${customer.address}`.toLowerCase().includes(search)
+    ).map(customer => {
+        const phone = merchantPhoneKey(customer.phone);
+        const orders = [...demoActiveOrders, ...dummyPastOrders].filter(order =>
+            order.customerId === customer.id ||
+            (order.phone && merchantPhoneKey(order.phone) === phone) ||
+            (order.customer && order.customer.toLowerCase() === customer.name.toLowerCase())
+        );
+        const latest = orders.reduce((date, order) => {
+            const timestamp = Date.parse(order.createdAt || order.date || '');
+            return Number.isFinite(timestamp) && timestamp > date ? timestamp : date;
+        }, Date.parse(customer.lastOrderAt || '') || 0);
+        return {
+            ...customer,
+            matchedOrders: orders,
+            lastOrderTimestamp: latest,
+            lastOrderLabel: orders[0]?.date || orders[0]?.received || ''
+        };
+    }).filter(customer => filter === 'frequent'
+        ? Math.max(customer.orders, customer.matchedOrders.length) >= 5
+        : filter === 'recent'
+            ? customer.lastOrderTimestamp && Date.now() - customer.lastOrderTimestamp <= 30 * 24 * 60 * 60 * 1000
+            : true
+    ).sort((a, b) => sort === 'orders'
+        ? Math.max(b.orders, b.matchedOrders.length) - Math.max(a.orders, a.matchedOrders.length)
+        : sort === 'recent'
+            ? b.lastOrderTimestamp - a.lastOrderTimestamp
+            : a.name.localeCompare(b.name));
+    document.getElementById('merchantCustomerTableCount').textContent = merchantCustomers.length;
+    document.getElementById('merchantCustomerCount').textContent = merchantCustomers.length;
+    document.getElementById('merchantCustomerMetric').textContent = merchantCustomers.length;
+    const page = paginateMerchantRecords('customers', filtered);
+    rows.innerHTML = page.length
+        ? page.map(customer => {
+            const orderCount = Math.max(customer.orders, customer.matchedOrders.length);
+            const lastOrder = customer.lastOrderTimestamp
+                ? new Date(customer.lastOrderTimestamp).toLocaleDateString()
+                : customer.lastOrderLabel || 'No order recorded';
+            const orderHistory = customer.matchedOrders.length
+                ? `<details class="merchant-customer-history"><summary>View ${customer.matchedOrders.length} record${customer.matchedOrders.length === 1 ? '' : 's'}</summary><ul>${customer.matchedOrders.map(order => `<li><strong>${escapeMerchantText(order.id)}</strong> - ${escapeMerchantText(order.items)} <span>${escapeMerchantText(order.date || order.received || '')}</span></li>`).join('')}</ul></details>`
+                : '<span class="merchant-muted">No matching order records</span>';
+            return `
+            <tr>
+              <td>${escapeMerchantText(customer.name)}</td><td>${escapeMerchantText(customer.phone)}</td>
+              <td>${escapeMerchantText(customer.email || '—')}</td><td>${escapeMerchantText(customer.address)}</td>
+              <td>${orderCount}</td><td>${escapeMerchantText(lastOrder)}</td><td>${orderHistory}</td>
+              <td><div class="merchant-record-actions"><button class="merchant-record-action" type="button" data-customer-action="edit" data-customer-id="${customer.id}">Edit</button><button class="merchant-record-action danger" type="button" data-customer-action="delete" data-customer-id="${customer.id}">Remove</button></div></td>
+            </tr>
+        `}).join('')
+        : '<tr><td class="merchant-record-empty" colspan="8">No customers match your search.</td></tr>';
+}
+
+function renderMerchantPartners() {
+    const rows = document.getElementById('merchantPartnerRows');
+    const search = document.getElementById('merchantPartnerSearch').value.trim().toLowerCase();
+    const statusFilter = document.getElementById('merchantPartnerFilter').value;
+    const sort = document.getElementById('merchantPartnerSort').value;
+    const filtered = merchantPartners.filter(partner =>
+        (statusFilter === 'all' ||
+            statusFilter === 'active' && partner.status === 'active' ||
+            statusFilter === 'inactive' && partner.status === 'inactive' ||
+            statusFilter === 'available' && partner.status === 'active' && !merchantPartnerWorkload(partner) && partner.availability === 'available' ||
+            statusFilter === 'on-delivery' && merchantPartnerWorkload(partner) > 0 ||
+            statusFilter === 'off-duty' && partner.status === 'active' && !merchantPartnerWorkload(partner) && partner.availability === 'off-duty') &&
+        `${partner.name} ${partner.phone} ${partner.email} ${partner.vehicle} ${partner.area}`.toLowerCase().includes(search)
+    ).sort((a, b) => sort === 'workload'
+        ? merchantPartnerWorkload(b) - merchantPartnerWorkload(a)
+        : sort === 'completed'
+            ? merchantPartnerCompletedCount(b) - merchantPartnerCompletedCount(a)
+            : a.name.localeCompare(b.name));
+    document.getElementById('merchantPartnerTableCount').textContent = merchantPartners.length;
+    const page = paginateMerchantRecords('partners', filtered);
+    rows.innerHTML = page.length
+        ? page.map(partner => {
+            const workload = merchantPartnerWorkload(partner);
+            const hasPendingOffer = merchantDeliveries.some(delivery =>
+                delivery.partnerId === partner.id && delivery.status === 'offered'
+            );
+            const availability = partner.status !== 'active'
+                ? 'Inactive'
+                : hasPendingOffer ? 'Offer pending'
+                    : workload ? 'On delivery' : partner.availability === 'off-duty' ? 'Off duty' : 'Available';
+            return `
+            <tr>
+              <td>${escapeMerchantText(partner.name)}</td><td>${escapeMerchantText(partner.phone)}</td>
+              <td>${escapeMerchantText(partner.email || '—')}</td><td>${escapeMerchantText(partner.vehicle)}</td>
+              <td>${escapeMerchantText(partner.area)}</td>
+              <td><span class="merchant-status-pill ${partner.status === 'active' ? 'delivered' : ''}">${partner.status === 'active' ? 'Active' : 'Inactive'}</span> <span class="merchant-muted">${availability}</span><button class="merchant-record-action" type="button" data-partner-action="availability" data-partner-id="${partner.id}" ${partner.status !== 'active' || workload ? 'disabled' : ''}>${partner.availability === 'off-duty' ? 'Set available' : 'Set off duty'}</button></td>
+              <td>${workload} / ${merchantRiderWorkloadLimit} active; ${merchantPartnerCompletedCount(partner)} completed; ${merchantPartnerCancelledCount(partner)} cancelled (${merchantPartnerCancellationRate(partner)}%)</td>
+              <td><div class="merchant-record-actions"><button class="merchant-record-action" type="button" data-partner-action="edit" data-partner-id="${partner.id}">Edit</button><button class="merchant-record-action danger" type="button" data-partner-action="delete" data-partner-id="${partner.id}">Remove</button></div></td>
+            </tr>
+        `}).join('')
+        : '<tr><td class="merchant-record-empty" colspan="8">No rides partners match your filters.</td></tr>';
+    updateMerchantOrderMetrics();
+}
+
+function renderMerchantDeliveries() {
+    const rows = document.getElementById('merchantDeliveryRows');
+    const search = document.getElementById('merchantDeliverySearch').value.trim().toLowerCase();
+    const statusFilter = document.getElementById('merchantDeliveryFilter').value;
+    const sort = document.getElementById('merchantDeliverySort').value;
+    const filtered = merchantDeliveries.filter(delivery => {
+        const partner = merchantAssignmentPartner(delivery);
+        return (statusFilter === 'all' || delivery.status === statusFilter) &&
+            `${delivery.order} ${delivery.customer} ${delivery.address} ${partner?.name || delivery.driver} ${partner?.phone || delivery.phone}`.toLowerCase().includes(search);
+    }).sort((a, b) => sort === 'oldest'
+        ? new Date(a.assignedAt) - new Date(b.assignedAt)
+        : sort === 'status'
+            ? a.status.localeCompare(b.status)
+            : sort === 'order'
+                ? a.order.localeCompare(b.order, undefined, { numeric: true })
+                : new Date(b.assignedAt) - new Date(a.assignedAt));
+    const activeCount = merchantDeliveries.filter(delivery => merchantActiveDeliveryStatuses.includes(delivery.status)).length;
+    document.getElementById('merchantDeliveryTableCount').textContent = merchantDeliveries.length;
+    document.getElementById('merchantAssignedRidersCount').textContent = activeCount;
+    const page = paginateMerchantRecords('deliveries', filtered);
+    rows.innerHTML = page.length
+        ? page.map(delivery => {
+            const overdue = merchantDeliveryIsOverdue(delivery);
+            const nextStatuses = merchantDeliveryTransitions[delivery.status] || [];
+            const assignedDate = new Date(delivery.assignedAt);
+            const partner = merchantAssignmentPartner(delivery);
+            const isAwaitingResponse = delivery.status === 'offered';
+            const statusActions = isAwaitingResponse
+                ? `<button class="merchant-record-action" type="button" data-delivery-status="${delivery.id}" data-next-status="accepted" data-actor="Rider (simulated)">Accept offer (demo)</button><button class="merchant-record-action danger" type="button" data-delivery-status="${delivery.id}" data-next-status="declined" data-actor="Rider (simulated)">Decline offer (demo)</button>${overdue ? `<button class="merchant-record-action danger" type="button" data-delivery-status="${delivery.id}" data-next-status="declined" data-actor="Merchant staff">No response - reassign</button>` : ''}`
+                : nextStatuses.length
+                    ? `<select aria-label="Update ${escapeMerchantText(delivery.order)} status" data-delivery-status="${delivery.id}"><option value="">Update status</option>${nextStatuses.map(status => `<option value="${status}">${merchantDeliveryStatusLabels[status]}</option>`).join('')}</select>`
+                    : '';
+            const timeline = delivery.statusHistory.map(item =>
+                `<li><strong>${escapeMerchantText(merchantDeliveryStatusLabels[item.status] || item.status)}</strong> - ${escapeMerchantText(new Date(item.at).toLocaleString())}<span>${escapeMerchantText(item.actor || 'Merchant staff')}</span>${item.reason ? `<p>${escapeMerchantText(item.reason)}</p>` : ''}</li>`
+            ).join('');
+            return `
+            <tr>
+              <td>${escapeMerchantText(delivery.order)}</td><td>${escapeMerchantText(delivery.customer)}</td>
+              <td>${escapeMerchantText(delivery.address)}</td><td>${escapeMerchantText(partner?.name || delivery.driver)}</td>
+              <td>${escapeMerchantText(partner?.phone || delivery.phone)}</td>
+              <td><span class="merchant-status-pill ${delivery.status}">${merchantDeliveryStatusLabels[delivery.status]}</span>${isAwaitingResponse && delivery.offerExpiresAt ? `<span class="merchant-muted">Reply by ${escapeMerchantText(new Date(delivery.offerExpiresAt).toLocaleTimeString())}</span>` : ''}${overdue ? `<span class="merchant-overdue-pill">${isAwaitingResponse ? 'Response overdue' : 'Overdue'}</span>` : ''}<details class="merchant-customer-history"><summary>Audit timeline</summary><ul>${timeline}</ul></details></td>
+              <td>${Number.isFinite(assignedDate.getTime()) ? escapeMerchantText(assignedDate.toLocaleString()) : '—'}</td>
+              <td><div class="merchant-record-actions">${statusActions}${delivery.status === 'offered' ? `<button class="merchant-record-action" type="button" data-delivery-action="edit" data-delivery-id="${delivery.id}">Edit offer</button><button class="merchant-record-action danger" type="button" data-delivery-status="${delivery.id}" data-next-status="cancelled" data-actor="Merchant staff">Cancel offer</button>` : ''}</div></td>
+            </tr>
+        `}).join('')
+        : '<tr><td class="merchant-record-empty" colspan="8">No rider assignments match your filters.</td></tr>';
+    checkMerchantOverdueDeliveries();
+    updateMerchantOrderMetrics();
+    refreshLiveRiderMaps();
+}
+
+function resetMerchantCustomerForm() {
+    document.getElementById('merchantCustomerForm').reset();
+    document.getElementById('merchantCustomerId').value = '';
+    document.getElementById('merchantCustomerFormHeading').textContent = 'Register customer';
+    document.getElementById('merchantCustomerForm').querySelector('[type="submit"]').textContent = 'Save customer';
+    document.getElementById('merchantCustomerCancelEdit').hidden = true;
+}
+
+function resetMerchantDeliveryForm() {
+    document.getElementById('merchantDeliveryForm').reset();
+    document.getElementById('merchantDeliveryId').value = '';
+    document.getElementById('merchantDeliveryFormHeading').textContent = 'Dispatch ready delivery';
+    document.getElementById('merchantDeliveryForm').querySelector('[type="submit"]').textContent = 'Send rider offer';
+    document.getElementById('merchantDeliveryCancelEdit').hidden = true;
+    document.getElementById('merchantRiderWorkloadWarning').hidden = true;
+    populateMerchantAssignmentOptions();
+}
+
+function merchantOrderCustomer(order) {
+    return merchantCustomers.find(record =>
+        record.id === order.customerId ||
+        (order.phone && merchantPhoneKey(record.phone) === merchantPhoneKey(order.phone)) ||
+        record.name.toLowerCase() === order.customer.toLowerCase()
+    );
+}
+
+function merchantOrderDeliveryAddress(order) {
+    return order.deliveryAddress || merchantOrderCustomer(order)?.address || '';
+}
+
+function merchantOrderCustomerPhone(order) {
+    return order.phone || merchantOrderCustomer(order)?.phone || '';
+}
+
+function merchantOrderCanDispatch(order) {
+    return order.fulfillment === 'delivery' &&
+        order.status === 'ready' &&
+        Boolean(merchantOrderDeliveryAddress(order)) &&
+        Boolean(order.pickupAddress || merchantPickupAddress) &&
+        merchantPhoneKey(merchantOrderCustomerPhone(order)).length >= 8;
+}
+
+function populateMerchantAssignmentOptions() {
+    const orderSelect = document.getElementById('merchantDeliveryOrder');
+    const partnerSelect = document.getElementById('merchantDeliveryPartner');
+    if (!orderSelect || !partnerSelect) return;
+    const selectedOrder = orderSelect.value;
+    const selectedPartner = partnerSelect.value;
+    const editingDelivery = merchantDeliveries.find(record =>
+        record.id === Number(document.getElementById('merchantDeliveryId').value)
+    );
+    const availableOrders = demoActiveOrders.filter(order =>
+        merchantOrderCanDispatch(order) &&
+        !merchantDeliveries.some(delivery =>
+            merchantActiveDeliveryStatuses.includes(delivery.status) &&
+            delivery.order === order.id && delivery.id !== editingDelivery?.id
+        )
+    );
+    const currentOrder = editingDelivery && !availableOrders.some(order => order.id === editingDelivery.order)
+        ? demoActiveOrders.find(order => order.id === editingDelivery.order) || {
+            id: editingDelivery.order,
+            customer: editingDelivery.customer
+        }
+        : null;
+    orderSelect.innerHTML = '<option value="">Choose an active order</option>' +
+        (currentOrder
+            ? `<option value="${escapeMerchantText(currentOrder.id)}">${escapeMerchantText(currentOrder.id)} - ${escapeMerchantText(currentOrder.customer)} (current assignment)</option>`
+            : '') +
+        availableOrders.map(order =>
+            `<option value="${escapeMerchantText(order.id)}">${escapeMerchantText(order.id)} - ${escapeMerchantText(order.customer)}</option>`
+        ).join('');
+    if ([...orderSelect.options].some(option => option.value === selectedOrder)) orderSelect.value = selectedOrder;
+    if ([...partnerSelect.options].some(option => option.value === selectedPartner)) partnerSelect.value = selectedPartner;
+    updateMerchantAssignmentOrder();
+}
+
+function updateMerchantAssignmentOrder() {
+    const order = demoActiveOrders.find(record =>
+        record.id === document.getElementById('merchantDeliveryOrder').value
+    );
+    const editingDelivery = merchantDeliveries.find(record =>
+        record.id === Number(document.getElementById('merchantDeliveryId').value)
+    );
+    document.getElementById('merchantDeliveryCustomer').value = order?.customer || editingDelivery?.customer || '';
+    document.getElementById('merchantDeliveryCustomerPhone').value =
+        (order && merchantOrderCustomerPhone(order)) || editingDelivery?.customerPhone || '';
+    document.getElementById('merchantDeliveryAddress').value =
+        (order && merchantOrderDeliveryAddress(order)) || editingDelivery?.address || '';
+    const eligibility = document.getElementById('merchantDispatchEligibility');
+    const complete = order && merchantOrderCanDispatch(order);
+    eligibility.textContent = !order
+        ? 'Choose a ready delivery order. Customer contact details and address will be copied from that order.'
+        : complete
+            ? `Ready to dispatch ${order.id}. Customer details come from the order; rider pickup details come from the store location.`
+            : `${order.id} needs a customer phone, delivery address, and saved store pickup location before dispatch.`;
+    eligibility.classList.toggle('is-warning', Boolean(order) && !complete);
+    populateMerchantAssignmentPartners();
+}
+
+function populateMerchantAssignmentPartners() {
+    const orderSelect = document.getElementById('merchantDeliveryOrder');
+    const partnerSelect = document.getElementById('merchantDeliveryPartner');
+    if (!orderSelect || !partnerSelect) return;
+    const selectedPartner = partnerSelect.value;
+    const editingDelivery = merchantDeliveries.find(record =>
+        record.id === Number(document.getElementById('merchantDeliveryId').value)
+    );
+    const address = document.getElementById('merchantDeliveryAddress').value.trim();
+    const currentPartnerId = editingDelivery?.partnerId;
+    partnerSelect.innerHTML = '<option value="">Choose an eligible rider</option>' +
+        merchantPartners.filter(partner =>
+            merchantPartnerIsEligible(partner, address, editingDelivery?.id) || partner.id === currentPartnerId
+        ).map(partner => {
+            const workload = merchantPartnerWorkload(partner, editingDelivery?.id);
+            return `<option value="${partner.id}">${escapeMerchantText(partner.name)} - ${escapeMerchantText(partner.phone)} (${partner.area}; ${workload}/${merchantRiderWorkloadLimit} active)</option>`;
+        }).join('');
+    if ([...partnerSelect.options].some(option => option.value === selectedPartner)) partnerSelect.value = selectedPartner;
+    const selectedRider = merchantPartners.find(partner => partner.id === Number(partnerSelect.value));
+    document.getElementById('merchantDeliveryPhone').value = selectedRider?.phone || '';
+    updateMerchantRiderWorkloadWarning();
+}
+
+function updateMerchantRiderWorkloadWarning() {
+    const partner = merchantPartners.find(record =>
+        record.id === Number(document.getElementById('merchantDeliveryPartner').value)
+    );
+    const warning = document.getElementById('merchantRiderWorkloadWarning');
+    if (!partner) {
+        const address = document.getElementById('merchantDeliveryAddress').value.trim();
+        warning.textContent = address
+            ? 'No active, available rider currently covers this address and has capacity.'
+            : 'Select an eligible delivery order before choosing a rider.';
+        warning.classList.add('is-warning');
+        warning.hidden = false;
+        return;
+    }
+    const editingDeliveryId = Number(document.getElementById('merchantDeliveryId').value) || null;
+    const workload = merchantPartnerWorkload(partner, editingDeliveryId);
+    const address = document.getElementById('merchantDeliveryAddress').value.trim();
+    const eligible = merchantPartnerIsEligible(partner, address, editingDeliveryId);
+    warning.textContent = !merchantPartnerCoversAddress(partner, address)
+        ? `${partner.name} does not cover this delivery address.`
+        : workload >= merchantRiderWorkloadLimit
+            ? `${partner.name} has reached the active assignment limit.`
+            : !eligible
+                ? `${partner.name} is not available for a new assignment.`
+                : `${partner.name} is eligible for this delivery (${workload}/${merchantRiderWorkloadLimit} active).`;
+    warning.classList.toggle('is-warning', !eligible);
+    warning.hidden = false;
+}
+
+document.getElementById('merchantCustomerForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const phone = document.getElementById('merchantCustomerPhone').value.trim();
+    if (phone.replace(/\D/g, '').length < 8) {
+        document.getElementById('merchantCustomerPhone').focus();
+        showToast('Enter a valid customer phone number.');
+        return;
+    }
+    const customerId = Number(document.getElementById('merchantCustomerId').value);
+    const duplicate = merchantCustomers.find(record =>
+        merchantPhoneKey(record.phone) === merchantPhoneKey(phone) && record.id !== customerId
+    );
+    if (duplicate && customerId) {
+        showToast(`That phone number belongs to ${duplicate.name}. Edit that customer record instead.`);
+        return;
+    }
+    if (duplicate && !confirm(`${duplicate.name} already has this phone number. Update that customer record instead?`)) return;
+    const matchingCustomerId = duplicate?.id || customerId;
+    const existingCustomer = merchantCustomers.find(record => record.id === matchingCustomerId);
+    const updatedAt = new Date().toISOString();
+    const customer = {
+        id: matchingCustomerId || Math.max(0, ...merchantCustomers.map(record => record.id)) + 1,
+        name: document.getElementById('merchantCustomerName').value.trim(),
+        phone,
+        email: document.getElementById('merchantCustomerEmail').value.trim(),
+        address: document.getElementById('merchantCustomerAddress').value.trim(),
+        orders: existingCustomer?.orders || 0,
+        lastOrderAt: existingCustomer?.lastOrderAt || null,
+        createdAt: existingCustomer?.createdAt || updatedAt,
+        updatedAt
+    };
+    const nextCustomers = existingCustomer
+        ? merchantCustomers.map(record => record.id === customer.id ? customer : record)
+        : [customer, ...merchantCustomers];
+    if (!saveMerchantCollection('kiryaMerchantCustomers', nextCustomers)) return;
+    merchantCustomers = nextCustomers;
+    resetMerchantCustomerForm();
+    renderMerchantCustomers();
+    renderMerchantAssignmentOptions();
+    showToast(duplicate ? 'Existing customer record updated.' : 'Customer saved.');
+});
+
+document.getElementById('merchantCustomerRows').addEventListener('click', event => {
+    const button = event.target.closest('[data-customer-action]');
+    if (!button) return;
+    const customer = merchantCustomers.find(record => record.id === Number(button.dataset.customerId));
+    if (!customer) return;
+    if (button.dataset.customerAction === 'edit') {
+        document.getElementById('merchantCustomerId').value = customer.id;
+        document.getElementById('merchantCustomerName').value = customer.name;
+        document.getElementById('merchantCustomerPhone').value = customer.phone;
+        document.getElementById('merchantCustomerEmail').value = customer.email;
+        document.getElementById('merchantCustomerAddress').value = customer.address;
+        document.getElementById('merchantCustomerFormHeading').textContent = 'Edit customer';
+        document.getElementById('merchantCustomerForm').querySelector('[type="submit"]').textContent = 'Update customer';
+        document.getElementById('merchantCustomerCancelEdit').hidden = false;
+        document.getElementById('merchantCustomerName').focus();
+    } else {
+        const hasActiveAssignment = merchantDeliveries.some(delivery =>
+            merchantActiveDeliveryStatuses.includes(delivery.status) &&
+            (delivery.customerId === customer.id || delivery.customer.toLowerCase() === customer.name.toLowerCase())
+        );
+        if (hasActiveAssignment) {
+            showToast('This customer has an active rider assignment. Complete or reassign it before removal.');
+            return;
+        }
+        if (!confirm(`Remove ${customer.name} from the customer directory?`)) return;
+        const nextCustomers = merchantCustomers.filter(record => record.id !== customer.id);
+        if (!saveMerchantCollection('kiryaMerchantCustomers', nextCustomers)) return;
+        merchantCustomers = nextCustomers;
+        renderMerchantCustomers();
+        renderMerchantAssignmentOptions();
+        showToast('Customer removed.');
+    }
+});
+
+document.getElementById('merchantCustomerCancelEdit').addEventListener('click', resetMerchantCustomerForm);
+
+document.getElementById('merchantDeliveryForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const partner = merchantPartners.find(record =>
+        record.id === Number(document.getElementById('merchantDeliveryPartner').value)
+    );
+    const deliveryId = document.getElementById('merchantDeliveryId').value;
+    const existingDelivery = merchantDeliveries.find(record => record.id === Number(deliveryId));
+    const orderNumber = document.getElementById('merchantDeliveryOrder').value.trim();
+    const order = demoActiveOrders.find(record => record.id === orderNumber);
+    if (!order || !merchantOrderCanDispatch(order)) {
+        document.getElementById('merchantDeliveryOrder').focus();
+        showToast('Choose an eligible ready delivery order with customer contact details and a delivery address.');
+        return;
+    }
+    if (merchantDeliveries.some(record =>
+        record.order.toLowerCase() === orderNumber.toLowerCase() &&
+        record.id !== existingDelivery?.id &&
+        merchantActiveDeliveryStatuses.includes(record.status)
+    )) {
+        document.getElementById('merchantDeliveryOrder').focus();
+        showToast('This order already has an active rider offer or assignment.');
+        return;
+    }
+    const customer = merchantOrderCustomer(order);
+    const address = merchantOrderDeliveryAddress(order);
+    const customerPhone = merchantOrderCustomerPhone(order);
+    if (!partner || !merchantPartnerIsEligible(partner, address, existingDelivery?.id)) {
+        document.getElementById('merchantDeliveryPartner').focus();
+        showToast('Select an active, available rider within the service area and below the workload limit.');
+        return;
+    }
+    const now = new Date().toISOString();
+    const status = 'offered';
+    const history = existingDelivery?.statusHistory || [];
+    const statusHistory = [
+        ...history,
+        { status, at: now, actor: 'Merchant staff', ...(existingDelivery ? { reason: 'Rider offer updated' } : {}) }
+    ];
+    const delivery = {
+        id: deliveryId ? Number(deliveryId) : Math.max(0, ...merchantDeliveries.map(record => record.id)) + 1,
+        order: orderNumber,
+        customer: order.customer,
+        customerId: customer?.id || order.customerId || null,
+        customerPhone,
+        address,
+        pickupAddress: order.pickupAddress || merchantPickupAddress,
+        partnerId: partner.id,
+        driver: partner.name,
+        phone: partner.phone,
+        status,
+        createdAt: existingDelivery?.createdAt || now,
+        assignedAt: now,
+        offerExpiresAt: new Date(Date.now() + merchantOfferResponseAfterMs).toISOString(),
+        updatedAt: now,
+        statusHistory
+    };
+    const nextDeliveries = existingDelivery
+        ? merchantDeliveries.map(record => record.id === delivery.id ? delivery : record)
+        : [delivery, ...merchantDeliveries];
+    if (!saveMerchantCollection('kiryaMerchantDeliveries', nextDeliveries)) return;
+    merchantDeliveries = nextDeliveries;
+    notifiedOverdueDeliveries.delete(delivery.id);
+    resetMerchantDeliveryForm();
+    renderMerchantDeliveries();
+    renderMerchantPartners();
+    renderMerchantActiveOrders();
+    updateMerchantOrderMetrics();
+    showToast(existingDelivery ? 'Rider offer updated.' : 'Delivery offer sent to rider (demo).');
+});
+
+document.getElementById('merchantDeliveryRows').addEventListener('click', event => {
+    const statusButton = event.target.closest('[data-next-status]');
+    if (statusButton) {
+        const delivery = merchantDeliveries.find(record => record.id === Number(statusButton.dataset.deliveryStatus));
+        if (delivery) recordMerchantDeliveryStatus(delivery, statusButton.dataset.nextStatus, statusButton.dataset.actor);
+        return;
+    }
+    const button = event.target.closest('[data-delivery-action]');
+    if (!button) return;
+    const delivery = merchantDeliveries.find(record => record.id === Number(button.dataset.deliveryId));
+    if (!delivery) return;
+    if (button.dataset.deliveryAction === 'edit' && delivery.status === 'offered') {
+        document.getElementById('merchantDeliveryId').value = delivery.id;
+        populateMerchantAssignmentOptions();
+        document.getElementById('merchantDeliveryOrder').value = delivery.order;
+        updateMerchantAssignmentOrder();
+        document.getElementById('merchantDeliveryAddress').value = delivery.address;
+        document.getElementById('merchantDeliveryCustomerPhone').value = delivery.customerPhone || '';
+        document.getElementById('merchantDeliveryPartner').value = String(delivery.partnerId || '');
+        document.getElementById('merchantDeliveryPhone').value = delivery.phone;
+        populateMerchantAssignmentPartners();
+        document.getElementById('merchantDeliveryFormHeading').textContent = 'Update rider offer';
+        document.getElementById('merchantDeliveryForm').querySelector('[type="submit"]').textContent = 'Update offer';
+        document.getElementById('merchantDeliveryCancelEdit').hidden = false;
+        updateMerchantRiderWorkloadWarning();
+        document.getElementById('merchantDeliveryOrder').focus();
+    }
+});
+
+document.getElementById('merchantDeliveryRows').addEventListener('change', event => {
+    const select = event.target.closest('select[data-delivery-status]');
+    if (!select || !select.value) return;
+    const delivery = merchantDeliveries.find(record => record.id === Number(select.dataset.deliveryStatus));
+    if (delivery) recordMerchantDeliveryStatus(delivery, select.value);
+});
+
+document.getElementById('merchantDeliveryCancelEdit').addEventListener('click', resetMerchantDeliveryForm);
+document.getElementById('merchantDeliveryOrder').addEventListener('change', updateMerchantAssignmentOrder);
+document.getElementById('merchantDeliveryPartner').addEventListener('change', event => {
+    const partner = merchantPartners.find(record => record.id === Number(event.target.value));
+    document.getElementById('merchantDeliveryPhone').value = partner?.phone || '';
+    updateMerchantRiderWorkloadWarning();
+});
+
+function resetMerchantPartnerForm() {
+    document.getElementById('merchantPartnerForm').reset();
+    document.getElementById('merchantPartnerId').value = '';
+    document.getElementById('merchantPartnerFormHeading').textContent = 'Register rides partner';
+    document.getElementById('merchantPartnerForm').querySelector('[type="submit"]').textContent = 'Save partner';
+    document.getElementById('merchantPartnerCancelEdit').hidden = true;
+}
+
+document.getElementById('merchantPartnerForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const phone = document.getElementById('merchantPartnerPhone').value.trim();
+    if (phone.replace(/\D/g, '').length < 8) {
+        document.getElementById('merchantPartnerPhone').focus();
+        showToast('Enter a valid rides partner phone number.');
+        return;
+    }
+    const partnerId = document.getElementById('merchantPartnerId').value;
+    const existingPartner = merchantPartners.find(record => record.id === Number(partnerId));
+    const hasActiveAssignments = existingPartner && merchantPartnerWorkload(existingPartner) > 0;
+    if (hasActiveAssignments && merchantPhoneKey(existingPartner.phone) !== merchantPhoneKey(phone)) {
+        document.getElementById('merchantPartnerPhone').focus();
+        showToast('Complete this rider’s active assignments before changing their phone number.');
+        return;
+    }
+    if (hasActiveAssignments && document.getElementById('merchantPartnerStatus').value !== 'active') {
+        showToast('Complete this rider’s active assignments before deactivating them.');
+        return;
+    }
+    if (hasActiveAssignments && document.getElementById('merchantPartnerAvailability').value === 'off-duty') {
+        showToast('A rider with active assignments cannot be marked off duty.');
+        return;
+    }
+    const partner = {
+        id: partnerId ? Number(partnerId) : Math.max(0, ...merchantPartners.map(record => record.id)) + 1,
+        name: document.getElementById('merchantPartnerName').value.trim(),
+        phone,
+        email: document.getElementById('merchantPartnerEmail').value.trim(),
+        vehicle: document.getElementById('merchantPartnerVehicle').value.trim(),
+        area: document.getElementById('merchantPartnerArea').value.trim(),
+        status: document.getElementById('merchantPartnerStatus').value,
+        availability: document.getElementById('merchantPartnerAvailability').value,
+        createdAt: existingPartner?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    const nextPartners = existingPartner
+        ? merchantPartners.map(record => record.id === partner.id ? partner : record)
+        : [partner, ...merchantPartners];
+    if (!saveMerchantCollection('kiryaMerchantPartners', nextPartners)) return;
+    merchantPartners = nextPartners;
+    resetMerchantPartnerForm();
+    renderMerchantPartners();
+    renderMerchantAssignmentOptions();
+    showToast('Rides partner saved.');
+});
+
+document.getElementById('merchantPartnerRows').addEventListener('click', event => {
+    const button = event.target.closest('[data-partner-action]');
+    if (!button) return;
+    const partner = merchantPartners.find(record => record.id === Number(button.dataset.partnerId));
+    if (!partner) return;
+    if (button.dataset.partnerAction === 'edit') {
+        document.getElementById('merchantPartnerId').value = partner.id;
+        document.getElementById('merchantPartnerName').value = partner.name;
+        document.getElementById('merchantPartnerPhone').value = partner.phone;
+        document.getElementById('merchantPartnerEmail').value = partner.email;
+        document.getElementById('merchantPartnerVehicle').value = partner.vehicle;
+        document.getElementById('merchantPartnerArea').value = partner.area;
+        document.getElementById('merchantPartnerStatus').value = partner.status;
+        document.getElementById('merchantPartnerAvailability').value = partner.availability;
+        document.getElementById('merchantPartnerFormHeading').textContent = 'Edit rides partner';
+        document.getElementById('merchantPartnerForm').querySelector('[type="submit"]').textContent = 'Update partner';
+        document.getElementById('merchantPartnerCancelEdit').hidden = false;
+        document.getElementById('merchantPartnerName').focus();
+    } else if (button.dataset.partnerAction === 'availability') {
+        if (merchantPartnerWorkload(partner)) {
+            showToast('A rider with active assignments cannot be taken off duty.');
+            return;
+        }
+        const nextPartners = merchantPartners.map(record => record.id === partner.id
+            ? { ...record, availability: record.availability === 'off-duty' ? 'available' : 'off-duty', updatedAt: new Date().toISOString() }
+            : record
+        );
+        if (!saveMerchantCollection('kiryaMerchantPartners', nextPartners)) return;
+        merchantPartners = nextPartners;
+        renderMerchantPartners();
+        renderMerchantAssignmentOptions();
+        showToast(`${partner.name} is now ${partner.availability === 'off-duty' ? 'available' : 'off duty'}.`);
+    } else if (merchantPartnerWorkload(partner)) {
+        showToast('A rides partner with active assignments cannot be removed.');
+    } else if (confirm(`Remove ${partner.name} from rides partners?`)) {
+        const nextPartners = merchantPartners.filter(record => record.id !== partner.id);
+        if (!saveMerchantCollection('kiryaMerchantPartners', nextPartners)) return;
+        merchantPartners = nextPartners;
+        renderMerchantPartners();
+        renderMerchantAssignmentOptions();
+        showToast('Rides partner removed.');
+    }
+});
+
+document.getElementById('merchantPartnerCancelEdit').addEventListener('click', resetMerchantPartnerForm);
+
+const merchantRegisterRenderers = {
+    customers: renderMerchantCustomers,
+    partners: renderMerchantPartners,
+    deliveries: renderMerchantDeliveries
+};
+
+for (const [type, render] of Object.entries(merchantRegisterRenderers)) {
+    const section = type === 'partners' ? 'Partner' : type === 'customers' ? 'Customer' : 'Delivery';
+    document.getElementById(`merchant${section}Prev`).addEventListener('click', () => {
+        merchantRecordPages[type] = Math.max(1, merchantRecordPages[type] - 1);
+        render();
+    });
+    document.getElementById(`merchant${section}Next`).addEventListener('click', () => {
+        merchantRecordPages[type] += 1;
+        render();
+    });
+    const searchId = type === 'customers' ? 'merchantCustomerSearch'
+        : type === 'partners' ? 'merchantPartnerSearch' : 'merchantDeliverySearch';
+    const filterId = type === 'partners' ? 'merchantPartnerFilter'
+        : type === 'deliveries' ? 'merchantDeliveryFilter'
+            : 'merchantCustomerFilter';
+    [searchId, filterId, `merchant${section}Sort`].filter(Boolean).forEach(id => {
+        document.getElementById(id).addEventListener(id === searchId ? 'input' : 'change', () => {
+            merchantRecordPages[type] = 1;
+            render();
+        });
+    });
+}
+
+document.getElementById('merchantCustomerExport').addEventListener('click', () => exportMerchantRecords(
+    'customers.csv',
+    merchantCustomers.map(customer => {
+        const matchingOrders = [...demoActiveOrders, ...dummyPastOrders].filter(order =>
+        order.customerId === customer.id ||
+        (order.phone && merchantPhoneKey(order.phone) === merchantPhoneKey(customer.phone)) ||
+        (order.customer && order.customer.toLowerCase() === customer.name.toLowerCase())
+        );
+        const latestOrder = matchingOrders.reduce((latest, order) => {
+        const timestamp = Date.parse(order.createdAt || order.date || '');
+        return Number.isFinite(timestamp) && timestamp > latest ? timestamp : latest;
+        }, Date.parse(customer.lastOrderAt || '') || 0);
+        return {
+        ...customer,
+        orders: Math.max(customer.orders, matchingOrders.length),
+        lastOrder: latestOrder ? new Date(latestOrder).toLocaleDateString() : ''
+        };
+    }),
+    [['id', 'ID'], ['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address'], ['orders', 'Orders'], ['lastOrder', 'Last order'], ['createdAt', 'Created at'], ['updatedAt', 'Updated at']]
+));
+document.getElementById('merchantPartnerExport').addEventListener('click', () => exportMerchantRecords(
+    'rides-partners.csv',
+    merchantPartners.map(partner => ({
+        ...partner,
+        availability: merchantDeliveries.some(delivery =>
+            delivery.partnerId === partner.id && delivery.status === 'offered'
+        ) ? 'Offer pending' : merchantPartnerWorkload(partner) ? 'On delivery' : partner.availability,
+        activeAssignments: merchantPartnerWorkload(partner),
+        completedDeliveries: merchantPartnerCompletedCount(partner),
+        cancelledDeliveries: merchantPartnerCancelledCount(partner),
+        cancellationRate: `${merchantPartnerCancellationRate(partner)}%`
+    })),
+    [['id', 'ID'], ['name', 'Name'], ['phone', 'Phone'], ['email', 'Email'], ['vehicle', 'Vehicle'], ['area', 'Service area'], ['status', 'Account status'], ['availability', 'Availability'], ['activeAssignments', 'Active assignments'], ['completedDeliveries', 'Completed deliveries'], ['cancelledDeliveries', 'Cancelled deliveries'], ['cancellationRate', 'Cancellation rate'], ['createdAt', 'Created at'], ['updatedAt', 'Updated at']]
+));
+document.getElementById('merchantDeliveryExport').addEventListener('click', () => exportMerchantRecords(
+    'rider-assignments.csv',
+    merchantDeliveries,
+    [['id', 'ID'], ['order', 'Order'], ['customer', 'Customer'], ['customerPhone', 'Customer phone'], ['address', 'Address'], ['driver', 'Rider'], ['phone', 'Rider phone'], ['status', 'Status'], ['createdAt', 'Created at'], ['assignedAt', 'Offer sent at'], ['offerExpiresAt', 'Offer response deadline'], ['updatedAt', 'Last updated'], ['statusHistory', 'Audit history']]
+));
+
 const merchantKioskCart = new Map();
+updateMerchantStoreStatus();
 let merchantKioskCategory = 'All';
 let merchantKioskSearchTerm = '';
-let merchantKioskOrderSequence = 9000;
+let merchantKioskOrderSequence = Math.max(
+    8999,
+    ...demoActiveOrders.map(order => Number(order.id.replace(/\D/g, '')))
+) + 1;
 
 function openMerchantKiosk() {
     setMerchantNavView('kiosk');
@@ -3292,10 +5339,42 @@ function openMerchantKiosk() {
 function renderMerchantKioskCatalog() {
     const closedNotice = document.getElementById('merchantKioskClosedNotice');
     if (closedNotice) closedNotice.hidden = merchantStoreIsOpen;
+    updateMerchantKioskFulfillment();
+    renderMerchantKioskSavedCustomers();
     renderMerchantKioskCategories();
     renderMerchantKioskProducts();
     renderMerchantKioskCart();
 }
+
+function updateMerchantKioskFulfillment() {
+    const isDelivery = document.getElementById('merchantKioskFulfillment').value === 'delivery';
+    const addressField = document.getElementById('merchantKioskDeliveryAddressField');
+    const addressInput = document.getElementById('merchantKioskDeliveryAddress');
+    const tableField = document.getElementById('merchantKioskTableField');
+    const tableInput = document.getElementById('merchantKioskTableNumber');
+    addressField.hidden = !isDelivery;
+    addressInput.required = isDelivery;
+    tableField.hidden = isDelivery;
+    tableInput.required = !isDelivery;
+}
+
+function renderMerchantKioskSavedCustomers() {
+    const select = document.getElementById('merchantKioskSavedCustomer');
+    if (!select) return;
+    const selected = select.value;
+    select.innerHTML = '<option value="">New customer</option>' +
+        merchantCustomers.map(customer => `<option value="${customer.id}">${escapeMerchantText(customer.name)} - ${escapeMerchantText(customer.phone)}</option>`).join('');
+    if (merchantCustomers.some(customer => String(customer.id) === selected)) select.value = selected;
+}
+
+document.getElementById('merchantKioskSavedCustomer')?.addEventListener('change', event => {
+    const customer = merchantCustomers.find(record => record.id === Number(event.target.value));
+    document.getElementById('merchantKioskCustomerName').value = customer?.name || '';
+    document.getElementById('merchantKioskCustomerPhone').value = customer?.phone || '';
+    document.getElementById('merchantKioskDeliveryAddress').value = customer?.address || '';
+});
+
+document.getElementById('merchantKioskFulfillment')?.addEventListener('change', updateMerchantKioskFulfillment);
 
 function renderMerchantKioskCategories() {
     const categories = document.getElementById('merchantKioskCategories');
@@ -3329,6 +5408,7 @@ function renderMerchantKioskProducts() {
     }
 
     products.innerHTML = shownItems.map(item => {
+        const cartEntry = merchantKioskCart.get(item.id);
         const photo = item.image
             ? `<img src="${escapeMerchantText(item.image)}" alt="${escapeMerchantText(item.name)}" loading="lazy">`
             : `<div class="merchant-kiosk-product-placeholder" aria-hidden="true">${escapeMerchantText(item.img || '🍽')}</div>`;
@@ -3337,9 +5417,11 @@ function renderMerchantKioskProducts() {
                 <div class="merchant-kiosk-product-image">${photo}</div>
                 <div class="merchant-kiosk-product-content">
                     <div class="merchant-kiosk-product-title-row"><h3>${escapeMerchantText(item.name)}</h3><strong>${formatMerchantCurrency(item.price)}</strong></div>
-                    <span class="merchant-kiosk-product-category">${escapeMerchantText(item.category || 'Other')}</span>
-                    <p class="merchant-kiosk-ingredients"><strong>Ingredients</strong> ${escapeMerchantText(item.ingredients || 'Ask our team for details.')}</p>
-                    <button class="merchant-kiosk-add" type="button" data-kiosk-add="${item.id}" ${merchantStoreIsOpen ? '' : 'disabled'}><span aria-hidden="true">＋</span> Add to order</button>
+                    <div class="merchant-kiosk-product-meta">
+                        <span class="merchant-kiosk-product-category">${escapeMerchantText(item.category || 'Other')}</span>
+                        <span class="merchant-kiosk-ingredients">${escapeMerchantText(item.ingredients || 'Ask our team for details.')}</span>
+                    </div>
+                    <button class="merchant-kiosk-add ${cartEntry ? 'is-added' : ''}" type="button" data-kiosk-add="${item.id}" ${merchantStoreIsOpen ? '' : 'disabled'}><span aria-hidden="true">＋</span> ${cartEntry ? `Added (${cartEntry.quantity})` : 'Add to order'}</button>
                 </div>
             </article>
         `;
@@ -3353,7 +5435,10 @@ function renderMerchantKioskCart() {
     const entries = [...merchantKioskCart.values()];
     const itemCount = entries.reduce((count, entry) => count + entry.quantity, 0);
     const subtotal = entries.reduce((sum, entry) => sum + entry.item.price * entry.quantity, 0);
-    document.getElementById('merchantKioskCartPanel').classList.toggle('has-items', itemCount > 0);
+    const cartPanel = document.getElementById('merchantKioskCartPanel');
+    cartPanel.classList.toggle('has-items', itemCount > 0);
+    cartPanel.hidden = itemCount === 0;
+    document.querySelector('.merchant-kiosk-workspace').classList.toggle('has-kiosk-cart', itemCount > 0);
     document.getElementById('merchantKioskHeaderCount').textContent = itemCount;
     document.getElementById('merchantKioskCartCount').textContent = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
     document.getElementById('merchantKioskSubtotal').textContent = formatMerchantCurrency(subtotal);
@@ -3362,7 +5447,7 @@ function renderMerchantKioskCart() {
         ? '<div class="merchant-kiosk-cart-empty">Your basket is empty.</div>'
         : entries.map(({ item, quantity }) => `
             <div class="merchant-kiosk-cart-item">
-                <div><strong>${escapeMerchantText(item.name)}</strong><small>${formatMerchantCurrency(item.price)} each</small></div>
+                <div class="merchant-kiosk-cart-item-info"><strong>${escapeMerchantText(item.name)}</strong><small>${formatMerchantCurrency(item.price)} each</small></div>
                 <div class="merchant-kiosk-quantity">
                     <button type="button" data-kiosk-quantity="decrease" data-kiosk-item="${item.id}" aria-label="Remove one ${escapeMerchantText(item.name)}">−</button>
                     <span>${quantity}</span>
@@ -3394,6 +5479,7 @@ document.getElementById('merchantKioskProducts')?.addEventListener('click', even
     entry.quantity += 1;
     merchantKioskCart.set(item.id, entry);
     renderMerchantKioskCart();
+    renderMerchantKioskProducts();
 });
 
 document.getElementById('merchantKioskCartItems')?.addEventListener('click', event => {
@@ -3405,39 +5491,99 @@ document.getElementById('merchantKioskCartItems')?.addEventListener('click', eve
     entry.quantity += button.dataset.kioskQuantity === 'increase' ? 1 : -1;
     if (entry.quantity <= 0) merchantKioskCart.delete(itemId);
     renderMerchantKioskCart();
+    renderMerchantKioskProducts();
 });
 
 document.getElementById('merchantKioskPlaceOrder')?.addEventListener('click', () => {
     const customerNameInput = document.getElementById('merchantKioskCustomerName');
     const customerPhoneInput = document.getElementById('merchantKioskCustomerPhone');
+    const fulfillment = document.getElementById('merchantKioskFulfillment').value;
+    const deliveryAddressInput = document.getElementById('merchantKioskDeliveryAddress');
     const tableNumberInput = document.getElementById('merchantKioskTableNumber');
     const customerName = customerNameInput.value.trim();
     const customerPhone = customerPhoneInput.value.trim();
+    const deliveryAddress = deliveryAddressInput.value.trim();
     const tableNumber = Number(tableNumberInput.value);
     if (!customerName) { customerNameInput.focus(); showToast('Enter your name to place the order.'); return; }
     if (customerPhone.replace(/\D/g, '').length < 8) { customerPhoneInput.focus(); showToast('Enter a valid phone number.'); return; }
-    if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 999) { tableNumberInput.focus(); showToast('Enter your table number.'); return; }
+    if (fulfillment === 'delivery' && !deliveryAddress) {
+        deliveryAddressInput.focus();
+        showToast('Enter a delivery address.');
+        return;
+    }
+    if (fulfillment === 'dine-in' && (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 999)) {
+        tableNumberInput.focus();
+        showToast('Enter your table number.');
+        return;
+    }
     if (!merchantStoreIsOpen || merchantKioskCart.size === 0) return;
 
     const entries = [...merchantKioskCart.values()];
     const total = entries.reduce((sum, entry) => sum + entry.item.price * entry.quantity, 0);
+    const existingCustomer = merchantCustomers.find(record => merchantPhoneKey(record.phone) === merchantPhoneKey(customerPhone));
+    const customerId = existingCustomer?.id || Math.max(0, ...merchantCustomers.map(record => record.id)) + 1;
+    const createdAt = new Date().toISOString();
     const order = {
         id: `#${merchantKioskOrderSequence++}`,
         customer: customerName,
         phone: customerPhone,
-        table: tableNumber,
+        customerId,
+        merchant: 'Al Reef Restaurant',
+        createdAt,
+        statusHistory: [{ status: 'new', at: createdAt, actor: 'Customer (prototype)' }],
+        fulfillment,
+        deliveryAddress: fulfillment === 'delivery' ? deliveryAddress : '',
+        pickupAddress: fulfillment === 'delivery' ? merchantPickupAddress : '',
+        table: fulfillment === 'dine-in' ? tableNumber : null,
         items: entries.map(({ item, quantity }) => `${quantity}x ${item.name}`).join(', '),
         total: formatMerchantCurrency(total),
         received: new Date().toLocaleTimeString('en-UG', { hour: 'numeric', minute: '2-digit' }),
         status: 'new'
     };
-    demoActiveOrders.unshift(order);
+    const nextCustomers = existingCustomer
+        ? merchantCustomers.map(record => record.id === existingCustomer.id
+            ? {
+                ...record,
+                address: fulfillment === 'delivery' ? deliveryAddress : record.address,
+                orders: record.orders + 1,
+                lastOrderAt: order.createdAt,
+                updatedAt: order.createdAt
+            }
+            : record)
+        : [{
+            id: Math.max(0, ...merchantCustomers.map(record => record.id)) + 1,
+            name: customerName,
+            phone: customerPhone,
+            email: '',
+            address: fulfillment === 'delivery' ? deliveryAddress : '',
+            orders: 1,
+            lastOrderAt: order.createdAt,
+            createdAt: order.createdAt,
+            updatedAt: order.createdAt
+        }, ...merchantCustomers];
+    const nextActiveOrders = [order, ...demoActiveOrders];
+    if (!saveMerchantCollections({
+        kiryaMerchantActiveOrders: nextActiveOrders,
+        kiryaMerchantCustomers: nextCustomers
+    })) return;
+    demoActiveOrders = nextActiveOrders;
+    merchantCustomers = nextCustomers;
+    renderCustomerOrders();
     merchantKioskCart.clear();
     customerNameInput.value = '';
     customerPhoneInput.value = '';
+    deliveryAddressInput.value = '';
     tableNumberInput.value = '';
+    document.getElementById('merchantKioskSavedCustomer').value = '';
+    document.getElementById('merchantKioskFulfillment').value = 'dine-in';
+    updateMerchantKioskFulfillment();
+    renderMerchantKioskSavedCustomers();
     renderMerchantActiveOrders();
+    renderMerchantCustomers();
+    renderMerchantAssignmentOptions();
+    updateMerchantOrderMetrics();
     renderMerchantKioskCart();
+    renderMerchantKioskProducts();
     showToast(`Order ${order.id} sent to Al Reef Restaurant.`);
 });
 
@@ -3455,29 +5601,44 @@ function renderMerchantActiveOrders() {
 
     const activeStatuses = new Set(['new', 'preparing', 'ready']);
     const activeOrders = demoActiveOrders.filter(order => activeStatuses.has(order.status));
-    document.getElementById('merchantActiveOrdersCount').textContent = activeOrders.length;
     document.getElementById('merchantActiveOrdersBadge').textContent = activeOrders.length;
+    document.getElementById('merchantActiveOrdersNavCount').textContent = activeOrders.length;
     list.innerHTML = '';
+    const search = document.getElementById('merchantActiveOrderSearch').value.trim().toLowerCase();
+    const statusFilter = document.getElementById('merchantActiveOrderFilter').value;
+    const filteredOrders = activeOrders.filter(order =>
+        (statusFilter === 'all' || order.status === statusFilter) &&
+        `${order.id} ${order.customer} ${order.items}`.toLowerCase().includes(search)
+    );
 
-    if (activeOrders.length === 0) {
-        list.innerHTML = '<div class="merchant-active-orders-empty">No active orders right now.</div>';
+    if (filteredOrders.length === 0) {
+        const hasFilters = Boolean(search) || statusFilter !== 'all';
+        list.innerHTML = `<div class="merchant-active-orders-empty">${hasFilters ? 'No active orders match your filters.' : 'No active orders right now.'}</div>`;
         return;
     }
 
-    activeOrders.forEach(order => {
+    filteredOrders.forEach(order => {
         const statusLabel = { new: 'New order', preparing: 'Preparing', ready: 'Ready for pickup' }[order.status];
+        const activeDelivery = merchantDeliveries.find(delivery =>
+            delivery.order === order.id && merchantActiveDeliveryStatuses.includes(delivery.status)
+        );
         const actions = order.status === 'new'
             ? '<button class="danger" type="button" data-active-order-action="decline">Decline</button><button class="primary" type="button" data-active-order-action="accept">Accept order</button>'
             : order.status === 'preparing'
                 ? '<button class="primary" type="button" data-active-order-action="ready">Mark ready</button>'
-                : '<button class="primary" type="button" data-active-order-action="complete">Complete</button>';
+                : order.fulfillment === 'delivery'
+                    ? activeDelivery
+                        ? `<span class="merchant-muted">Rider ${escapeMerchantText(merchantDeliveryStatusLabels[activeDelivery.status].toLowerCase())}</span>`
+                        : '<button class="primary" type="button" data-active-order-action="dispatch">Dispatch rider</button>'
+                    : '<button class="primary" type="button" data-active-order-action="complete">Complete</button>';
         const card = document.createElement('article');
         card.className = 'merchant-active-order';
         card.dataset.orderId = order.id;
         card.innerHTML = `
             <div class="merchant-active-order-main">
-                <div class="merchant-active-order-heading"><strong>${escapeMerchantText(order.id)}</strong><span>${escapeMerchantText(order.customer)}</span>${order.table ? `<span>Table ${escapeMerchantText(order.table)}</span>` : ''}<span>Received ${escapeMerchantText(order.received)}</span></div>
+                <div class="merchant-active-order-heading"><strong>${escapeMerchantText(order.id)}</strong><span>${escapeMerchantText(order.customer)}</span>${order.merchant ? `<span>${escapeMerchantText(order.merchant)}</span>` : ''}${order.table ? `<span>Table ${escapeMerchantText(order.table)}</span>` : ''}<span>${order.fulfillment === 'delivery' ? 'Delivery' : 'Dine-in'}</span><span>Received ${escapeMerchantText(order.received)}</span></div>
                 <div class="merchant-active-order-details">${escapeMerchantText(order.items)}</div>
+                ${order.fulfillment === 'delivery' ? `<div class="merchant-active-order-details">${escapeMerchantText(order.deliveryAddress || 'Delivery address required')}</div>` : ''}
             </div>
             <span class="merchant-order-status ${order.status}">${statusLabel}</span>
             <div class="merchant-active-order-total">${escapeMerchantText(order.total)}</div>
@@ -3486,6 +5647,9 @@ function renderMerchantActiveOrders() {
         list.appendChild(card);
     });
 }
+
+document.getElementById('merchantActiveOrderSearch').addEventListener('input', renderMerchantActiveOrders);
+document.getElementById('merchantActiveOrderFilter').addEventListener('change', renderMerchantActiveOrders);
 
 document.getElementById('merchantActiveOrderList')?.addEventListener('click', event => {
     const button = event.target.closest('[data-active-order-action]');
@@ -3496,56 +5660,191 @@ document.getElementById('merchantActiveOrderList')?.addEventListener('click', ev
     if (!order) return;
 
     const action = button.dataset.activeOrderAction;
+    if (action === 'dispatch') {
+        navigateMerchantView('assigned-riders');
+        const orderSelect = document.getElementById('merchantDeliveryOrder');
+        orderSelect.value = order.id;
+        updateMerchantAssignmentOrder();
+        document.getElementById('merchantDeliveryPartner').focus();
+        return;
+    }
     const nextStatus = { accept: 'preparing', ready: 'ready', complete: 'completed', decline: 'declined' }[action];
     if (!nextStatus) return;
 
-    order.status = nextStatus;
+    const reason = action === 'decline'
+        ? prompt(`Enter a reason for declining order ${order.id}:`)?.trim()
+        : '';
+    if (action === 'decline' && !reason) {
+        showToast('A reason is required to decline an order.');
+        return;
+    }
+    const updatedOrder = {
+        ...order,
+        status: nextStatus,
+        statusHistory: [
+            ...(order.statusHistory || []),
+            {
+                status: nextStatus,
+                at: new Date().toISOString(),
+                actor: 'Merchant staff',
+                ...(reason ? { reason } : {})
+            }
+        ]
+    };
     if (action === 'complete' || action === 'decline') {
-        dummyPastOrders.unshift({
-            id: order.id,
+        const nextActiveOrders = demoActiveOrders.filter(item => item.id !== order.id);
+        const nextPastOrders = [{
+            ...updatedOrder,
             date: `Today, ${order.received}`,
             items: order.table ? `Table ${order.table} - ${order.items}` : order.items,
             total: order.total,
             status: action === 'complete' ? 'Delivered' : 'Cancelled',
-            statusColor: action === 'complete' ? '#019E81' : '#ff4757'
-        });
+            statusColor: action === 'complete' ? '#019E81' : '#ff4757',
+            ...(reason ? { cancellationReason: reason } : {})
+        }, ...dummyPastOrders];
+        if (!saveMerchantCollections({
+            kiryaMerchantActiveOrders: nextActiveOrders,
+            kiryaMerchantPastOrders: nextPastOrders
+        })) return;
+        demoActiveOrders = nextActiveOrders;
+        dummyPastOrders = nextPastOrders;
+    } else {
+        const nextActiveOrders = demoActiveOrders.map(item => item.id === order.id ? updatedOrder : item);
+        if (!saveMerchantCollection('kiryaMerchantActiveOrders', nextActiveOrders)) return;
+        demoActiveOrders = nextActiveOrders;
     }
+    renderCustomerOrders();
     renderMerchantActiveOrders();
+    populateMerchantAssignmentOptions();
+    updateMerchantOrderMetrics();
     showToast(`Order ${order.id} ${action === 'decline' ? 'declined' : action === 'complete' ? 'completed' : nextStatus === 'ready' ? 'marked ready' : 'accepted'}.`);
 });
 
-renderMerchantActiveOrders();
+let dummyPastOrders = loadMerchantCollection('kiryaMerchantPastOrders', [
+    { id: '#8820', date: 'Today, 10:30 AM', items: '2x Cheese Burger, 1x Cola', total: 'UGX 55,000', status: 'Delivered', statusColor: '#019E81' },
+    { id: '#8819', date: 'Yesterday, 8:15 PM', items: '1x Family Pizza Feast', total: 'UGX 85,000', status: 'Delivered', statusColor: '#019E81' },
+    { id: '#8818', date: 'Yesterday, 7:00 PM', items: '3x Spicy Wings (6pcs)', total: 'UGX 90,000', status: 'Cancelled', statusColor: '#ff4757' },
+    { id: '#8817', date: '22 Oct, 1:00 PM', items: '1x Zinger Wrap', total: 'UGX 22,000', status: 'Delivered', statusColor: '#019E81' },
+    { id: '#8816', date: '21 Oct, 9:45 PM', items: '2x Milkshakes', total: 'UGX 36,000', status: 'Delivered', statusColor: '#019E81' }
+], order =>
+    order && typeof order.id === 'string' && typeof order.date === 'string' &&
+    typeof order.items === 'string' && typeof order.total === 'string' &&
+    /\d/.test(order.total) &&
+    ['Delivered', 'Cancelled'].includes(order.status)
+);
 
-const dummyPastOrders = [
-    { id: '#8820', date: 'Today, 10:30 AM', items: '2x Cheese Burger, 1x Cola', total: 'UGX 55.00', status: 'Delivered', statusColor: '#019E81' },
-    { id: '#8819', date: 'Yesterday, 8:15 PM', items: '1x Family Pizza Feast', total: 'UGX 85.00', status: 'Delivered', statusColor: '#019E81' },
-    { id: '#8818', date: 'Yesterday, 7:00 PM', items: '3x Spicy Wings (6pcs)', total: 'UGX 90.00', status: 'Cancelled', statusColor: '#ff4757' },
-    { id: '#8817', date: '22 Oct, 1:00 PM', items: '1x Zinger Wrap', total: 'UGX 22.00', status: 'Delivered', statusColor: '#019E81' },
-    { id: '#8816', date: '21 Oct, 9:45 PM', items: '2x Milkshakes', total: 'UGX 36.00', status: 'Delivered', statusColor: '#019E81' }
-];
+function getMerchantAnalyticsSnapshot() {
+    const activeOrders = demoActiveOrders.filter(order => ['new', 'preparing', 'ready'].includes(order.status));
+    const orderStatus = {
+        New: demoActiveOrders.filter(order => order.status === 'new').length,
+        Preparing: demoActiveOrders.filter(order => order.status === 'preparing').length,
+        Ready: demoActiveOrders.filter(order => order.status === 'ready').length,
+        Delivered: dummyPastOrders.filter(order => order.status === 'Delivered').length,
+        Cancelled: dummyPastOrders.filter(order => order.status === 'Cancelled').length
+    };
+    const amountForStatus = status => [...activeOrders, ...dummyPastOrders]
+        .filter(order => status === 'In progress'
+            ? ['new', 'preparing', 'ready'].includes(order.status)
+            : order.status.toLowerCase() === status.toLowerCase())
+        .reduce((sum, order) => sum + Number(order.total.replace(/[^\d.]/g, '')), 0);
+    const categories = merchantMenuItems.reduce((counts, item) => {
+        const category = item.category || 'Other';
+        counts[category] = (counts[category] || 0) + 1;
+        return counts;
+    }, {});
+
+    return {
+        statusLabels: Object.keys(orderStatus),
+        statusValues: Object.values(orderStatus),
+        valueLabels: ['In progress', 'Delivered', 'Cancelled'],
+        values: ['In progress', 'Delivered', 'Cancelled'].map(amountForStatus),
+        categoryLabels: Object.keys(categories),
+        categoryValues: Object.values(categories)
+    };
+}
+
+function updateMerchantAnalytics() {
+    const analytics = getMerchantAnalyticsSnapshot();
+    if (dailySalesChartInstance) {
+        dailySalesChartInstance.data.labels = analytics.valueLabels;
+        dailySalesChartInstance.data.datasets[0].data = analytics.values;
+        dailySalesChartInstance.update();
+    }
+    if (topItemsChartInstance) {
+        topItemsChartInstance.data.labels = analytics.categoryLabels;
+        topItemsChartInstance.data.datasets[0].data = analytics.categoryValues;
+        topItemsChartInstance.update();
+    }
+    if (orderStatusChartInstance) {
+        orderStatusChartInstance.data.labels = analytics.statusLabels;
+        orderStatusChartInstance.data.datasets[0].data = analytics.statusValues;
+        orderStatusChartInstance.update();
+    }
+}
+
+function updateMerchantOrderMetrics() {
+    const orderCount = demoActiveOrders.length + dummyPastOrders.length;
+    const salesTotal = [...demoActiveOrders, ...dummyPastOrders].reduce((sum, order) =>
+        sum + Number(order.total.replace(/[^\d.]/g, '')), 0
+    );
+    const activeRiderAssignments = merchantDeliveries.filter(delivery =>
+        merchantActiveDeliveryStatuses.includes(delivery.status)
+    ).length;
+    const availableRiders = merchantPartners.filter(partner =>
+        partner.status === 'active' &&
+        partner.availability === 'available' &&
+        merchantPartnerWorkload(partner) === 0
+    ).length;
+    document.getElementById('merchantSalesTotal').textContent = formatMerchantCurrency(salesTotal);
+    document.getElementById('merchantOrdersTotal').textContent = orderCount;
+    document.getElementById('merchantCustomerMetric').textContent = merchantCustomers.length;
+    document.getElementById('merchantCustomerCount').textContent = merchantCustomers.length;
+    document.getElementById('merchantAssignedRidersCount').textContent = activeRiderAssignments;
+    document.getElementById('merchantActiveRiderAssignmentsMetric').textContent = activeRiderAssignments;
+    document.getElementById('merchantCancelledOrdersMetric').textContent =
+        dummyPastOrders.filter(order => order.status === 'Cancelled').length;
+    document.getElementById('merchantDeliveredAssignmentsMetric').textContent =
+        merchantDeliveries.filter(delivery => delivery.status === 'delivered').length;
+    document.getElementById('merchantAvailableRidersMetric').textContent = availableRiders;
+    const salesGoalProgress = Math.min(100, salesTotal / 2_000_000 * 100);
+    const ordersGoalProgress = Math.min(100, orderCount);
+    document.getElementById('merchantSalesGoal').value = salesGoalProgress;
+    document.getElementById('merchantSalesGoalValue').innerHTML = `${formatMerchantCurrency(salesTotal)} <small>of UGX 2,000,000</small>`;
+    document.getElementById('merchantSalesGoalPercent').textContent = `${salesGoalProgress.toFixed(1)}% of the order value goal`;
+    document.getElementById('merchantOrdersGoal').value = ordersGoalProgress;
+    document.getElementById('merchantOrdersGoalValue').innerHTML = `${orderCount} <small>of 100 orders</small>`;
+    document.getElementById('merchantOrdersGoalPercent').textContent = `${ordersGoalProgress}% of the orders goal`;
+    if (dailySalesChartInstance || topItemsChartInstance || orderStatusChartInstance) updateMerchantAnalytics();
+}
 
 function renderMerchantOrders() {
     merchantOrdersList.innerHTML = '';
-    dummyPastOrders.forEach(order => {
-        const card = document.createElement('div');
-        card.className = 'dashboard-card';
-        card.style.display = 'flex';
-        card.style.flexDirection = 'column';
-        card.style.gap = '8px';
-        card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:800; color:#333;">${escapeMerchantText(order.id)}</span>
-                <span style="font-size:0.85em; color:#666;">${escapeMerchantText(order.date)}</span>
-            </div>
-            <div style="font-size:0.95em; color:#555; line-height:1.4;">${escapeMerchantText(order.items)}</div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px;">
-                <span style="font-weight:bold; color:#333;">${escapeMerchantText(order.total)}</span>
-                <span style="background:${order.statusColor}20; color:${order.statusColor}; padding:4px 8px; border-radius:6px; font-size:0.85em; font-weight:700;">${escapeMerchantText(order.status)}</span>
-            </div>
-        `;
-        merchantOrdersList.appendChild(card);
-    });
+    const search = document.getElementById('merchantPastOrderSearch').value.trim().toLowerCase();
+    const status = document.getElementById('merchantPastOrderFilter').value;
+    const filtered = dummyPastOrders.filter(order =>
+        (status === 'all' || order.status === status) &&
+        `${order.id} ${order.date} ${order.customer || ''} ${order.items}`.toLowerCase().includes(search)
+    );
+    merchantOrdersList.innerHTML = filtered.length
+        ? filtered.map(order => {
+            const orderTimeline = (order.statusHistory || []).map(item => {
+                const labels = { new: 'New', preparing: 'Preparing', ready: 'Ready', completed: 'Delivered', declined: 'Cancelled' };
+                return `<li><strong>${escapeMerchantText(labels[item.status] || item.status)}</strong> - ${escapeMerchantText(new Date(item.at).toLocaleString())}<span>${escapeMerchantText(item.actor || 'Merchant staff')}</span>${item.reason ? `<p>${escapeMerchantText(item.reason)}</p>` : ''}</li>`;
+            }).join('');
+            return `
+            <tr>
+              <td>${escapeMerchantText(order.id)}</td><td>${escapeMerchantText(order.date)}</td>
+              <td>${escapeMerchantText(order.customer || '—')}</td>
+              <td>${escapeMerchantText(order.fulfillment === 'delivery' ? 'Delivery' : order.table ? `Dine-in (table ${order.table})` : '—')}</td>
+              <td>${escapeMerchantText(order.items)}</td><td>${escapeMerchantText(order.total)}</td>
+              <td><span class="merchant-status-pill ${order.status === 'Delivered' ? 'delivered' : 'cancelled'}">${escapeMerchantText(order.status)}</span>${orderTimeline ? `<details class="merchant-customer-history"><summary>Order timeline</summary><ul>${orderTimeline}</ul></details>` : ''}${order.cancellationReason ? `<p>${escapeMerchantText(order.cancellationReason)}</p>` : ''}</td>
+            </tr>
+        `}).join('')
+        : '<tr><td class="merchant-record-empty" colspan="7">No orders match your filters.</td></tr>';
 }
+
+document.getElementById('merchantPastOrderSearch').addEventListener('input', renderMerchantOrders);
+document.getElementById('merchantPastOrderFilter').addEventListener('change', renderMerchantOrders);
 
 function openMerchantOrders() {
     setMerchantNavView('orders');
@@ -3553,10 +5852,68 @@ function openMerchantOrders() {
     merchantOrdersScreen.classList.add('active');
 }
 
-if(merchantOrdersBtn) merchantOrdersBtn.addEventListener('click', openMerchantOrders);
-if(merchantOrdersBackBtn) {
-    merchantOrdersBackBtn.addEventListener('click', () => merchantOrdersScreen.classList.remove('active'));
+function openMerchantActiveOrders() {
+    [merchantKioskScreen, merchantMenuScreen, merchantEditItemScreen, merchantOrdersScreen]
+        .forEach(screen => screen?.classList.remove('active'));
+    setMerchantNavView('active-orders');
+    merchantActiveOrdersScreen?.classList.add('active');
+    renderMerchantActiveOrders();
 }
+
+renderMerchantActiveOrders();
+updateMerchantOrderMetrics();
+
+window.addEventListener('storage', event => {
+    if (event.key === riderLocationStorageKey) {
+        refreshLiveRiderMaps();
+        return;
+    }
+    const collectionKey = event.key;
+    if (!collectionKey || !collectionKey.startsWith('kiryaMerchant')) return;
+    if (collectionKey === 'kiryaMerchantPickupAddress') {
+        try {
+            const address = event.newValue === null ? '' : JSON.parse(event.newValue);
+            if (typeof address !== 'string') throw new Error('Saved pickup address is not text.');
+            merchantPickupAddress = address;
+            document.getElementById('merchantPickupAddress').value = address;
+            document.getElementById('merchantPickupAddressStatus').textContent = address
+                ? 'Pickup location is saved and will be included in new delivery orders.'
+                : 'Add the store address before sending rider offers.';
+        } catch (error) {
+            console.error('Unable to synchronize the merchant pickup address.', error);
+            showToast('The updated rider pickup location could not be loaded.');
+        }
+        return;
+    }
+    let records;
+    try {
+        records = event.newValue === null ? [] : JSON.parse(event.newValue);
+        if (!Array.isArray(records)) throw new Error(`Saved ${collectionKey} data is not a list.`);
+    } catch (error) {
+        console.error(`Unable to synchronize merchant data for ${collectionKey}.`, error);
+        showToast('A merchant update could not be synchronized in this tab.');
+        return;
+    }
+    if (collectionKey === 'kiryaMerchantActiveOrders') demoActiveOrders = records;
+    else if (collectionKey === 'kiryaMerchantPastOrders') dummyPastOrders = records;
+    else if (collectionKey === 'kiryaMerchantCustomers') merchantCustomers = records;
+    else if (collectionKey === 'kiryaMerchantDeliveries') merchantDeliveries = records;
+    else if (collectionKey === 'kiryaMerchantPartners') {
+        merchantPartners = records.map(partner => ({
+            ...partner,
+            availability: ['available', 'off-duty'].includes(partner.availability) ? partner.availability : 'off-duty'
+        }));
+    } else return;
+
+    renderMerchantActiveOrders();
+    if (merchantAssignedRidersScreen?.classList.contains('active')) renderMerchantDeliveries();
+    if (merchantDeliveryScreen?.classList.contains('active')) renderMerchantPartners();
+    if (merchantCustomersScreen?.classList.contains('active')) renderMerchantCustomers();
+    renderMerchantAssignmentOptions();
+    updateMerchantOrderMetrics();
+    if (dailySalesChartInstance || topItemsChartInstance || orderStatusChartInstance) updateMerchantAnalytics();
+    renderCustomerOrders();
+});
 
 /* Profile Picture Upload Logic */
 const profilePic = document.getElementById('profilePic');
@@ -3578,6 +5935,7 @@ if(profilePic && profilePicInput) {
             reader.readAsDataURL(file);
         }
     });
+    updateMerchantAnalytics();
 }
 
 /* Saved Addresses Screen Logic */

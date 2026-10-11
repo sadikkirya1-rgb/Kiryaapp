@@ -37,6 +37,7 @@
   <nav>
     <div class="nav-item active" data-role-app="home">🏠<span>Home</span></div>
     <div class="nav-item" data-role-app="discover">🔍<span>Discover</span></div>
+    <div class="nav-item" data-role-app="orders" role="button" tabindex="0" aria-label="View orders">📦<span>Orders</span><b id="customerActiveOrderCount" hidden>0</b></div>
     <div class="nav-item" data-role-app="cart">🛒<span>Cart</span></div>
     <div class="nav-item" data-role-app="profile">👤<span>Profile</span></div>
     <div class="nav-item" data-role-app="rider">🚴‍♂️<span>Rider</span></div>
@@ -837,10 +838,11 @@
   
   <div class="rider-overlay-ui">
     <div class="rider-header-controls">
-        <div id="riderStatusToggle" class="rider-status-badge offline">
+        <div class="rider-branding"><span>RIDER WORKSPACE</span><strong id="riderHeaderName">Rides partner</strong><small id="riderLocationStatus" role="status">Location sharing starts when you go online.</small></div>
+        <button id="riderStatusToggle" class="rider-status-badge offline" type="button" aria-pressed="false">
             <span class="status-dot" style="width:10px; height:10px; background:#ff4757; border-radius:50%;"></span>
             <span class="status-text">GO ONLINE</span>
-        </div>
+        </button>
     </div>
 
     <!-- Bottom Panel -->
@@ -850,8 +852,8 @@
             <h3 style="margin-bottom:15px; font-weight:800; font-size:1.3em; color:#333;">Today's Performance</h3>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
                 <div style="background:#f9f9f9; padding:15px; border-radius:12px; text-align:center;">
-                    <div style="font-size:0.9em; color:#666;">Earnings</div>
-                    <div style="font-size:1.4em; font-weight:900; color:#333; margin-top:5px;">UGX <span id="riderEarningsToday">0.00</span></div>
+                    <div style="font-size:0.9em; color:#666;">Delivery earnings</div>
+                    <div style="font-size:1.4em; font-weight:900; color:#333; margin-top:5px;" id="riderEarningsToday">UGX 0</div>
                 </div>
                 <div style="background:#f9f9f9; padding:15px; border-radius:12px; text-align:center;">
                     <div style="font-size:0.9em; color:#666;">Trips</div>
@@ -859,7 +861,7 @@
                 </div>
             </div>
             <div style="margin-top:20px; font-size:0.9em; color:#888; text-align:center; padding: 10px; background: #f0f0f0; border-radius: 8px;" id="riderIdleMsg">
-                Go Online to start receiving orders.
+                Go online to receive delivery offers sent by the merchant.
             </div>
         </div>
 
@@ -867,57 +869,90 @@
         <div id="riderDeliveryState" style="display:none;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="font-weight:800; color:#333;">Current Delivery</h3>
-                <span style="background:#e0f2f1; color:#019E81; padding:4px 10px; border-radius:10px; font-size:0.85em; font-weight:bold;">#8821</span>
+                <span id="riderCurrentOrderNumber" style="background:#e0f2f1; color:#019E81; padding:4px 10px; border-radius:10px; font-size:0.85em; font-weight:bold;">—</span>
             </div>
             
             <div class="step-card active" id="riderStepPickup">
                 <div style="font-weight:bold; font-size:0.8em; color:#666;">PICKUP</div>
-                <div style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Burger King, Mall Branch</div>
-                <div style="font-size:0.85em; color:#888; margin-top:2px;">Order ready for pickup</div>
+                <div id="riderPickupName" style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Merchant</div>
+                <div id="riderPickupAddress" style="font-size:0.85em; color:#888; margin-top:2px;">Pickup details appear after accepting an offer.</div>
             </div>
             
             <div class="step-card" id="riderStepDropoff">
                 <div style="font-weight:bold; font-size:0.8em; color:#666;">DROPOFF</div>
-                <div style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Flat 402, Al Majaz 2</div>
-                <div style="font-size:0.85em; color:#888; margin-top:2px;">Cash to collect: UGX 15,000</div>
+                <div id="riderCustomerName" style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Customer</div>
+                <div id="riderDropoffAddress" style="font-size:0.85em; color:#888; margin-top:2px;">Customer delivery address</div>
+                <a id="riderCustomerCall" class="rider-customer-call" href="#" hidden>Call customer</a>
             </div>
 
             <div class="swipe-container" id="riderSwipeBtn">
-                <div class="swipe-text" id="riderSwipeText">SWIPE TO PICK UP</div>
+                <div class="swipe-text" id="riderSwipeText">CONFIRM PICKUP</div>
                 <div class="swipe-knob" id="riderSwipeKnob">➜</div>
             </div>
         </div>
     </div>
   </div>
 
-  <!-- Incoming Order Modal -->
+  <section id="riderOrdersView" class="rider-secondary-view" hidden>
+    <header><span>WORK QUEUE</span><h2>Delivery orders <b id="riderOrderCount">0</b></h2></header>
+    <div id="riderOrdersList" class="rider-orders-list" aria-live="polite"></div>
+  </section>
+  <section id="riderEarningsView" class="rider-secondary-view" hidden>
+    <header><span>PERFORMANCE</span><h2>Earnings</h2></header>
+    <div class="rider-earnings-summary"><span>Rider payout today</span><strong id="riderEarningsSummary">Payout not configured</strong><small id="riderCompletedSummary">0 completed deliveries</small></div>
+    <div id="riderEarningsList" class="rider-earnings-list"></div>
+  </section>
+  <section id="riderAccountView" class="rider-secondary-view" hidden>
+    <header><span>RIDER PROFILE</span><h2>Account &amp; availability</h2></header>
+    <p class="rider-prototype-note">Prototype mode: choose a demo partner. Production rider identity and availability must be verified and saved by the server.</p>
+    <label for="riderPartnerSelect">Rider account</label>
+    <select id="riderPartnerSelect" class="rider-partner-select"></select>
+    <div class="rider-account-summary"><span>Vehicle</span><strong id="riderVehicleSummary">—</strong></div>
+    <div class="rider-account-summary"><span>Service area</span><strong id="riderAreaSummary">—</strong></div>
+    <button class="rider-support-button" id="riderSupportButton" type="button">Contact dispatch support</button>
+  </section>
+
+  <nav class="rider-bottom-nav" aria-label="Rider navigation">
+    <button type="button" class="active" data-rider-tab="home" aria-current="page"><span aria-hidden="true">⌂</span>Home</button>
+    <button type="button" data-rider-tab="orders"><span aria-hidden="true">▣</span>Orders<b id="riderOrdersBadge" hidden>0</b></button>
+    <button type="button" data-rider-tab="earnings"><span aria-hidden="true">＄</span>Earnings</button>
+    <button type="button" data-rider-tab="account"><span aria-hidden="true">●</span>Account</button>
+  </nav>
+
   <div id="riderOrderModal">
     <div class="timer-bar"><div class="timer-fill" id="riderTimerFill"></div></div>
     <div style="text-align:center; font-weight:bold; color:#019E81; font-size: 0.9em;">NEW DELIVERY REQUEST</div>
-    <div class="order-price">UGX 4,500</div>
-    <div class="order-meta">
-        <span>🕒 15 min</span>
-        <span>📏 2.5 km</span>
-        <span>📦 2 items</span>
-    </div>
+    <div class="order-price" id="riderOfferOrderNumber">Delivery offer</div>
+    <div class="order-meta" id="riderOfferItems"></div>
     <div class="rest-info">
         <div style="font-size:2em;">🍔</div>
         <div>
-            <div style="font-weight:bold; color:#333;">Burger King</div>
-            <div style="font-size:0.85em; color:#666;">Mall Branch • 1.2km away</div>
+            <div style="font-weight:bold; color:#333;" id="riderOfferMerchant">Merchant</div>
+            <div style="font-size:0.85em; color:#666;" id="riderOfferPickup">Pickup address</div>
         </div>
     </div>
     <div class="rest-info">
         <div style="font-size:2em;">🏠</div>
         <div>
-            <div style="font-weight:bold; color:#333;">Customer</div>
-            <div style="font-size:0.85em; color:#666;">Flat 402, Al Majaz 2</div>
+            <div style="font-weight:bold; color:#333;" id="riderOfferCustomer">Customer</div>
+            <div style="font-size:0.85em; color:#666;" id="riderOfferAddress">Delivery address</div>
         </div>
     </div>
     <div class="btn-row">
         <button class="btn-decline" id="riderDeclineBtn">Decline</button>
-        <button class="btn-accept" id="riderAcceptBtn">Accept Order</button>
+        <button class="btn-accept" id="riderAcceptBtn">Accept delivery</button>
     </div>
+  </div>
+</div>
+
+<div id="customerOrdersScreen" class="generic-screen">
+  <div class="generic-header">
+    <button class="customer-orders-back" id="customerOrdersBack" type="button" aria-label="Back to home">‹</button>
+    <div class="generic-title">Your orders</div>
+  </div>
+  <div class="generic-content customer-orders-content">
+    <p class="customer-orders-note">Merchant and rider updates appear here in this browser prototype.</p>
+    <div id="customerOrdersList" class="customer-orders-list" aria-live="polite"></div>
   </div>
 </div>
 
@@ -1199,86 +1234,63 @@
 
 <div id="shopPortalScreen" class="generic-screen">
   <div class="generic-header merchant-header">
-    <button class="merchant-mobile-nav-toggle" id="merchantMobileNavToggle" type="button" aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open vendor navigation">
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation">
       <span aria-hidden="true">☰</span>
     </button>
     <div class="generic-title">Merchant Portal</div>
+    <div class="merchant-store-status" id="merchantStoreStatusIndicator" role="status">
+      <span class="merchant-status-dot" aria-hidden="true"></span>
+      <span>Store: <strong id="merchantStoreStatusText">Open</strong></span>
+    </div>
   </div>
   <div class="merchant-layout">
-    <aside class="merchant-sidebar" id="merchantSidebar" aria-label="Vendor controls">
-      <div class="merchant-sidebar-heading">
-        <span>Vendor tools</span>
-        <button class="merchant-sidebar-collapse" id="merchantSidebarCollapse" type="button" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">
-          <span aria-hidden="true">‹</span>
-        </button>
-      </div>
-      <nav class="merchant-side-nav" aria-label="Vendor sections">
-        <button class="active" type="button" data-merchant-view="dashboard" aria-label="Dashboard" title="Dashboard" aria-current="page">
-          <span class="merchant-nav-icon" aria-hidden="true">⌂</span><span class="merchant-side-label">Dashboard</span>
-        </button>
-        <button type="button" data-merchant-view="kiosk" aria-label="Digital Menu" title="Digital Menu">
-          <span class="merchant-nav-icon" aria-hidden="true">▦</span><span class="merchant-side-label">Digital Menu</span>
-        </button>
-        <button type="button" id="merchantOrdersBtn" data-merchant-view="orders" aria-label="Past Orders" title="Past Orders">
-          <span class="merchant-nav-icon" aria-hidden="true">▤</span><span class="merchant-side-label">Past Orders</span>
-        </button>
-        <button type="button" id="merchantManageMenuBtn" data-merchant-view="menu" aria-label="Manage Menu" title="Manage Menu">
-          <span class="merchant-nav-icon" aria-hidden="true">☷</span><span class="merchant-side-label">Manage Menu</span>
-        </button>
-      </nav>
-      <div class="merchant-sidebar-footer">
-        <button class="merchant-store-toggle" id="merchantStoreToggleBtn" type="button" aria-label="Close store">
-          <span class="merchant-nav-icon" aria-hidden="true">◉</span><span class="merchant-side-label">Close store</span>
-        </button>
-        <button class="merchant-add-item-button" type="button" data-merchant-view="add-item" aria-label="Add menu item" title="Add menu item">
-          <span class="merchant-nav-icon" aria-hidden="true">＋</span><span class="merchant-side-label">Add menu item</span>
-        </button>
-      </div>
-    </aside>
-    <button class="merchant-sidebar-backdrop" id="merchantSidebarBackdrop" type="button" aria-label="Close vendor navigation" tabindex="-1"></button>
     <main class="merchant-main">
     <div class="generic-content" id="merchantPortalContent">
-    <div class="dashboard-card" id="merchantStoreCard">
-      <div class="merchant-store-status"><span class="merchant-status-dot" aria-hidden="true"></span><span>Store Status: <strong id="merchantStoreStatusText">Open</strong></span></div>
-    </div>
+    <p class="merchant-demo-note">Sample records are saved in this browser. All customer marketplace restaurants route into this single Al Reef demo queue. Configure the store pickup address for rider offers; connect the merchant API for real store-specific orders.</p>
     <section class="merchant-metrics" aria-label="Business overview">
-      <article class="merchant-metric-card"><span class="merchant-metric-label">Sales this week</span><strong>UGX 1.33M</strong><small>Across the last 7 days</small></article>
-      <article class="merchant-metric-card"><span class="merchant-metric-label">Orders this week</span><strong>68</strong><small>Completed orders</small></article>
-      <article class="merchant-metric-card"><span class="merchant-metric-label">Average rating</span><strong>4.7 <span aria-hidden="true">★</span></strong><small>Customer score</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Order value in register</span><strong id="merchantSalesTotal">UGX 0</strong><small>Based on recorded orders</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Orders in register</span><strong id="merchantOrdersTotal">0</strong><small>Active and past orders</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Customers</span><strong id="merchantCustomerMetric">0</strong><small>Registered customers</small></article>
       <article class="merchant-metric-card"><span class="merchant-metric-label">Available items</span><strong id="merchantAvailableMenuCount">4 / 5</strong><small>Menu items in stock</small></article>
-      <article class="merchant-metric-card"><span class="merchant-metric-label">Active orders</span><strong id="merchantActiveOrdersCount">3</strong><small>Orders in progress</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Active rider assignments</span><strong id="merchantActiveRiderAssignmentsMetric">0</strong><small>Offered, accepted, picked up, or in transit</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Cancelled orders</span><strong id="merchantCancelledOrdersMetric">0</strong><small>Orders cancelled in the register</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Delivered assignments</span><strong id="merchantDeliveredAssignmentsMetric">0</strong><small>Rider deliveries completed</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Available riders</span><strong id="merchantAvailableRidersMetric">0</strong><small>Active partners ready for an assignment</small></article>
+    </section>
+    <section class="merchant-record-panel merchant-pickup-settings" aria-labelledby="merchantPickupAddressHeading">
+      <div class="merchant-section-heading"><h2 id="merchantPickupAddressHeading">Rider pickup location</h2></div>
+      <p>Use the store’s full address so riders know where to collect customer orders.</p>
+      <div class="merchant-pickup-setting-row">
+        <label class="merchant-visually-hidden" for="merchantPickupAddress">Store pickup address</label>
+        <input id="merchantPickupAddress" type="text" maxlength="180" autocomplete="street-address" placeholder="Enter the full store pickup address">
+        <button class="merchant-button-primary" id="merchantPickupAddressSave" type="button">Save pickup location</button>
+      </div>
+      <small id="merchantPickupAddressStatus" role="status"></small>
     </section>
     <section class="merchant-goals" aria-labelledby="merchantGoalsHeading">
       <div class="merchant-section-heading"><h2 id="merchantGoalsHeading">Weekly goals</h2></div>
       <div class="merchant-goal-grid">
         <div class="merchant-goal">
-          <div class="merchant-goal-heading"><label for="merchantSalesGoal">Sales target</label><span>UGX 1.33M <small>of 2.00M</small></span></div>
-          <progress id="merchantSalesGoal" max="100" value="66.5" aria-label="Weekly sales target progress"></progress>
-          <small>66.5% of this week’s sales target</small>
+          <div class="merchant-goal-heading"><label for="merchantSalesGoal">Order value goal</label><span id="merchantSalesGoalValue">UGX 0 <small>of UGX 2,000,000</small></span></div>
+          <progress id="merchantSalesGoal" max="100" value="0" aria-label="Order value goal progress"></progress>
+          <small id="merchantSalesGoalPercent">0% of the order value goal</small>
         </div>
         <div class="merchant-goal">
-          <div class="merchant-goal-heading"><label for="merchantOrdersGoal">Order target</label><span>68 <small>of 100 orders</small></span></div>
-          <progress id="merchantOrdersGoal" max="100" value="68" aria-label="Weekly order target progress"></progress>
-          <small>68% of this week’s order target</small>
+          <div class="merchant-goal-heading"><label for="merchantOrdersGoal">Orders goal</label><span id="merchantOrdersGoalValue">0 <small>of 100 orders</small></span></div>
+          <progress id="merchantOrdersGoal" max="100" value="0" aria-label="Registered orders goal progress"></progress>
+          <small id="merchantOrdersGoalPercent">0% of the orders goal</small>
         </div>
       </div>
-    </section>
-    <section class="merchant-active-orders-section" aria-labelledby="merchantActiveOrdersHeading">
-      <div class="merchant-section-heading">
-        <h2 id="merchantActiveOrdersHeading">Active orders</h2>
-        <span class="merchant-order-count" id="merchantActiveOrdersBadge">3</span>
-      </div>
-      <div class="merchant-active-order-list" id="merchantActiveOrderList"></div>
     </section>
     <section class="merchant-analytics-section" aria-labelledby="merchantAnalyticsCard">
       <h2 class="merchant-analytics-title" id="merchantAnalyticsCard">Analytics</h2>
       <div class="merchant-chart-grid">
         <article class="merchant-chart-card">
-          <h3>Top Selling Items</h3>
+          <h3>Menu items by category</h3>
           <div class="merchant-chart-frame"><canvas id="topItemsChart"></canvas></div>
         </article>
         <article class="merchant-chart-card">
-          <h3>Order Status</h3>
+          <h3>Orders by status</h3>
           <div class="merchant-chart-frame"><canvas id="orderStatusChart"></canvas></div>
         </article>
         <article class="merchant-chart-card">
@@ -1286,7 +1298,7 @@
           <div class="merchant-chart-frame"><canvas id="menuAvailabilityChart"></canvas></div>
         </article>
         <article class="merchant-chart-card merchant-sales-chart">
-          <h3>Daily Sales (UGX)</h3>
+          <h3>Order value by status (UGX)</h3>
           <div class="merchant-chart-frame"><canvas id="dailySalesChart"></canvas></div>
         </article>
       </div>
@@ -1294,25 +1306,53 @@
   </div>
     </main>
   </div>
-  <nav class="merchant-bottom-nav" id="merchantBottomNav" aria-label="Merchant navigation">
-    <button class="active" type="button" data-merchant-view="dashboard" aria-current="page">
-      <span class="merchant-nav-icon" aria-hidden="true">⌂</span>
-      <span>Dashboard</span>
-    </button>
-    <button type="button" data-merchant-view="orders">
-      <span class="merchant-nav-icon" aria-hidden="true">▤</span>
-      <span>Orders</span>
-    </button>
-    <button type="button" data-merchant-view="kiosk">
-      <span class="merchant-nav-icon" aria-hidden="true">☷</span>
-      <span>Menu</span>
-    </button>
+</div>
+
+<button class="merchant-nav-backdrop" id="merchantSidebarBackdrop" type="button" aria-label="Close merchant navigation" tabindex="-1"></button>
+<aside class="merchant-sidebar" id="merchantSidebar" aria-label="Merchant navigation" aria-hidden="true" inert>
+  <div class="merchant-sidebar-heading">
+    <span>Merchant tools</span>
+    <button class="merchant-sidebar-close" id="merchantSidebarClose" type="button" aria-label="Close merchant navigation">×</button>
+  </div>
+  <nav class="merchant-side-nav" aria-label="Merchant sections">
+    <button class="active" type="button" data-merchant-view="dashboard" aria-current="page"><span class="merchant-nav-icon" aria-hidden="true">⌂</span><span class="merchant-side-label">Dashboard</span></button>
+    <button type="button" data-merchant-view="active-orders"><span class="merchant-nav-icon" aria-hidden="true">▤</span><span class="merchant-side-label">Active orders</span><span class="merchant-nav-count" id="merchantActiveOrdersNavCount" aria-live="polite" aria-atomic="true">3</span></button>
+    <button type="button" data-merchant-view="orders"><span class="merchant-nav-icon" aria-hidden="true">▤</span><span class="merchant-side-label">Order history</span></button>
+    <button type="button" data-merchant-view="menu"><span class="merchant-nav-icon" aria-hidden="true">☷</span><span class="merchant-side-label">Manage menu</span></button>
+    <button type="button" data-merchant-view="delivery"><span class="merchant-nav-icon" aria-hidden="true">🚚</span><span class="merchant-side-label">Rides partner</span></button>
+    <button type="button" data-merchant-view="assigned-riders"><span class="merchant-nav-icon" aria-hidden="true">🛵</span><span class="merchant-side-label">Assigned Riders</span><span class="merchant-nav-count" id="merchantAssignedRidersCount">2</span></button>
+    <button type="button" data-merchant-view="customers"><span class="merchant-nav-icon" aria-hidden="true">♙</span><span class="merchant-side-label">Customers</span><span class="merchant-nav-count" id="merchantCustomerCount">3</span></button>
+    <button type="button" data-merchant-view="kiosk"><span class="merchant-nav-icon" aria-hidden="true">▦</span><span class="merchant-side-label">Digital menu</span></button>
   </nav>
+  <div class="merchant-sidebar-footer">
+    <button class="merchant-store-toggle" id="merchantStoreToggleBtn" type="button" aria-label="Close store"><span class="merchant-nav-icon" aria-hidden="true">◉</span><span class="merchant-side-label">Close store</span></button>
+  </div>
+</aside>
+
+<div id="merchantActiveOrdersScreen" class="generic-screen">
+  <div class="generic-header">
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
+    <div class="generic-title">Active Orders <span class="merchant-order-count" id="merchantActiveOrdersBadge">3</span></div>
+  </div>
+  <div class="generic-content">
+    <div class="merchant-record-toolbar">
+      <label class="merchant-visually-hidden" for="merchantActiveOrderSearch">Search active orders</label>
+      <input class="merchant-record-search" id="merchantActiveOrderSearch" type="search" placeholder="Search by order, customer, or item">
+      <label class="merchant-visually-hidden" for="merchantActiveOrderFilter">Filter active orders</label>
+      <select class="merchant-record-filter" id="merchantActiveOrderFilter">
+        <option value="all">All active orders</option><option value="new">New</option><option value="preparing">Preparing</option><option value="ready">Ready</option>
+      </select>
+    </div>
+    <section class="merchant-active-orders-section" aria-labelledby="merchantActiveOrdersHeading">
+      <h2 class="merchant-active-orders-heading" id="merchantActiveOrdersHeading">Orders in progress</h2>
+      <div class="merchant-active-order-list" id="merchantActiveOrderList"></div>
+    </section>
+  </div>
 </div>
 
 <div id="merchantKioskScreen" class="generic-screen merchant-kiosk-screen">
   <div class="generic-header merchant-kiosk-header">
-    <button class="merchant-kiosk-back" id="merchantKioskBackBtn" type="button" aria-label="Back to merchant dashboard">‹</button>
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
     <div class="merchant-kiosk-brand"><span aria-hidden="true">AR</span><div><strong>Al Reef Restaurant</strong><small>Restaurant menu</small></div></div>
     <button class="merchant-kiosk-cart-jump" id="merchantKioskCartJump" type="button" aria-label="View order basket">Order <span id="merchantKioskHeaderCount">0</span></button>
   </div>
@@ -1328,11 +1368,19 @@
       </div>
       <div class="merchant-kiosk-products" id="merchantKioskProducts"></div>
     </main>
-    <aside class="merchant-kiosk-cart" id="merchantKioskCartPanel" aria-labelledby="merchantKioskCartTitle">
+    <aside class="merchant-kiosk-cart" id="merchantKioskCartPanel" aria-labelledby="merchantKioskCartTitle" hidden>
       <div class="merchant-kiosk-cart-heading"><h2 id="merchantKioskCartTitle">Your order</h2><span id="merchantKioskCartCount">0 items</span></div>
       <div class="merchant-kiosk-cart-items" id="merchantKioskCartItems"></div>
       <div class="merchant-kiosk-subtotal"><span>Subtotal</span><strong id="merchantKioskSubtotal">UGX 0</strong></div>
       <div class="merchant-kiosk-customer-fields">
+        <div class="merchant-kiosk-field">
+          <label for="merchantKioskSavedCustomer">Saved customer</label>
+          <select id="merchantKioskSavedCustomer"><option value="">New customer</option></select>
+        </div>
+        <div class="merchant-kiosk-field">
+          <label for="merchantKioskFulfillment">Fulfilment</label>
+          <select id="merchantKioskFulfillment"><option value="dine-in">Dine-in</option><option value="delivery">Delivery</option></select>
+        </div>
         <div class="merchant-kiosk-field">
           <label for="merchantKioskCustomerName">Name</label>
           <input id="merchantKioskCustomerName" type="text" autocomplete="name" placeholder="Your name" required>
@@ -1341,8 +1389,12 @@
           <label for="merchantKioskCustomerPhone">Contact</label>
           <input id="merchantKioskCustomerPhone" type="tel" autocomplete="tel" placeholder="0700 123 456" required>
         </div>
-        <div class="merchant-kiosk-field merchant-kiosk-table-field">
-          <label for="merchantKioskTableNumber">Table number</label>
+        <div class="merchant-kiosk-field merchant-kiosk-delivery-address-field" id="merchantKioskDeliveryAddressField" hidden>
+          <label for="merchantKioskDeliveryAddress">Delivery address</label>
+          <input id="merchantKioskDeliveryAddress" type="text" autocomplete="street-address" maxlength="180" placeholder="Street, area, city">
+        </div>
+        <div class="merchant-kiosk-field merchant-kiosk-table-field" id="merchantKioskTableField">
+          <label for="merchantKioskTableNumber">Table#</label>
           <input id="merchantKioskTableNumber" type="number" min="1" max="999" inputmode="numeric" placeholder="e.g. 12" required>
         </div>
       </div>
@@ -1353,18 +1405,19 @@
 
 <div id="merchantMenuScreen" class="generic-screen">
   <div class="generic-header">
-    <div class="generic-back-btn" id="merchantMenuBackBtn">⬅️</div>
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
     <div class="generic-title">Manage Menu</div>
-    <div style="margin-left:auto; font-size:1.5em; cursor:pointer;" id="merchantAddMenuBtn">➕</div>
+    <button class="merchant-add-menu-button" type="button" id="merchantAddMenuBtn" aria-label="Add menu item" title="Add menu item">＋</button>
   </div>
-  <div class="generic-content" id="merchantMenuList">
-    <!-- Items populated by JS -->
+  <div class="generic-content" id="merchantMenuContent">
+    <div class="merchant-record-toolbar"><label class="merchant-visually-hidden" for="merchantMenuSearch">Search menu items</label><input class="merchant-record-search" id="merchantMenuSearch" type="search" placeholder="Search by item or category"></div>
+    <div id="merchantMenuList" aria-live="polite"></div>
   </div>
 </div>
 
 <div id="merchantEditItemScreen" class="generic-screen">
   <div class="generic-header">
-    <div class="generic-back-btn" id="editItemBackBtn">⬅️</div>
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
     <div class="generic-title" id="editItemTitle">Edit Item</div>
   </div>
   <div class="generic-content">
@@ -1387,7 +1440,8 @@
         <label for="editItemIngredients">Ingredients</label>
         <textarea id="editItemIngredients" rows="2" placeholder="e.g., chicken, herbs, spices"></textarea>
         <label for="editItemImage">Product photo URL</label>
-        <input type="url" id="editItemImage" placeholder="assets/product-photo.jpg">
+        <input type="text" id="editItemImage" inputmode="url" placeholder="https://example.com/product-photo.jpg" aria-describedby="merchantImagePreviewStatus">
+        <div class="merchant-image-preview" id="merchantImagePreview" aria-live="polite"><span id="merchantImagePreviewStatus">Image preview appears here</span></div>
         <label for="editItemImg">Emoji fallback</label>
         <input type="text" id="editItemImg" placeholder="e.g., 🍔">
         <input type="hidden" id="editItemId">
@@ -1398,10 +1452,122 @@
 
 <div id="merchantOrdersScreen" class="generic-screen">
   <div class="generic-header">
-    <div class="generic-back-btn" id="merchantOrdersBackBtn">⬅️</div>
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
     <div class="generic-title">Order History</div>
   </div>
-  <div class="generic-content" id="merchantOrdersList"></div>
+  <div class="generic-content">
+    <div class="merchant-record-toolbar">
+      <label class="merchant-visually-hidden" for="merchantPastOrderSearch">Search order history</label>
+      <input class="merchant-record-search" id="merchantPastOrderSearch" type="search" placeholder="Search by order, customer, or item">
+      <label class="merchant-visually-hidden" for="merchantPastOrderFilter">Filter order history</label>
+      <select class="merchant-record-filter" id="merchantPastOrderFilter"><option value="all">All statuses</option><option value="Delivered">Delivered</option><option value="Cancelled">Cancelled</option></select>
+    </div>
+    <div class="merchant-record-table-wrap"><table class="merchant-record-table"><thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Fulfilment</th><th>Items</th><th>Total</th><th>Status / reason</th></tr></thead><tbody id="merchantOrdersList"></tbody></table></div>
+  </div>
+</div>
+
+<div id="merchantCustomersScreen" class="generic-screen">
+  <div class="generic-header">
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
+    <div class="generic-title">Customers</div>
+  </div>
+  <div class="generic-content">
+    <section class="merchant-record-panel" aria-labelledby="merchantCustomerFormHeading">
+      <div class="merchant-section-heading"><h2 id="merchantCustomerFormHeading">Register customer</h2></div>
+      <form class="merchant-record-form" id="merchantCustomerForm">
+        <input type="hidden" id="merchantCustomerId">
+        <label>Name<input id="merchantCustomerName" name="name" type="text" autocomplete="name" required maxlength="100"></label>
+        <label>Phone<input id="merchantCustomerPhone" name="phone" type="tel" autocomplete="tel" required pattern="[0-9+() -]{8,}" title="Enter a valid phone number"></label>
+        <label>Email<input id="merchantCustomerEmail" name="email" type="email" autocomplete="email"></label>
+        <label>Delivery address<input id="merchantCustomerAddress" name="address" type="text" autocomplete="street-address" required maxlength="180"></label>
+        <div class="merchant-form-actions"><button class="merchant-button-primary" type="submit">Save customer</button><button class="merchant-button-secondary" id="merchantCustomerCancelEdit" type="button" hidden>Cancel edit</button></div>
+      </form>
+    </section>
+    <section class="merchant-record-panel" aria-labelledby="merchantCustomersHeading">
+      <div class="merchant-section-heading"><h2 id="merchantCustomersHeading">Customer directory</h2><span class="merchant-order-count" id="merchantCustomerTableCount">3</span></div>
+      <div class="merchant-record-toolbar">
+        <label class="merchant-visually-hidden" for="merchantCustomerSearch">Search customers</label><input class="merchant-record-search" id="merchantCustomerSearch" type="search" placeholder="Search by name, phone, or address">
+        <label class="merchant-visually-hidden" for="merchantCustomerSort">Sort customers</label><select class="merchant-record-filter" id="merchantCustomerSort"><option value="name">Name A-Z</option><option value="orders">Most orders</option><option value="recent">Recently active</option></select>
+        <label class="merchant-visually-hidden" for="merchantCustomerFilter">Filter customers</label><select class="merchant-record-filter" id="merchantCustomerFilter"><option value="all">All customers</option><option value="frequent">Frequent customers (5+ orders)</option><option value="recent">Active in the last 30 days</option></select>
+        <button class="merchant-button-secondary" id="merchantCustomerExport" type="button">Export CSV</button>
+      </div>
+      <div class="merchant-record-table-wrap"><table class="merchant-record-table"><thead><tr><th>Customer</th><th>Phone</th><th>Email</th><th>Address</th><th>Orders</th><th>Last order</th><th>Order history</th><th>Actions</th></tr></thead><tbody id="merchantCustomerRows"></tbody></table></div>
+      <div class="merchant-record-pagination"><span id="merchantCustomerPageInfo" aria-live="polite"></span><div><button class="merchant-button-secondary" id="merchantCustomerPrev" type="button">Previous</button><button class="merchant-button-secondary" id="merchantCustomerNext" type="button">Next</button></div></div>
+    </section>
+  </div>
+</div>
+
+<div id="merchantDeliveryScreen" class="generic-screen">
+  <div class="generic-header">
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
+    <div class="generic-title">Rides partner</div>
+  </div>
+  <div class="generic-content">
+    <section class="merchant-record-panel" aria-labelledby="merchantPartnerFormHeading">
+      <div class="merchant-section-heading"><h2 id="merchantPartnerFormHeading">Register rides partner</h2></div>
+      <form class="merchant-record-form" id="merchantPartnerForm">
+        <input type="hidden" id="merchantPartnerId">
+        <label>Partner name<input id="merchantPartnerName" name="name" type="text" required maxlength="100" autocomplete="name"></label>
+        <label>Phone<input id="merchantPartnerPhone" name="phone" type="tel" required pattern="[0-9+() -]{8,}" title="Enter a valid phone number" autocomplete="tel"></label>
+        <label>Email<input id="merchantPartnerEmail" name="email" type="email" maxlength="180" autocomplete="email"></label>
+        <label>Vehicle / transport type<input id="merchantPartnerVehicle" name="vehicle" type="text" required maxlength="80" placeholder="e.g. Motorcycle"></label>
+        <label>Service area<input id="merchantPartnerArea" name="area" type="text" required maxlength="120" placeholder="e.g. Kampala"></label>
+        <label>Status<select id="merchantPartnerStatus" name="status"><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+        <label>Availability<select id="merchantPartnerAvailability" name="availability"><option value="available">Available</option><option value="off-duty">Off duty</option></select></label>
+        <div class="merchant-form-actions"><button class="merchant-button-primary" type="submit">Save partner</button><button class="merchant-button-secondary" id="merchantPartnerCancelEdit" type="button" hidden>Cancel edit</button></div>
+      </form>
+    </section>
+    <section class="merchant-record-panel" aria-labelledby="merchantPartnersHeading">
+      <div class="merchant-section-heading"><h2 id="merchantPartnersHeading">Rides partners</h2><span class="merchant-order-count" id="merchantPartnerTableCount">2</span></div>
+      <div class="merchant-record-toolbar">
+        <label class="merchant-visually-hidden" for="merchantPartnerSearch">Search rides partners</label><input class="merchant-record-search" id="merchantPartnerSearch" type="search" placeholder="Search by name, phone, vehicle, or area">
+        <label class="merchant-visually-hidden" for="merchantPartnerFilter">Filter rides partners</label><select class="merchant-record-filter" id="merchantPartnerFilter"><option value="all">All partners</option><option value="active">Active account</option><option value="inactive">Inactive account</option><option value="available">Available</option><option value="on-delivery">On delivery</option><option value="off-duty">Off duty</option></select>
+        <label class="merchant-visually-hidden" for="merchantPartnerSort">Sort rides partners</label><select class="merchant-record-filter" id="merchantPartnerSort"><option value="name">Name A-Z</option><option value="workload">Most active assignments</option><option value="completed">Most completed deliveries</option></select>
+        <button class="merchant-button-secondary" id="merchantPartnerExport" type="button">Export CSV</button>
+      </div>
+      <div class="merchant-record-table-wrap"><table class="merchant-record-table"><thead><tr><th>Partner</th><th>Phone</th><th>Email</th><th>Vehicle</th><th>Service area</th><th>Account / availability</th><th>Active / completed</th><th>Actions</th></tr></thead><tbody id="merchantPartnerRows"></tbody></table></div>
+      <div class="merchant-record-pagination"><span id="merchantPartnerPageInfo" aria-live="polite"></span><div><button class="merchant-button-secondary" id="merchantPartnerPrev" type="button">Previous</button><button class="merchant-button-secondary" id="merchantPartnerNext" type="button">Next</button></div></div>
+    </section>
+  </div>
+</div>
+
+<div id="merchantAssignedRidersScreen" class="generic-screen">
+  <div class="generic-header">
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
+    <div class="generic-title">Assigned Riders</div>
+  </div>
+  <div class="generic-content">
+    <section class="merchant-record-panel" aria-labelledby="merchantDeliveryFormHeading">
+      <div class="merchant-section-heading"><h2 id="merchantDeliveryFormHeading">Dispatch ready delivery</h2></div>
+      <form class="merchant-record-form" id="merchantDeliveryForm">
+        <input type="hidden" id="merchantDeliveryId">
+        <label>Ready delivery order<select id="merchantDeliveryOrder" name="order" required></select></label>
+        <p class="merchant-workload-warning" id="merchantDispatchEligibility" role="status">Choose a ready delivery order. Customer contact details and address will be copied from that order.</p>
+        <label>Customer<input id="merchantDeliveryCustomer" name="customer" type="text" readonly required></label>
+        <label>Customer phone<input id="merchantDeliveryCustomerPhone" name="customerPhone" type="tel" readonly required></label>
+        <label>Delivery address<input id="merchantDeliveryAddress" name="address" type="text" readonly required maxlength="180"></label>
+        <label>Assigned rider<select id="merchantDeliveryPartner" name="partner" required></select></label>
+        <label>Rider phone<input id="merchantDeliveryPhone" name="phone" type="tel" readonly required pattern="[0-9+() -]{8,}" title="Select a rides partner"></label>
+        <p class="merchant-workload-warning" id="merchantRiderWorkloadWarning" role="status" hidden></p>
+        <div class="merchant-form-actions"><button class="merchant-button-primary" type="submit">Send rider offer</button><button class="merchant-button-secondary" id="merchantDeliveryCancelEdit" type="button" hidden>Cancel edit</button></div>
+      </form>
+      <p class="merchant-demo-note">Dispatch is available for ready delivery orders with a saved customer address. Rider responses and reminders are simulated in this browser. Data is local prototype data; eligibility, permissions, notifications, audit records, and concurrent assignment protection must be enforced by the backend when integrated.</p>
+    </section>
+    <section class="merchant-record-panel" aria-labelledby="merchantDeliveriesHeading">
+      <div class="merchant-section-heading"><h2 id="merchantDeliveriesHeading">Rider assignments</h2><span class="merchant-order-count" id="merchantDeliveryTableCount">2</span></div>
+      <div class="merchant-live-map-heading"><strong>Live rider locations</strong><span>Visible while riders are online and sharing GPS.</span></div>
+      <div id="merchantRiderLiveMap" class="merchant-rider-live-map" role="region" aria-label="Map of assigned riders sharing live locations"></div>
+      <p id="merchantRiderLiveMapStatus" class="merchant-live-map-status" role="status">Waiting for assigned riders to share their location.</p>
+      <div class="merchant-record-toolbar">
+        <label class="merchant-visually-hidden" for="merchantDeliverySearch">Search rider assignments</label><input class="merchant-record-search" id="merchantDeliverySearch" type="search" placeholder="Search by order, customer, or rider">
+        <label class="merchant-visually-hidden" for="merchantDeliveryFilter">Filter rider assignments</label><select class="merchant-record-filter" id="merchantDeliveryFilter"><option value="all">All assignments</option><option value="offered">Offered</option><option value="accepted">Accepted</option><option value="picked-up">Picked up</option><option value="in-transit">In transit</option><option value="delivered">Delivered</option><option value="declined">Declined</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option></select>
+        <label class="merchant-visually-hidden" for="merchantDeliverySort">Sort rider assignments</label><select class="merchant-record-filter" id="merchantDeliverySort"><option value="newest">Newest assignment</option><option value="oldest">Oldest assignment</option><option value="status">Status</option><option value="order">Order number</option></select>
+        <button class="merchant-button-secondary" id="merchantDeliveryExport" type="button">Export CSV</button>
+      </div>
+      <div class="merchant-record-table-wrap"><table class="merchant-record-table"><thead><tr><th>Order</th><th>Customer</th><th>Address</th><th>Rider</th><th>Rider phone</th><th>Status / audit timeline</th><th>Offer sent</th><th>Actions</th></tr></thead><tbody id="merchantDeliveryRows"></tbody></table></div>
+      <div class="merchant-record-pagination"><span id="merchantDeliveryPageInfo" aria-live="polite"></span><div><button class="merchant-button-secondary" id="merchantDeliveryPrev" type="button">Previous</button><button class="merchant-button-secondary" id="merchantDeliveryNext" type="button">Next</button></div></div>
+    </section>
+  </div>
 </div>
 
 <div id="viewCartBtn">
