@@ -2734,6 +2734,14 @@ let isRiderOnline = false;
 let riderMap;
 let riderLocationWatchId = null;
 let riderLocationMarker = null;
+let riderMarkerAnimationFrame = null;
+let riderPickupMarker = null;
+let riderPickupRouteLayer = null;
+let riderPickupRouteController = null;
+let riderPickupLastRouteOrigin = null;
+let riderPickupLastRouteDestination = null;
+let riderPickupLastRouteAt = 0;
+let riderPickupRouteRequestId = 0;
 let riderOrderTimer;
 let riderPollTimer;
 let riderCurrentStep = 0; // 0: Idle, 1: Pickup, 2: Dropoff
@@ -2743,6 +2751,9 @@ let riderWorkspaceInitialized = false;
 let riderRenderedDeliveryKey = null;
 let merchantRiderTrackingMap = null;
 let merchantRiderTrackingMarkers = new Map();
+let merchantPickupMap = null;
+let merchantPickupMarker = null;
+let merchantTrackingStoreMarker = null;
 let customerTrackingMaps = new Map();
 let liveRiderMapRefreshTimer = null;
 const riderLocationStorageKey = 'kiryaRiderLiveLocations';
@@ -2802,9 +2813,9 @@ function writeLiveRiderLocations(locations) {
 function liveRiderMarkerIcon() {
     return L.divIcon({
         className: 'live-rider-marker',
-        html: '<span aria-hidden="true">🛵</span>',
-        iconSize: [38, 38],
-        iconAnchor: [19, 19]
+        html: '<img src="assets/Delivery%20Guy%20on%20Bicycle%2C%20Cycle%2C%20and%20Bike.svg" alt="">',
+        iconSize: [48, 48],
+        iconAnchor: [24, 24]
     });
 }
 
@@ -2814,6 +2825,86 @@ function createTrackingMap(element) {
         maxZoom: 19
     });
     return L.map(element, { zoomControl: true, layers: [streetLayer] }).setView([0.3476, 32.5825], 12);
+}
+
+function merchantStoreMarkerIcon() {
+    return L.divIcon({
+        className: 'merchant-store-marker',
+        html: '<span aria-hidden="true">🏪</span>',
+        iconSize: [42, 42],
+        iconAnchor: [21, 21]
+    });
+}
+
+function updateStoreMarker(mapInstance, marker) {
+    if (!mapInstance) return marker;
+    if (!merchantPickupCoordinates) {
+        marker?.remove();
+        return null;
+    }
+    const position = [merchantPickupCoordinates.latitude, merchantPickupCoordinates.longitude];
+    const popup = `${escapeMerchantText(merchantPickupAddress || 'Merchant pickup location')}`;
+    if (marker) {
+        marker.setLatLng(position);
+        marker.setPopupContent(popup);
+        if (mapInstance === merchantRiderTrackingMap && merchantRiderTrackingMarkers.size === 0) {
+            mapInstance.setView(position, 14);
+        }
+        return marker;
+    }
+    const storeMarker = L.marker(position, {
+        icon: merchantStoreMarkerIcon(),
+        draggable: mapInstance === merchantPickupMap
+    }).addTo(mapInstance).bindPopup(popup);
+    if (mapInstance === merchantRiderTrackingMap && merchantRiderTrackingMarkers.size === 0) {
+        mapInstance.setView(position, 14);
+    }
+    if (mapInstance === merchantPickupMap) {
+        storeMarker.on('dragend', event => selectMerchantPickupLocation(event.target.getLatLng()));
+    }
+    return storeMarker;
+}
+
+function updateMerchantPickupMarkers() {
+    merchantPickupMarker = updateStoreMarker(merchantPickupMap, merchantPickupMarker);
+    merchantTrackingStoreMarker = updateStoreMarker(merchantRiderTrackingMap, merchantTrackingStoreMarker);
+}
+
+async function selectMerchantPickupLocation(latlng) {
+    merchantPickupCoordinates = { latitude: latlng.lat, longitude: latlng.lng };
+    updateMerchantPickupMarkers();
+    const input = document.getElementById('merchantPickupAddress');
+    const status = document.getElementById('merchantPickupAddressStatus');
+    if (status) status.textContent = 'Map location selected. Looking up the street address…';
+    const selectedCoordinates = merchantPickupCoordinates;
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat}&lon=${latlng.lng}&format=json&accept-language=en&language=en`);
+        if (!response.ok) throw new Error(`Address lookup failed with status ${response.status}.`);
+        const result = await response.json();
+        if (merchantPickupCoordinates !== selectedCoordinates) return;
+        const address = result.address
+            ? [result.address.road, result.address.house_number, result.address.suburb || result.address.village, result.address.city || result.address.town || result.address.state, result.address.country].filter(Boolean).join(', ')
+            : result.display_name;
+        if (address) input.value = address.slice(0, 180);
+        if (status) status.textContent = address
+            ? 'Address found. Save pickup location to confirm this map pin.'
+            : `Map pin selected at ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}. Enter an address and save.`;
+    } catch (error) {
+        console.error('Unable to look up the selected merchant pickup address.', error);
+        if (status) status.textContent = `Map pin selected at ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}. Enter an address and save.`;
+    }
+}
+
+function initMerchantPickupMap() {
+    const element = document.getElementById('merchantPickupMap');
+    if (!element || merchantPickupMap) return;
+    merchantPickupMap = createTrackingMap(element);
+    if (merchantPickupCoordinates) {
+        merchantPickupMap.setView([merchantPickupCoordinates.latitude, merchantPickupCoordinates.longitude], 15);
+    }
+    merchantPickupMap.on('click', event => selectMerchantPickupLocation(event.latlng));
+    updateMerchantPickupMarkers();
+    merchantPickupMarker?.on('dragend', event => selectMerchantPickupLocation(event.target.getLatLng()));
 }
 
 function ensureLiveRiderMapRefresh() {
@@ -2829,13 +2920,148 @@ function getFreshRiderLocation(locations, partnerId) {
         : null;
 }
 
-function updateRiderMapLocation(location) {
+function updateRiderPickupDestination() {
     if (!riderMap) return;
-    if (!location) {
-        riderLocationMarker?.remove();
-        riderLocationMarker = null;
+    if (!merchantPickupCoordinates) {
+        riderPickupMarker?.remove();
+        riderPickupMarker = null;
         return;
     }
+    const position = [merchantPickupCoordinates.latitude, merchantPickupCoordinates.longitude];
+    const popup = `${escapeMerchantText(merchantProfile.name)} · ${escapeMerchantText(merchantPickupAddress || 'Pickup location')}`;
+    if (riderPickupMarker) {
+        riderPickupMarker.setLatLng(position);
+        riderPickupMarker.setPopupContent(popup);
+        return;
+    }
+    riderPickupMarker = L.marker(position, { icon: merchantStoreMarkerIcon() })
+        .addTo(riderMap)
+        .bindPopup(popup);
+}
+
+function distanceBetweenCoordinates(first, second) {
+    const toRadians = value => value * Math.PI / 180;
+    const latitudeDelta = toRadians(second.lat - first.lat);
+    const longitudeDelta = toRadians(second.lng - first.lng);
+    const value = Math.sin(latitudeDelta / 2) ** 2 +
+        Math.cos(toRadians(first.lat)) * Math.cos(toRadians(second.lat)) *
+        Math.sin(longitudeDelta / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function updateRiderPickupRoute(location) {
+    const routeStatus = document.getElementById('riderPickupRouteStatus');
+    const directions = document.getElementById('riderPickupDirections');
+    if (!routeStatus || !directions) return;
+    if (riderCurrentStep !== 1) {
+        riderPickupRouteController?.abort();
+        riderPickupRouteController = null;
+        riderPickupRouteRequestId += 1;
+        riderPickupRouteLayer?.remove();
+        riderPickupRouteLayer = null;
+        riderPickupLastRouteOrigin = null;
+        riderPickupLastRouteAt = 0;
+        directions.hidden = true;
+        routeStatus.textContent = riderCurrentStep > 1
+            ? 'Pickup confirmed. Follow the customer delivery address.'
+            : 'Accept a delivery to see the route to pickup.';
+        return;
+    }
+    if (!location) {
+        riderPickupRouteController?.abort();
+        riderPickupRouteController = null;
+        riderPickupRouteRequestId += 1;
+        riderPickupRouteLayer?.remove();
+        riderPickupRouteLayer = null;
+        riderPickupLastRouteOrigin = null;
+        routeStatus.textContent = 'Waiting for your live GPS location to calculate the pickup route.';
+        directions.hidden = true;
+        return;
+    }
+    if (!merchantPickupCoordinates) {
+        riderPickupRouteController?.abort();
+        riderPickupRouteController = null;
+        riderPickupRouteRequestId += 1;
+        riderPickupLastRouteOrigin = null;
+        routeStatus.textContent = merchantPickupAddress
+            ? `${merchantPickupAddress} · business map pin not set`
+            : 'Merchant pickup map location has not been set.';
+        directions.hidden = true;
+        riderPickupRouteLayer?.remove();
+        riderPickupRouteLayer = null;
+        return;
+    }
+
+    updateRiderPickupDestination();
+    const destination = merchantPickupCoordinates;
+    const destinationKey = `${destination.latitude},${destination.longitude}`;
+    const destinationChanged = riderPickupLastRouteDestination !== destinationKey;
+    if (destinationChanged) {
+        riderPickupRouteController?.abort();
+        riderPickupRouteController = null;
+        riderPickupLastRouteOrigin = null;
+        riderPickupLastRouteAt = 0;
+        riderPickupLastRouteDestination = destinationKey;
+    }
+    directions.href = `https://www.google.com/maps/dir/?api=1&origin=${location.lat},${location.lng}&destination=${destination.latitude},${destination.longitude}&travelmode=driving`;
+    directions.hidden = false;
+
+    const now = Date.now();
+    const movedMeters = riderPickupLastRouteOrigin
+        ? distanceBetweenCoordinates(riderPickupLastRouteOrigin, location)
+        : Infinity;
+    if (riderPickupLastRouteOrigin && movedMeters < 75 && now - riderPickupLastRouteAt < 15000) return;
+
+    riderPickupRouteController?.abort();
+    const controller = new AbortController();
+    riderPickupRouteController = controller;
+    riderPickupLastRouteOrigin = { lat: location.lat, lng: location.lng };
+    riderPickupLastRouteAt = now;
+    const requestId = ++riderPickupRouteRequestId;
+    routeStatus.textContent = 'Calculating route to pickup…';
+    const routeUrl = `https://router.project-osrm.org/route/v1/driving/${location.lng},${location.lat};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson&steps=false`;
+    fetch(routeUrl, { signal: controller.signal }).then(response => {
+        if (!response.ok) throw new Error(`Route request failed with status ${response.status}.`);
+        return response.json();
+    }).then(result => {
+        if (requestId !== riderPickupRouteRequestId) return;
+        const route = result.code === 'Ok' ? result.routes?.[0] : null;
+        if (!route?.geometry?.coordinates?.length) throw new Error('No pickup route was returned.');
+        const routeCoordinates = route.geometry.coordinates.map(([longitude, latitude]) => [latitude, longitude]);
+        if (riderPickupRouteLayer) riderPickupRouteLayer.setLatLngs(routeCoordinates);
+        else {
+            riderPickupRouteLayer = L.polyline(routeCoordinates, { color: '#1676d2', weight: 5, opacity: 0.82 }).addTo(riderMap);
+            riderMap.fitBounds(riderPickupRouteLayer.getBounds(), { padding: [40, 40], maxZoom: 15, animate: true });
+        }
+        const distanceKm = route.distance / 1000;
+        const minutes = Math.max(1, Math.round(route.duration / 60));
+        const durationText = minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} hr ${minutes % 60} min`;
+        routeStatus.textContent = `${distanceKm.toFixed(distanceKm < 10 ? 1 : 0)} km · about ${durationText} to pickup`;
+    }).catch(error => {
+        if (error.name === 'AbortError' || requestId !== riderPickupRouteRequestId) return;
+        console.error('Unable to calculate the rider pickup route.', error);
+        routeStatus.textContent = 'Route estimate unavailable. Open directions for navigation.';
+    }).finally(() => {
+        if (requestId === riderPickupRouteRequestId) riderPickupRouteController = null;
+    });
+}
+
+function updateRiderMapLocation(location) {
+    const locationText = document.getElementById('riderStepLocation');
+    if (locationText) locationText.textContent = location
+        ? `GPS · ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`
+        : isRiderOnline ? 'Waiting for your live GPS location…' : 'Go online to share your live GPS location.';
+    if (!location) {
+        if (riderMarkerAnimationFrame !== null) {
+            cancelAnimationFrame(riderMarkerAnimationFrame);
+            riderMarkerAnimationFrame = null;
+        }
+        riderLocationMarker?.remove();
+        riderLocationMarker = null;
+        updateRiderPickupRoute(null);
+        return;
+    }
+    if (!riderMap) return;
     const position = [location.latitude, location.longitude];
     if (!riderLocationMarker) {
         riderLocationMarker = L.marker(position, { icon: liveRiderMarkerIcon() })
@@ -2843,35 +3069,60 @@ function updateRiderMapLocation(location) {
             .bindPopup(`${escapeMerchantText(location.name)} · your live location`);
         riderMap.setView(position, 16);
     } else {
-        riderLocationMarker.setLatLng(position);
+        if (riderMarkerAnimationFrame !== null) cancelAnimationFrame(riderMarkerAnimationFrame);
+        const start = riderLocationMarker.getLatLng();
+        const startedAt = performance.now();
+        const duration = 900;
+        const animateMarker = now => {
+            const progress = Math.min((now - startedAt) / duration, 1);
+            const easedProgress = 1 - (1 - progress) ** 2;
+            riderLocationMarker?.setLatLng([
+                start.lat + (location.latitude - start.lat) * easedProgress,
+                start.lng + (location.longitude - start.lng) * easedProgress
+            ]);
+            if (progress < 1) riderMarkerAnimationFrame = requestAnimationFrame(animateMarker);
+            else riderMarkerAnimationFrame = null;
+        };
+        riderMarkerAnimationFrame = requestAnimationFrame(animateMarker);
+        riderMap.panTo(position, { animate: true, duration: 0.9 });
     }
+    updateRiderPickupRoute(riderLocationMarker.getLatLng());
 }
 
 function updateMerchantRiderTrackingMap(locations) {
     if (!merchantRiderTrackingMap) return;
+    const orderId = document.getElementById('merchantDeliveryOrder')?.value;
+    const selectedOrder = demoActiveOrders.find(order => order.id === orderId);
+    const deliveryAddress = document.getElementById('merchantDeliveryAddress')?.value.trim() ||
+        (selectedOrder ? merchantOrderDeliveryAddress(selectedOrder) : '');
+    const editingDeliveryId = Number(document.getElementById('merchantDeliveryId')?.value) || null;
     const current = new Set();
-    merchantDeliveries.filter(delivery =>
-        merchantActiveDeliveryStatuses.includes(delivery.status)
-    ).forEach(delivery => {
-        const partner = merchantAssignmentPartner(delivery);
+    merchantPartners.filter(partner => partner.status === 'active' && partner.availability === 'available')
+        .forEach(partner => {
         const location = partner?.status === 'active' && partner.availability === 'available'
             ? getFreshRiderLocation(locations, partner.id)
             : null;
-        if (!partner || !location) return;
+        if (!location) return;
         const markerKey = String(partner.id);
         current.add(markerKey);
-        const order = demoActiveOrders.find(record => record.id === delivery.order);
-        const pickupAddress = order?.pickupAddress || delivery.pickupAddress || merchantPickupAddress;
-        const popup = `${escapeMerchantText(partner.name)} · ${escapeMerchantText(delivery.order)} · ${escapeMerchantText(merchantDeliveryStatusLabels[delivery.status] || delivery.status)}${pickupAddress ? `<br>Pickup: ${escapeMerchantText(pickupAddress)}` : ''}`;
+        const eligible = Boolean(selectedOrder && merchantOrderCanDispatch(selectedOrder) &&
+            !merchantDeliveries.some(delivery => delivery.order === selectedOrder.id &&
+                delivery.id !== editingDeliveryId && merchantActiveDeliveryStatuses.includes(delivery.status)) &&
+            merchantPartnerIsEligible(partner, deliveryAddress, editingDeliveryId));
+        const popup = `${escapeMerchantText(partner.name)} · online${selectedOrder
+            ? `<br>${eligible ? `Select for ${escapeMerchantText(selectedOrder.id)}` : 'Not eligible for this order'}`
+            : '<br>Choose a ready order to enable assignment'}`;
         const position = [location.latitude, location.longitude];
         const marker = merchantRiderTrackingMarkers.get(markerKey);
         if (marker) {
             marker.setLatLng(position);
             marker.setPopupContent(popup);
         } else {
-            merchantRiderTrackingMarkers.set(markerKey,
-                L.marker(position, { icon: liveRiderMarkerIcon() }).addTo(merchantRiderTrackingMap).bindPopup(popup)
-            );
+            const riderMarker = L.marker(position, { icon: liveRiderMarkerIcon() })
+                .addTo(merchantRiderTrackingMap)
+                .bindPopup(popup);
+            riderMarker.on('click', () => selectMerchantRiderFromMap(partner.id));
+            merchantRiderTrackingMarkers.set(markerKey, riderMarker);
             if (merchantRiderTrackingMarkers.size === 1) merchantRiderTrackingMap.setView(position, 14);
         }
     });
@@ -2883,8 +3134,42 @@ function updateMerchantRiderTrackingMap(locations) {
     });
     const status = document.getElementById('merchantRiderLiveMapStatus');
     if (status) status.textContent = current.size
-        ? `${current.size} assigned rider${current.size === 1 ? '' : 's'} sharing a recent location. Pickup addresses are shown on each order.`
-        : 'Waiting for assigned riders to share their location.';
+        ? `${current.size} online rider${current.size === 1 ? '' : 's'} sharing a recent GPS location. Choose an order above, select an eligible rider marker, then send the offer.`
+        : 'Waiting for online riders to share a recent GPS location.';
+}
+
+function selectMerchantRiderFromMap(partnerId) {
+    const partner = merchantPartners.find(record => record.id === partnerId);
+    const orderId = document.getElementById('merchantDeliveryOrder').value;
+    const order = demoActiveOrders.find(record => record.id === orderId);
+    const editingDeliveryId = Number(document.getElementById('merchantDeliveryId').value) || null;
+    if (!order) {
+        document.getElementById('merchantDeliveryOrder').focus();
+        showToast('Choose a ready delivery order before selecting a rider on the map.');
+        return;
+    }
+    if (!merchantOrderCanDispatch(order) || merchantDeliveries.some(delivery =>
+        delivery.order === order.id && delivery.id !== editingDeliveryId &&
+        merchantActiveDeliveryStatuses.includes(delivery.status)
+    )) {
+        showToast('This order is not available for rider assignment. Choose another ready order.');
+        return;
+    }
+    const address = document.getElementById('merchantDeliveryAddress').value.trim();
+    if (!partner || !merchantPartnerIsEligible(partner, address, editingDeliveryId)) {
+        showToast('This rider is not eligible for the selected order.');
+        return;
+    }
+    populateMerchantAssignmentPartners();
+    const partnerSelect = document.getElementById('merchantDeliveryPartner');
+    if (![...partnerSelect.options].some(option => option.value === String(partner.id))) {
+        showToast('This rider is no longer available. Choose another rider.');
+        return;
+    }
+    partnerSelect.value = String(partner.id);
+    partnerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    showToast(`${partner.name} selected for ${order.id}. Review and send the rider offer in the dispatch form.`);
+    document.getElementById('merchantDeliveryForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function initializeCustomerTrackingMaps() {
@@ -3282,6 +3567,7 @@ function renderRiderCurrentDelivery(delivery, partner) {
         dashboardState.style.display = 'block';
         riderCurrentStep = 0;
         riderRenderedDeliveryKey = null;
+        updateRiderPickupRoute(riderLocationMarker?.getLatLng() || null);
         return;
     }
     const order = readRiderActiveOrders()?.find(record => record.id === delivery.order);
@@ -3290,8 +3576,15 @@ function renderRiderCurrentDelivery(delivery, partner) {
     dashboardState.style.display = 'none';
     riderCurrentStep = delivery.status === 'accepted' || delivery.status === 'assigned' ? 1 : 2;
     document.getElementById('riderCurrentOrderNumber').textContent = delivery.order;
-    document.getElementById('riderPickupName').textContent = order?.merchant || 'Merchant';
-    document.getElementById('riderPickupAddress').textContent = order?.pickupAddress || delivery.pickupAddress || 'Pickup address not recorded';
+    document.getElementById('riderStepRiderName').textContent = partner.name;
+    document.getElementById('riderStepRider').classList.toggle('active', isRiderOnline);
+    document.getElementById('riderStepRider').style.opacity = isRiderOnline ? '1' : '0.55';
+    document.getElementById('riderPickupName').textContent = merchantProfile.name || order?.merchant || 'Merchant';
+    document.getElementById('riderPickupAddress').textContent = merchantPickupAddress || delivery.pickupAddress || order?.pickupAddress || 'Pickup address not recorded';
+    const businessCall = document.getElementById('riderPickupContact');
+    const businessPhone = String(merchantProfile.phone || '').replace(/[^\d+]/g, '');
+    businessCall.href = businessPhone ? `tel:${businessPhone}` : '#';
+    businessCall.hidden = !businessPhone;
     document.getElementById('riderCustomerName').textContent = delivery.customer || 'Customer';
     document.getElementById('riderDropoffAddress').textContent = delivery.address;
     const callLink = document.getElementById('riderCustomerCall');
@@ -3299,6 +3592,7 @@ function renderRiderCurrentDelivery(delivery, partner) {
     callLink.href = phone ? `tel:${phone}` : '#';
     callLink.hidden = !phone;
     const atPickup = riderCurrentStep === 1;
+    updateRiderPickupRoute(riderLocationMarker?.getLatLng() || null);
     document.getElementById('riderStepPickup').classList.toggle('active', atPickup);
     document.getElementById('riderStepPickup').style.opacity = atPickup ? '1' : '0.55';
     document.getElementById('riderStepDropoff').classList.toggle('active', !atPickup);
@@ -3336,8 +3630,8 @@ function showRiderOffer(delivery) {
     riderPendingOfferId = delivery.id;
     const order = readRiderActiveOrders()?.find(record => record.id === delivery.order);
     document.getElementById('riderOfferOrderNumber').textContent = delivery.order;
-    document.getElementById('riderOfferMerchant').textContent = order?.merchant || 'Merchant';
-    document.getElementById('riderOfferPickup').textContent = order?.pickupAddress || delivery.pickupAddress || 'Pickup address not recorded';
+    document.getElementById('riderOfferMerchant').textContent = merchantProfile.name || order?.merchant || 'Merchant';
+    document.getElementById('riderOfferPickup').textContent = merchantPickupAddress || delivery.pickupAddress || order?.pickupAddress || 'Pickup address not recorded';
     document.getElementById('riderOfferCustomer').textContent = delivery.customer || 'Customer';
     document.getElementById('riderOfferAddress').textContent = delivery.address;
     document.getElementById('riderOfferItems').textContent = order?.items || '';
@@ -3537,6 +3831,10 @@ function initMerchantRiderTrackingMap() {
     const element = document.getElementById('merchantRiderLiveMap');
     if (!element || merchantRiderTrackingMap) return;
     merchantRiderTrackingMap = createTrackingMap(element);
+    if (merchantPickupCoordinates) {
+        merchantRiderTrackingMap.setView([merchantPickupCoordinates.latitude, merchantPickupCoordinates.longitude], 14);
+    }
+    updateMerchantPickupMarkers();
 }
 
 function toggleRiderStatus() {
@@ -4163,6 +4461,7 @@ const merchantDeliveryScreen = document.getElementById('merchantDeliveryScreen')
 const merchantAssignedRidersScreen = document.getElementById('merchantAssignedRidersScreen');
 const merchantOrdersList = document.getElementById('merchantOrdersList');
 const merchantPortalScreen = document.getElementById('shopPortalScreen');
+const merchantProfileScreen = document.getElementById('merchantProfileScreen');
 const merchantHeaderNavToggles = document.querySelectorAll('[data-merchant-nav-toggle]');
 const merchantSidebarBackdrop = document.getElementById('merchantSidebarBackdrop');
 const merchantSidebar = document.getElementById('merchantSidebar');
@@ -4198,11 +4497,64 @@ function loadMerchantPickupAddress() {
     }
 }
 
-let merchantPickupAddress = loadMerchantPickupAddress();
+function loadMerchantProfile() {
+    const fallback = { name: 'Al Reef Restaurant', category: 'Restaurant', phone: '' };
+    try {
+        const saved = localStorage.getItem('kiryaMerchantProfile');
+        if (saved === null) return fallback;
+        const profile = JSON.parse(saved);
+        if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+            throw new Error('Saved merchant profile is invalid.');
+        }
+        return {
+            name: typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : fallback.name,
+            category: ['Restaurant', 'Grocery', 'Pharmacy', 'Retail', 'Other'].includes(profile.category) ? profile.category : fallback.category,
+            phone: typeof profile.phone === 'string' ? profile.phone : '',
+            address: typeof profile.address === 'string' ? profile.address : ''
+        };
+    } catch (error) {
+        console.error('Unable to load the merchant profile.', error);
+        showToast('Saved business profile could not be loaded.');
+        return fallback;
+    }
+}
+
+function loadMerchantPickupCoordinates() {
+    try {
+        const saved = localStorage.getItem('kiryaMerchantPickupCoordinates');
+        if (saved === null) return null;
+        const coordinates = JSON.parse(saved);
+        if (coordinates === null) return null;
+        if (!coordinates || !Number.isFinite(coordinates.latitude) || Math.abs(coordinates.latitude) > 90 ||
+            !Number.isFinite(coordinates.longitude) || Math.abs(coordinates.longitude) > 180) {
+            throw new Error('Saved pickup coordinates are invalid.');
+        }
+        return coordinates;
+    } catch (error) {
+        console.error('Unable to load the merchant pickup coordinates.', error);
+        showToast('Saved pickup map location could not be loaded.');
+        return null;
+    }
+}
+
+let merchantProfile = loadMerchantProfile();
+let merchantPickupAddress = loadMerchantPickupAddress() || merchantProfile.address;
+let merchantPickupCoordinates = loadMerchantPickupCoordinates();
+document.getElementById('merchantBusinessName').value = merchantProfile.name;
+document.getElementById('merchantBusinessCategory').value = merchantProfile.category;
+document.getElementById('merchantBusinessPhone').value = merchantProfile.phone;
 document.getElementById('merchantPickupAddress').value = merchantPickupAddress;
 document.getElementById('merchantPickupAddressStatus').textContent = merchantPickupAddress
-    ? 'Pickup location is saved and will be included in new delivery orders.'
+    ? merchantPickupCoordinates ? 'Pickup address and map pin are saved for new rider offers.' : 'Pickup location is saved and will be included in new delivery orders.'
     : 'Add the store address before sending rider offers.';
+
+document.getElementById('merchantPickupAddress').addEventListener('input', () => {
+    if (!merchantPickupCoordinates) return;
+    merchantPickupCoordinates = null;
+    updateMerchantPickupMarkers();
+    updateRiderPickupDestination();
+    updateRiderPickupRoute(riderLocationMarker?.getLatLng() || null);
+});
 
 function setMerchantNavView(view) {
     document.querySelectorAll('#merchantSidebar [data-merchant-view]').forEach(button => {
@@ -4237,7 +4589,7 @@ function closeMerchantNavAndReturnFocus() {
 function navigateMerchantView(view) {
     setMerchantNavView(view);
     const merchantScreens = [
-        merchantPortalScreen, merchantActiveOrdersScreen, merchantOrdersScreen,
+        merchantPortalScreen, merchantProfileScreen, merchantActiveOrdersScreen, merchantOrdersScreen,
         merchantMenuScreen, merchantEditItemScreen, merchantKioskScreen,
         merchantDeliveryScreen, merchantAssignedRidersScreen, merchantCustomersScreen
     ];
@@ -4246,6 +4598,10 @@ function navigateMerchantView(view) {
     if (view === 'dashboard') {
         merchantPortalScreen?.classList.add('active');
         document.getElementById('merchantPortalContent')?.scrollTo({ top: 0 });
+    } else if (view === 'profile') {
+        merchantProfileScreen?.classList.add('active');
+        initMerchantPickupMap();
+        setTimeout(() => merchantPickupMap?.invalidateSize(), 100);
     } else if (view === 'kiosk') {
         openMerchantKiosk();
     } else if (view === 'orders') {
@@ -4486,29 +4842,50 @@ const merchantDeliveryTransitions = {
 
 document.getElementById('merchantPickupAddressSave').addEventListener('click', () => {
     const input = document.getElementById('merchantPickupAddress');
+    const name = document.getElementById('merchantBusinessName').value.trim();
+    const category = document.getElementById('merchantBusinessCategory').value;
+    const phone = document.getElementById('merchantBusinessPhone').value.trim();
     const address = input.value.trim();
+    if (!name || !category) {
+        const field = !name ? document.getElementById('merchantBusinessName') : document.getElementById('merchantBusinessCategory');
+        field.focus();
+        showToast('Enter the business name and type.');
+        return;
+    }
+    if (phone && phone.replace(/\D/g, '').length < 8) {
+        document.getElementById('merchantBusinessPhone').focus();
+        showToast('Enter a valid business phone number or leave it blank.');
+        return;
+    }
     if (!address) {
         input.focus();
-        showToast('Enter the full store pickup address.');
+        showToast('Enter the business pickup address.');
         return;
     }
     const now = new Date().toISOString();
+    const profile = { name, category, phone, address };
     const nextOrders = demoActiveOrders.map(order => ({
         ...order,
-        pickupAddress: order.fulfillment === 'delivery' && !order.pickupAddress ? address : order.pickupAddress
+        pickupAddress: order.fulfillment === 'delivery' ? address : order.pickupAddress
     }));
     if (!saveMerchantCollections({
+        kiryaMerchantProfile: profile,
         kiryaMerchantPickupAddress: address,
+        kiryaMerchantPickupCoordinates: merchantPickupCoordinates,
         kiryaMerchantActiveOrders: nextOrders
     })) return;
+    merchantProfile = profile;
     merchantPickupAddress = address;
     demoActiveOrders = nextOrders;
+    updateMerchantPickupMarkers();
+    updateRiderPickupDestination();
+    updateRiderPickupRoute(riderLocationMarker?.getLatLng() || null);
     document.getElementById('merchantPickupAddressStatus').textContent =
-        `Saved ${new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. New rider offers will include this pickup location.`;
+        `Business profile saved at ${new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.${merchantPickupCoordinates ? ' The map pin is included in rider directions.' : ' Select the map to add a rider pickup pin.'}`;
     populateMerchantAssignmentOptions();
     renderMerchantActiveOrders();
     updateMerchantOrderMetrics();
-    showToast('Rider pickup location saved.');
+    showToast('Business profile saved.');
 });
 
 function merchantPartnerWorkload(partner, excludedDeliveryId = null) {
@@ -4905,6 +5282,8 @@ function updateMerchantAssignmentOrder() {
             : `${order.id} needs a customer phone, delivery address, and saved store pickup location before dispatch.`;
     eligibility.classList.toggle('is-warning', Boolean(order) && !complete);
     populateMerchantAssignmentPartners();
+    const locations = readLiveRiderLocations();
+    if (locations) updateMerchantRiderTrackingMap(locations);
 }
 
 function populateMerchantAssignmentPartners() {
@@ -5870,18 +6249,70 @@ window.addEventListener('storage', event => {
     }
     const collectionKey = event.key;
     if (!collectionKey || !collectionKey.startsWith('kiryaMerchant')) return;
+    if (collectionKey === 'kiryaMerchantProfile') {
+        try {
+            const profile = event.newValue === null ? {} : JSON.parse(event.newValue);
+            if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+                throw new Error('Saved merchant profile is invalid.');
+            }
+            merchantProfile = {
+                name: typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : 'Al Reef Restaurant',
+                category: ['Restaurant', 'Grocery', 'Pharmacy', 'Retail', 'Other'].includes(profile.category) ? profile.category : 'Restaurant',
+                phone: typeof profile.phone === 'string' ? profile.phone : '',
+                address: typeof profile.address === 'string' ? profile.address : merchantPickupAddress
+            };
+            if (merchantProfile.address) merchantPickupAddress = merchantProfile.address;
+            document.getElementById('merchantBusinessName').value = merchantProfile.name;
+            document.getElementById('merchantBusinessCategory').value = merchantProfile.category;
+            document.getElementById('merchantBusinessPhone').value = merchantProfile.phone;
+            document.getElementById('merchantPickupAddress').value = merchantPickupAddress;
+            updateMerchantPickupMarkers();
+            updateRiderPickupDestination();
+            updateRiderPickupRoute(riderLocationMarker?.getLatLng() || null);
+        } catch (error) {
+            console.error('Unable to synchronize the merchant profile.', error);
+            showToast('The updated business profile could not be loaded.');
+        }
+        return;
+    }
     if (collectionKey === 'kiryaMerchantPickupAddress') {
         try {
             const address = event.newValue === null ? '' : JSON.parse(event.newValue);
             if (typeof address !== 'string') throw new Error('Saved pickup address is not text.');
             merchantPickupAddress = address;
+            merchantProfile = { ...merchantProfile, address };
             document.getElementById('merchantPickupAddress').value = address;
             document.getElementById('merchantPickupAddressStatus').textContent = address
                 ? 'Pickup location is saved and will be included in new delivery orders.'
                 : 'Add the store address before sending rider offers.';
+            updateMerchantPickupMarkers();
+            updateRiderPickupDestination();
+            updateRiderPickupRoute(riderLocationMarker?.getLatLng() || null);
         } catch (error) {
             console.error('Unable to synchronize the merchant pickup address.', error);
             showToast('The updated rider pickup location could not be loaded.');
+        }
+        return;
+    }
+    if (collectionKey === 'kiryaMerchantPickupCoordinates') {
+        try {
+            const coordinates = event.newValue === null ? null : JSON.parse(event.newValue);
+            if (coordinates !== null && (!coordinates || !Number.isFinite(coordinates.latitude) ||
+                Math.abs(coordinates.latitude) > 90 || !Number.isFinite(coordinates.longitude) ||
+                Math.abs(coordinates.longitude) > 180)) {
+                throw new Error('Saved pickup coordinates are invalid.');
+            }
+            merchantPickupCoordinates = coordinates;
+            updateMerchantPickupMarkers();
+            updateRiderPickupDestination();
+            updateRiderPickupRoute(riderLocationMarker?.getLatLng() || null);
+            const status = document.getElementById('merchantPickupAddressStatus');
+            if (status) status.textContent = merchantPickupAddress
+                ? coordinates ? 'Pickup address and map pin are saved for new rider offers.' : 'Pickup location is saved and will be included in new delivery orders.'
+                : 'Add the store address before sending rider offers.';
+        } catch (error) {
+            console.error('Unable to synchronize the merchant pickup coordinates.', error);
+            showToast('The updated pickup map location could not be loaded.');
         }
         return;
     }

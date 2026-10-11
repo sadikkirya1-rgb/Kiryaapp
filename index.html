@@ -872,10 +872,19 @@
                 <span id="riderCurrentOrderNumber" style="background:#e0f2f1; color:#019E81; padding:4px 10px; border-radius:10px; font-size:0.85em; font-weight:bold;">—</span>
             </div>
             
+            <div class="step-card active" id="riderStepRider">
+              <div style="font-weight:bold; font-size:0.8em; color:#666;">RIDER</div>
+              <div id="riderStepRiderName" style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Rides partner</div>
+              <div id="riderStepLocation" style="font-size:0.85em; color:#888; margin-top:2px;">Go online to share your live GPS location.</div>
+            </div>
+
             <div class="step-card active" id="riderStepPickup">
                 <div style="font-weight:bold; font-size:0.8em; color:#666;">PICKUP</div>
                 <div id="riderPickupName" style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Merchant</div>
                 <div id="riderPickupAddress" style="font-size:0.85em; color:#888; margin-top:2px;">Pickup details appear after accepting an offer.</div>
+                <div class="rider-pickup-route" id="riderPickupRouteStatus" role="status">Waiting for pickup route details.</div>
+                <a class="rider-pickup-directions" id="riderPickupDirections" target="_blank" rel="noopener" hidden>Open directions</a>
+                <a id="riderPickupContact" class="rider-customer-call" href="#" hidden>Call business</a>
             </div>
             
             <div class="step-card" id="riderStepDropoff">
@@ -1257,16 +1266,6 @@
       <article class="merchant-metric-card"><span class="merchant-metric-label">Delivered assignments</span><strong id="merchantDeliveredAssignmentsMetric">0</strong><small>Rider deliveries completed</small></article>
       <article class="merchant-metric-card"><span class="merchant-metric-label">Available riders</span><strong id="merchantAvailableRidersMetric">0</strong><small>Active partners ready for an assignment</small></article>
     </section>
-    <section class="merchant-record-panel merchant-pickup-settings" aria-labelledby="merchantPickupAddressHeading">
-      <div class="merchant-section-heading"><h2 id="merchantPickupAddressHeading">Rider pickup location</h2></div>
-      <p>Use the store’s full address so riders know where to collect customer orders.</p>
-      <div class="merchant-pickup-setting-row">
-        <label class="merchant-visually-hidden" for="merchantPickupAddress">Store pickup address</label>
-        <input id="merchantPickupAddress" type="text" maxlength="180" autocomplete="street-address" placeholder="Enter the full store pickup address">
-        <button class="merchant-button-primary" id="merchantPickupAddressSave" type="button">Save pickup location</button>
-      </div>
-      <small id="merchantPickupAddressStatus" role="status"></small>
-    </section>
     <section class="merchant-goals" aria-labelledby="merchantGoalsHeading">
       <div class="merchant-section-heading"><h2 id="merchantGoalsHeading">Weekly goals</h2></div>
       <div class="merchant-goal-grid">
@@ -1316,6 +1315,7 @@
   </div>
   <nav class="merchant-side-nav" aria-label="Merchant sections">
     <button class="active" type="button" data-merchant-view="dashboard" aria-current="page"><span class="merchant-nav-icon" aria-hidden="true">⌂</span><span class="merchant-side-label">Dashboard</span></button>
+    <button type="button" data-merchant-view="profile"><span class="merchant-nav-icon" aria-hidden="true">🏪</span><span class="merchant-side-label">Business profile</span></button>
     <button type="button" data-merchant-view="active-orders"><span class="merchant-nav-icon" aria-hidden="true">▤</span><span class="merchant-side-label">Active orders</span><span class="merchant-nav-count" id="merchantActiveOrdersNavCount" aria-live="polite" aria-atomic="true">3</span></button>
     <button type="button" data-merchant-view="orders"><span class="merchant-nav-icon" aria-hidden="true">▤</span><span class="merchant-side-label">Order history</span></button>
     <button type="button" data-merchant-view="menu"><span class="merchant-nav-icon" aria-hidden="true">☷</span><span class="merchant-side-label">Manage menu</span></button>
@@ -1328,6 +1328,32 @@
     <button class="merchant-store-toggle" id="merchantStoreToggleBtn" type="button" aria-label="Close store"><span class="merchant-nav-icon" aria-hidden="true">◉</span><span class="merchant-side-label">Close store</span></button>
   </div>
 </aside>
+
+<div id="merchantProfileScreen" class="generic-screen">
+  <div class="generic-header">
+    <button class="merchant-mobile-nav-toggle" type="button" data-merchant-nav-toggle aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open merchant navigation"><span aria-hidden="true">☰</span></button>
+    <div class="generic-title">Business profile</div>
+  </div>
+  <div class="generic-content">
+    <section class="merchant-record-panel merchant-pickup-settings" aria-labelledby="merchantPickupAddressHeading">
+      <div class="merchant-section-heading"><h2 id="merchantPickupAddressHeading">Business details &amp; pickup location</h2></div>
+      <p>Keep your business details and pickup pin up to date so riders can find you and estimate their trip.</p>
+      <div class="merchant-profile-grid">
+        <label>Business name<input id="merchantBusinessName" type="text" maxlength="120" autocomplete="organization" required></label>
+        <label>Business type<select id="merchantBusinessCategory" required><option value="">Select business type</option><option value="Restaurant">Restaurant</option><option value="Grocery">Grocery</option><option value="Pharmacy">Pharmacy</option><option value="Retail">Retail</option><option value="Other">Other</option></select></label>
+        <label>Business phone<input id="merchantBusinessPhone" type="tel" maxlength="24" autocomplete="tel" placeholder="Optional contact number"></label>
+      </div>
+      <div class="merchant-pickup-setting-row">
+        <label class="merchant-visually-hidden" for="merchantPickupAddress">Business pickup address</label>
+        <input id="merchantPickupAddress" type="text" maxlength="180" autocomplete="street-address" placeholder="Enter the full store pickup address">
+        <button class="merchant-button-primary" id="merchantPickupAddressSave" type="button">Save business profile</button>
+      </div>
+      <p class="merchant-pickup-map-hint">Select the store entrance on the map. The pin is saved with the address.</p>
+      <div id="merchantPickupMap" class="merchant-pickup-map" role="region" aria-label="Select the merchant pickup location on a map"></div>
+      <small id="merchantPickupAddressStatus" role="status"></small>
+    </section>
+  </div>
+</div>
 
 <div id="merchantActiveOrdersScreen" class="generic-screen">
   <div class="generic-header">
@@ -1555,9 +1581,9 @@
     </section>
     <section class="merchant-record-panel" aria-labelledby="merchantDeliveriesHeading">
       <div class="merchant-section-heading"><h2 id="merchantDeliveriesHeading">Rider assignments</h2><span class="merchant-order-count" id="merchantDeliveryTableCount">2</span></div>
-      <div class="merchant-live-map-heading"><strong>Live rider locations</strong><span>Visible while riders are online and sharing GPS.</span></div>
-      <div id="merchantRiderLiveMap" class="merchant-rider-live-map" role="region" aria-label="Map of assigned riders sharing live locations"></div>
-      <p id="merchantRiderLiveMapStatus" class="merchant-live-map-status" role="status">Waiting for assigned riders to share their location.</p>
+      <div class="merchant-live-map-heading"><strong>Assign from live rider map</strong><span>Choose an order above, then select an eligible online rider marker.</span></div>
+      <div id="merchantRiderLiveMap" class="merchant-rider-live-map" role="region" aria-label="Map of merchant pickup location and assigned riders sharing live locations"></div>
+      <p id="merchantRiderLiveMapStatus" class="merchant-live-map-status" role="status">Choose an order above, then select an eligible rider marker. Review and send the offer in the dispatch form.</p>
       <div class="merchant-record-toolbar">
         <label class="merchant-visually-hidden" for="merchantDeliverySearch">Search rider assignments</label><input class="merchant-record-search" id="merchantDeliverySearch" type="search" placeholder="Search by order, customer, or rider">
         <label class="merchant-visually-hidden" for="merchantDeliveryFilter">Filter rider assignments</label><select class="merchant-record-filter" id="merchantDeliveryFilter"><option value="all">All assignments</option><option value="offered">Offered</option><option value="accepted">Accepted</option><option value="picked-up">Picked up</option><option value="in-transit">In transit</option><option value="delivered">Delivered</option><option value="declined">Declined</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option></select>
