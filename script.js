@@ -23,6 +23,8 @@ let riderProgressPolyline = appState.riderProgressPolyline;
 let routeAnimationFrame = appState.routeAnimationFrame;
 let dailySalesChartInstance = appState.dailySalesChartInstance;
 let topItemsChartInstance = appState.topItemsChartInstance;
+let orderStatusChartInstance;
+let menuAvailabilityChartInstance;
 
 function hideMap(){ const m=ui.get('map'); if(m) m.style.display='none'; }
 function showMap(){ const m=ui.get('map'); if(m) m.style.display='block'; }
@@ -2894,11 +2896,15 @@ function initMerchantCharts() {
     // Prevent re-initialization
     if (dailySalesChartInstance) dailySalesChartInstance.destroy();
     if (topItemsChartInstance) topItemsChartInstance.destroy();
+    if (orderStatusChartInstance) orderStatusChartInstance.destroy();
+    if (menuAvailabilityChartInstance) menuAvailabilityChartInstance.destroy();
 
     const salesCtx = document.getElementById('dailySalesChart')?.getContext('2d');
     const itemsCtx = document.getElementById('topItemsChart')?.getContext('2d');
+    const orderStatusCtx = document.getElementById('orderStatusChart')?.getContext('2d');
+    const menuAvailabilityCtx = document.getElementById('menuAvailabilityChart')?.getContext('2d');
 
-    if (!salesCtx || !itemsCtx) return;
+    if (!salesCtx || !itemsCtx || !orderStatusCtx || !menuAvailabilityCtx) return;
 
     // Daily Sales Chart (Line)
     dailySalesChartInstance = new Chart(salesCtx, {
@@ -2917,6 +2923,7 @@ function initMerchantCharts() {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             scales: {
                 y: {
                     beginAtZero: true,
@@ -2935,6 +2942,11 @@ function initMerchantCharts() {
         }
     });
 
+    const pieLegendOptions = {
+        position: 'left',
+        labels: { boxWidth: 8, boxHeight: 8, padding: 10, usePointStyle: true }
+    };
+
     // Top Selling Items Chart (Doughnut)
     topItemsChartInstance = new Chart(itemsCtx, {
         type: 'doughnut',
@@ -2947,7 +2959,34 @@ function initMerchantCharts() {
                 hoverOffset: 4
             }]
         },
-        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: pieLegendOptions } }
+    });
+
+    orderStatusChartInstance = new Chart(orderStatusCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Completed', 'Preparing', 'Cancelled'],
+            datasets: [{
+                data: [52, 11, 5],
+                backgroundColor: ['#15966f', '#e2a529', '#d9534f'],
+                borderWidth: 0
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: pieLegendOptions } }
+    });
+
+    const availableMenuItems = merchantMenuItems.filter(item => item.active).length;
+    menuAvailabilityChartInstance = new Chart(menuAvailabilityCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Available', 'Unavailable'],
+            datasets: [{
+                data: [availableMenuItems, merchantMenuItems.length - availableMenuItems],
+                backgroundColor: ['#15966f', '#cbd5d1'],
+                borderWidth: 0
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: pieLegendOptions } }
     });
 }
 
@@ -2960,27 +2999,60 @@ const merchantAddMenuBtn = document.getElementById('merchantAddMenuBtn');
 const merchantEditItemScreen = document.getElementById('merchantEditItemScreen');
 
 let merchantMenuItems = [
-    { id: 1, name: "Double Cheese Burger", price: 25.00, img: "🍔", active: true },
-    { id: 2, name: "Spicy Chicken Wings", price: 30.00, img: "🍗", active: true },
-    { id: 3, name: "Coca Cola", price: 5.00, img: "🥤", active: true },
-    { id: 4, name: "French Fries", price: 15.00, img: "🍟", active: false }
+    { id: 1, name: "Double Cheese Burger", price: 25000, category: "Burgers", img: "🍔", image: "assets/merchant-burger.jpg", description: "Two grilled beef patties with melted cheese and house sauce.", ingredients: "Beef, cheddar, brioche bun, lettuce, tomato, house sauce", active: true },
+    { id: 2, name: "Spicy Chicken Wings", price: 30000, category: "Chicken", img: "🍗", image: "assets/merchant-wings.jpg", description: "Crispy wings tossed in a gently spiced glaze.", ingredients: "Chicken wings, chili, garlic, honey, sesame", active: true },
+    { id: 3, name: "Fresh Orange Juice", price: 8000, category: "Drinks", img: "🥤", image: "assets/merchant-drink.jpg", description: "Freshly squeezed orange juice, served chilled.", ingredients: "Fresh oranges", active: true },
+    { id: 4, name: "French Fries", price: 15000, category: "Sides", img: "🍟", image: "assets/merchant-fries.jpg", description: "Golden fries with a light seasoning.", ingredients: "Potatoes, vegetable oil, sea salt", active: false },
+    { id: 5, name: "Chicken Pizza", price: 35000, category: "Pizza", img: "🍕", image: "assets/merchant-pizza.jpg", description: "Stone-baked pizza topped with chicken and fresh herbs.", ingredients: "Chicken, mozzarella, tomato, red onion, herbs", active: true }
 ];
+
+function escapeMerchantText(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[character]);
+}
+
+function formatMerchantCurrency(value) {
+    return `UGX ${Number(value).toLocaleString('en-UG')}`;
+}
+
+function updateMerchantMenuCount() {
+    const count = document.getElementById('merchantAvailableMenuCount');
+    const availableCount = merchantMenuItems.filter(item => item.active).length;
+    if (count) count.textContent = `${availableCount} / ${merchantMenuItems.length}`;
+    if (menuAvailabilityChartInstance) {
+        menuAvailabilityChartInstance.data.datasets[0].data = [availableCount, merchantMenuItems.length - availableCount];
+        menuAvailabilityChartInstance.update();
+    }
+}
+
+updateMerchantMenuCount();
 
 function renderMerchantMenuItems() {
     const list = document.getElementById('merchantMenuList');
     if(!list) return;
+    updateMerchantMenuCount();
     list.innerHTML = '';
     
     merchantMenuItems.forEach(item => {
         const div = document.createElement('div');
         div.style.cursor = 'pointer';
         div.className = 'menu-mgmt-item';
+        const productImage = item.image
+            ? `<img src="${escapeMerchantText(item.image)}" alt="" loading="lazy">`
+            : escapeMerchantText(item.img || '');
         div.innerHTML = `
             <div class="menu-mgmt-info">
-                <div class="menu-mgmt-img">${item.img}</div>
+                <div class="menu-mgmt-img">${productImage}</div>
                 <div class="menu-mgmt-text">
-                    <div class="menu-mgmt-name">${item.name}</div>
-                    <div class="menu-mgmt-price">UGX ${item.price.toFixed(2)}</div>
+                    <div class="menu-mgmt-name">${escapeMerchantText(item.name)}</div>
+                    <div class="menu-mgmt-price">${formatMerchantCurrency(item.price)}</div>
+                    <div class="menu-mgmt-category">${escapeMerchantText(item.category || 'Other')}</div>
+                    <div class="menu-mgmt-description">${escapeMerchantText(item.description)}</div>
                 </div>
             </div>
             <div class="menu-mgmt-toggle ${item.active ? 'active' : ''}"></div>
@@ -2996,6 +3068,7 @@ function renderMerchantMenuItems() {
             // Update the data model
             const dataItem = merchantMenuItems.find(i => i.id === item.id);
             if (dataItem) dataItem.active = isActive;
+            updateMerchantMenuCount();
             
             showToast(`${item.name} status updated`);
         });
@@ -3014,6 +3087,10 @@ function openEditItemScreen(itemId) {
     const nameInput = document.getElementById('editItemName');
     const priceInput = document.getElementById('editItemPrice');
     const imgInput = document.getElementById('editItemImg');
+    const imageInput = document.getElementById('editItemImage');
+    const descriptionInput = document.getElementById('editItemDescription');
+    const ingredientsInput = document.getElementById('editItemIngredients');
+    const categoryInput = document.getElementById('editItemCategory');
     const idInput = document.getElementById('editItemId');
     const deleteBtn = document.getElementById('deleteItemBtn');
 
@@ -3022,6 +3099,10 @@ function openEditItemScreen(itemId) {
         nameInput.value = '';
         priceInput.value = '';
         imgInput.value = '';
+        imageInput.value = '';
+        descriptionInput.value = '';
+        ingredientsInput.value = '';
+        categoryInput.value = 'Other';
         idInput.value = '';
         deleteBtn.style.display = 'none';
     } else { // Edit mode
@@ -3031,16 +3112,23 @@ function openEditItemScreen(itemId) {
         nameInput.value = item.name;
         priceInput.value = item.price;
         imgInput.value = item.img;
+        imageInput.value = item.image || '';
+        descriptionInput.value = item.description || '';
+        ingredientsInput.value = item.ingredients || '';
+        categoryInput.value = item.category || 'Other';
         idInput.value = item.id;
         deleteBtn.style.display = 'block';
     }
     merchantEditItemScreen.classList.add('active');
 }
 
-if(merchantManageMenuBtn) merchantManageMenuBtn.addEventListener('click', () => {
+function openMerchantMenu() {
+    setMerchantNavView('menu');
     merchantMenuScreen.classList.add('active');
     renderMerchantMenuItems();
-});
+}
+
+if(merchantManageMenuBtn) merchantManageMenuBtn.addEventListener('click', openMerchantMenu);
 if(merchantMenuBackBtn) merchantMenuBackBtn.addEventListener('click', () => merchantMenuScreen.classList.remove('active'));
 if(merchantAddMenuBtn) merchantAddMenuBtn.addEventListener('click', () => openEditItemScreen(null));
 
@@ -3052,15 +3140,19 @@ document.getElementById('saveItemBtn').addEventListener('click', () => {
     const name = document.getElementById('editItemName').value;
     const price = parseFloat(document.getElementById('editItemPrice').value);
     const img = document.getElementById('editItemImg').value;
+    const image = document.getElementById('editItemImage').value.trim();
+    const description = document.getElementById('editItemDescription').value.trim();
+    const ingredients = document.getElementById('editItemIngredients').value.trim();
+    const category = document.getElementById('editItemCategory').value;
 
-    if (!name || isNaN(price)) { showToast('Please enter a valid name and price.'); return; }
+    if (!name.trim() || !Number.isFinite(price) || price <= 0) { showToast('Enter an item name and a price greater than zero.'); return; }
 
     if (id) { // Update existing
         const item = merchantMenuItems.find(i => i.id == id);
-        if (item) { Object.assign(item, { name, price, img }); }
+        if (item) { Object.assign(item, { name: name.trim(), price, img, image, description, ingredients, category }); }
     } else { // Add new
         const newId = Math.max(0, ...merchantMenuItems.map(i => i.id)) + 1;
-        merchantMenuItems.push({ id: newId, name, price, img, active: true });
+        merchantMenuItems.push({ id: newId, name: name.trim(), price, category, img, image, description, ingredients, active: true });
     }
     renderMerchantMenuItems();
     merchantEditItemScreen.classList.remove('active');
@@ -3082,6 +3174,347 @@ const merchantOrdersBtn = document.getElementById('merchantOrdersBtn');
 const merchantOrdersScreen = document.getElementById('merchantOrdersScreen');
 const merchantOrdersBackBtn = document.getElementById('merchantOrdersBackBtn');
 const merchantOrdersList = document.getElementById('merchantOrdersList');
+const merchantBottomNav = document.getElementById('merchantBottomNav');
+const merchantPortalScreen = document.getElementById('shopPortalScreen');
+const merchantSidebarToggle = document.getElementById('merchantMobileNavToggle');
+const merchantSidebarCollapse = document.getElementById('merchantSidebarCollapse');
+const merchantSidebarBackdrop = document.getElementById('merchantSidebarBackdrop');
+const merchantSidebarNav = document.querySelector('.merchant-side-nav');
+const merchantStoreToggleBtn = document.getElementById('merchantStoreToggleBtn');
+const merchantKioskScreen = document.getElementById('merchantKioskScreen');
+const merchantKioskBackBtn = document.getElementById('merchantKioskBackBtn');
+const merchantKioskCartJump = document.getElementById('merchantKioskCartJump');
+let merchantStoreIsOpen = true;
+
+function setMerchantNavView(view) {
+    merchantPortalScreen?.querySelectorAll('[data-merchant-view]').forEach(button => {
+        const isActive = button.dataset.merchantView === view;
+        button.classList.toggle('active', isActive);
+        if (isActive) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+    });
+}
+
+function setMerchantMobileNavOpen(isOpen) {
+    merchantPortalScreen?.classList.toggle('mobile-nav-open', isOpen);
+    merchantSidebarToggle?.setAttribute('aria-expanded', String(isOpen));
+    merchantSidebarToggle?.setAttribute('aria-label', isOpen ? 'Close vendor navigation' : 'Open vendor navigation');
+}
+
+function navigateMerchantView(view) {
+    setMerchantNavView(view === 'add-item' ? 'menu' : view);
+    if (view === 'dashboard') {
+        document.getElementById('merchantPortalContent')?.scrollTo({ top: 0 });
+    } else if (view === 'kiosk') {
+        openMerchantKiosk();
+    } else if (view === 'orders') {
+        openMerchantOrders();
+    } else if (view === 'menu') {
+        openMerchantMenu();
+    } else if (view === 'add-item') {
+        openMerchantMenu();
+        merchantAddMenuBtn?.click();
+    }
+    setMerchantMobileNavOpen(false);
+}
+
+merchantSidebarToggle?.addEventListener('click', () => {
+    setMerchantMobileNavOpen(!merchantPortalScreen?.classList.contains('mobile-nav-open'));
+});
+
+merchantSidebarCollapse?.addEventListener('click', () => {
+    const isCollapsed = merchantPortalScreen?.classList.toggle('sidebar-collapsed');
+    merchantSidebarCollapse.setAttribute('aria-expanded', String(!isCollapsed));
+    merchantSidebarCollapse.setAttribute('aria-label', isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+    merchantSidebarCollapse.title = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    merchantSidebarCollapse.querySelector('span').textContent = isCollapsed ? '›' : '‹';
+});
+
+merchantSidebarBackdrop?.addEventListener('click', () => setMerchantMobileNavOpen(false));
+merchantKioskBackBtn?.addEventListener('click', () => {
+    merchantKioskScreen?.classList.remove('active');
+    setMerchantNavView('dashboard');
+});
+merchantKioskCartJump?.addEventListener('click', () => {
+    document.getElementById('merchantKioskCartPanel')?.scrollIntoView({ block: 'start' });
+});
+merchantStoreToggleBtn?.addEventListener('click', () => {
+    merchantStoreIsOpen = !merchantStoreIsOpen;
+    const action = merchantStoreIsOpen ? 'Close store' : 'Open store';
+    const status = merchantStoreIsOpen ? 'Open' : 'Closed';
+    merchantStoreToggleBtn.querySelector('.merchant-side-label').textContent = action;
+    merchantStoreToggleBtn.setAttribute('aria-label', action);
+    merchantStoreToggleBtn.title = action;
+    merchantStoreToggleBtn.classList.toggle('is-closed', !merchantStoreIsOpen);
+    document.getElementById('merchantStoreStatusText').textContent = status;
+    document.getElementById('merchantStoreCard').classList.toggle('is-closed', !merchantStoreIsOpen);
+    setMerchantMobileNavOpen(false);
+    showToast(`Store is now ${status.toLowerCase()}.`);
+});
+merchantSidebarNav?.addEventListener('click', event => {
+    const button = event.target.closest('[data-merchant-view]');
+    if (!button || button.id === 'merchantOrdersBtn' || button.id === 'merchantManageMenuBtn') return;
+    navigateMerchantView(button.dataset.merchantView);
+});
+merchantBottomNav?.addEventListener('click', event => {
+    const button = event.target.closest('[data-merchant-view]');
+    if (button) navigateMerchantView(button.dataset.merchantView);
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && merchantPortalScreen?.classList.contains('mobile-nav-open')) {
+        setMerchantMobileNavOpen(false);
+        merchantSidebarToggle?.focus();
+    }
+});
+
+window.matchMedia('(min-width: 761px)').addEventListener?.('change', event => {
+    if (event.matches) setMerchantMobileNavOpen(false);
+});
+
+const demoActiveOrders = [
+    { id: '#8912', customer: 'Sarah N.', items: '2x Chicken Biryani, 1x Mango Juice', total: 'UGX 42,000', received: '10:42 AM', status: 'new' },
+    { id: '#8911', customer: 'Daniel K.', items: '1x Family Pizza, 2x Soda', total: 'UGX 68,000', received: '10:35 AM', status: 'preparing' },
+    { id: '#8910', customer: 'Amina S.', items: '1x Grilled Chicken, 1x Fries', total: 'UGX 51,000', received: '10:28 AM', status: 'ready' }
+];
+
+const merchantKioskCart = new Map();
+let merchantKioskCategory = 'All';
+let merchantKioskSearchTerm = '';
+let merchantKioskOrderSequence = 9000;
+
+function openMerchantKiosk() {
+    setMerchantNavView('kiosk');
+    renderMerchantKioskCatalog();
+    merchantKioskScreen?.classList.add('active');
+}
+
+function renderMerchantKioskCatalog() {
+    const closedNotice = document.getElementById('merchantKioskClosedNotice');
+    if (closedNotice) closedNotice.hidden = merchantStoreIsOpen;
+    renderMerchantKioskCategories();
+    renderMerchantKioskProducts();
+    renderMerchantKioskCart();
+}
+
+function renderMerchantKioskCategories() {
+    const categories = document.getElementById('merchantKioskCategories');
+    if (!categories) return;
+
+    const availableCategories = [...new Set(merchantMenuItems.filter(item => item.active).map(item => item.category || 'Other'))];
+    if (!availableCategories.includes(merchantKioskCategory) && merchantKioskCategory !== 'All') merchantKioskCategory = 'All';
+    const categoryOptions = ['All', ...availableCategories];
+    categories.innerHTML = categoryOptions.map(category => `
+        <button class="merchant-kiosk-category ${category === merchantKioskCategory ? 'active' : ''}" type="button" data-kiosk-category="${escapeMerchantText(category)}" aria-pressed="${category === merchantKioskCategory}">
+            ${escapeMerchantText(category)}
+        </button>
+    `).join('');
+}
+
+function renderMerchantKioskProducts() {
+    const products = document.getElementById('merchantKioskProducts');
+    if (!products) return;
+
+    const availableItems = merchantMenuItems.filter(item => item.active);
+    const shownItems = availableItems.filter(item => {
+        const matchesCategory = merchantKioskCategory === 'All' || (item.category || 'Other') === merchantKioskCategory;
+        const searchableText = `${item.name} ${item.description || ''} ${item.ingredients || ''}`.toLowerCase();
+        return matchesCategory && searchableText.includes(merchantKioskSearchTerm);
+    });
+    document.getElementById('merchantKioskAvailableCount').textContent = `${availableItems.length} items available`;
+
+    if (shownItems.length === 0) {
+        products.innerHTML = '<div class="merchant-kiosk-empty">No menu items match your search.</div>';
+        return;
+    }
+
+    products.innerHTML = shownItems.map(item => {
+        const photo = item.image
+            ? `<img src="${escapeMerchantText(item.image)}" alt="${escapeMerchantText(item.name)}" loading="lazy">`
+            : `<div class="merchant-kiosk-product-placeholder" aria-hidden="true">${escapeMerchantText(item.img || '🍽')}</div>`;
+        return `
+            <article class="merchant-kiosk-product-card">
+                <div class="merchant-kiosk-product-image">${photo}</div>
+                <div class="merchant-kiosk-product-content">
+                    <div class="merchant-kiosk-product-title-row"><h3>${escapeMerchantText(item.name)}</h3><strong>${formatMerchantCurrency(item.price)}</strong></div>
+                    <span class="merchant-kiosk-product-category">${escapeMerchantText(item.category || 'Other')}</span>
+                    <p class="merchant-kiosk-ingredients"><strong>Ingredients</strong> ${escapeMerchantText(item.ingredients || 'Ask our team for details.')}</p>
+                    <button class="merchant-kiosk-add" type="button" data-kiosk-add="${item.id}" ${merchantStoreIsOpen ? '' : 'disabled'}><span aria-hidden="true">＋</span> Add to order</button>
+                </div>
+            </article>
+        `;
+    }).join('');
+}
+
+function renderMerchantKioskCart() {
+    const cartItems = document.getElementById('merchantKioskCartItems');
+    if (!cartItems) return;
+
+    const entries = [...merchantKioskCart.values()];
+    const itemCount = entries.reduce((count, entry) => count + entry.quantity, 0);
+    const subtotal = entries.reduce((sum, entry) => sum + entry.item.price * entry.quantity, 0);
+    document.getElementById('merchantKioskCartPanel').classList.toggle('has-items', itemCount > 0);
+    document.getElementById('merchantKioskHeaderCount').textContent = itemCount;
+    document.getElementById('merchantKioskCartCount').textContent = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
+    document.getElementById('merchantKioskSubtotal').textContent = formatMerchantCurrency(subtotal);
+    document.getElementById('merchantKioskPlaceOrder').disabled = itemCount === 0 || !merchantStoreIsOpen;
+    cartItems.innerHTML = entries.length === 0
+        ? '<div class="merchant-kiosk-cart-empty">Your basket is empty.</div>'
+        : entries.map(({ item, quantity }) => `
+            <div class="merchant-kiosk-cart-item">
+                <div><strong>${escapeMerchantText(item.name)}</strong><small>${formatMerchantCurrency(item.price)} each</small></div>
+                <div class="merchant-kiosk-quantity">
+                    <button type="button" data-kiosk-quantity="decrease" data-kiosk-item="${item.id}" aria-label="Remove one ${escapeMerchantText(item.name)}">−</button>
+                    <span>${quantity}</span>
+                    <button type="button" data-kiosk-quantity="increase" data-kiosk-item="${item.id}" aria-label="Add one ${escapeMerchantText(item.name)}">+</button>
+                </div>
+            </div>
+        `).join('');
+}
+
+document.getElementById('merchantKioskSearch')?.addEventListener('input', event => {
+    merchantKioskSearchTerm = event.target.value.trim().toLowerCase();
+    renderMerchantKioskProducts();
+});
+
+document.getElementById('merchantKioskCategories')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-kiosk-category]');
+    if (!button) return;
+    merchantKioskCategory = button.dataset.kioskCategory;
+    renderMerchantKioskCategories();
+    renderMerchantKioskProducts();
+});
+
+document.getElementById('merchantKioskProducts')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-kiosk-add]');
+    if (!button || !merchantStoreIsOpen) return;
+    const item = merchantMenuItems.find(product => product.id === Number(button.dataset.kioskAdd) && product.active);
+    if (!item) return;
+    const entry = merchantKioskCart.get(item.id) || { item, quantity: 0 };
+    entry.quantity += 1;
+    merchantKioskCart.set(item.id, entry);
+    renderMerchantKioskCart();
+});
+
+document.getElementById('merchantKioskCartItems')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-kiosk-quantity]');
+    if (!button) return;
+    const itemId = Number(button.dataset.kioskItem);
+    const entry = merchantKioskCart.get(itemId);
+    if (!entry) return;
+    entry.quantity += button.dataset.kioskQuantity === 'increase' ? 1 : -1;
+    if (entry.quantity <= 0) merchantKioskCart.delete(itemId);
+    renderMerchantKioskCart();
+});
+
+document.getElementById('merchantKioskPlaceOrder')?.addEventListener('click', () => {
+    const customerNameInput = document.getElementById('merchantKioskCustomerName');
+    const customerPhoneInput = document.getElementById('merchantKioskCustomerPhone');
+    const tableNumberInput = document.getElementById('merchantKioskTableNumber');
+    const customerName = customerNameInput.value.trim();
+    const customerPhone = customerPhoneInput.value.trim();
+    const tableNumber = Number(tableNumberInput.value);
+    if (!customerName) { customerNameInput.focus(); showToast('Enter your name to place the order.'); return; }
+    if (customerPhone.replace(/\D/g, '').length < 8) { customerPhoneInput.focus(); showToast('Enter a valid phone number.'); return; }
+    if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 999) { tableNumberInput.focus(); showToast('Enter your table number.'); return; }
+    if (!merchantStoreIsOpen || merchantKioskCart.size === 0) return;
+
+    const entries = [...merchantKioskCart.values()];
+    const total = entries.reduce((sum, entry) => sum + entry.item.price * entry.quantity, 0);
+    const order = {
+        id: `#${merchantKioskOrderSequence++}`,
+        customer: customerName,
+        phone: customerPhone,
+        table: tableNumber,
+        items: entries.map(({ item, quantity }) => `${quantity}x ${item.name}`).join(', '),
+        total: formatMerchantCurrency(total),
+        received: new Date().toLocaleTimeString('en-UG', { hour: 'numeric', minute: '2-digit' }),
+        status: 'new'
+    };
+    demoActiveOrders.unshift(order);
+    merchantKioskCart.clear();
+    customerNameInput.value = '';
+    customerPhoneInput.value = '';
+    tableNumberInput.value = '';
+    renderMerchantActiveOrders();
+    renderMerchantKioskCart();
+    showToast(`Order ${order.id} sent to Al Reef Restaurant.`);
+});
+
+document.getElementById('merchantKioskSearch')?.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        event.target.value = '';
+        merchantKioskSearchTerm = '';
+        renderMerchantKioskProducts();
+    }
+});
+
+function renderMerchantActiveOrders() {
+    const list = document.getElementById('merchantActiveOrderList');
+    if (!list) return;
+
+    const activeStatuses = new Set(['new', 'preparing', 'ready']);
+    const activeOrders = demoActiveOrders.filter(order => activeStatuses.has(order.status));
+    document.getElementById('merchantActiveOrdersCount').textContent = activeOrders.length;
+    document.getElementById('merchantActiveOrdersBadge').textContent = activeOrders.length;
+    list.innerHTML = '';
+
+    if (activeOrders.length === 0) {
+        list.innerHTML = '<div class="merchant-active-orders-empty">No active orders right now.</div>';
+        return;
+    }
+
+    activeOrders.forEach(order => {
+        const statusLabel = { new: 'New order', preparing: 'Preparing', ready: 'Ready for pickup' }[order.status];
+        const actions = order.status === 'new'
+            ? '<button class="danger" type="button" data-active-order-action="decline">Decline</button><button class="primary" type="button" data-active-order-action="accept">Accept order</button>'
+            : order.status === 'preparing'
+                ? '<button class="primary" type="button" data-active-order-action="ready">Mark ready</button>'
+                : '<button class="primary" type="button" data-active-order-action="complete">Complete</button>';
+        const card = document.createElement('article');
+        card.className = 'merchant-active-order';
+        card.dataset.orderId = order.id;
+        card.innerHTML = `
+            <div class="merchant-active-order-main">
+                <div class="merchant-active-order-heading"><strong>${escapeMerchantText(order.id)}</strong><span>${escapeMerchantText(order.customer)}</span>${order.table ? `<span>Table ${escapeMerchantText(order.table)}</span>` : ''}<span>Received ${escapeMerchantText(order.received)}</span></div>
+                <div class="merchant-active-order-details">${escapeMerchantText(order.items)}</div>
+            </div>
+            <span class="merchant-order-status ${order.status}">${statusLabel}</span>
+            <div class="merchant-active-order-total">${escapeMerchantText(order.total)}</div>
+            <div class="merchant-active-order-actions">${actions}</div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+document.getElementById('merchantActiveOrderList')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-active-order-action]');
+    const card = button?.closest('[data-order-id]');
+    if (!button || !card) return;
+
+    const order = demoActiveOrders.find(item => item.id === card.dataset.orderId);
+    if (!order) return;
+
+    const action = button.dataset.activeOrderAction;
+    const nextStatus = { accept: 'preparing', ready: 'ready', complete: 'completed', decline: 'declined' }[action];
+    if (!nextStatus) return;
+
+    order.status = nextStatus;
+    if (action === 'complete' || action === 'decline') {
+        dummyPastOrders.unshift({
+            id: order.id,
+            date: `Today, ${order.received}`,
+            items: order.table ? `Table ${order.table} - ${order.items}` : order.items,
+            total: order.total,
+            status: action === 'complete' ? 'Delivered' : 'Cancelled',
+            statusColor: action === 'complete' ? '#019E81' : '#ff4757'
+        });
+    }
+    renderMerchantActiveOrders();
+    showToast(`Order ${order.id} ${action === 'decline' ? 'declined' : action === 'complete' ? 'completed' : nextStatus === 'ready' ? 'marked ready' : 'accepted'}.`);
+});
+
+renderMerchantActiveOrders();
 
 const dummyPastOrders = [
     { id: '#8820', date: 'Today, 10:30 AM', items: '2x Cheese Burger, 1x Cola', total: 'UGX 55.00', status: 'Delivered', statusColor: '#019E81' },
@@ -3101,25 +3534,26 @@ function renderMerchantOrders() {
         card.style.gap = '8px';
         card.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:800; color:#333;">${order.id}</span>
-                <span style="font-size:0.85em; color:#666;">${order.date}</span>
+                <span style="font-weight:800; color:#333;">${escapeMerchantText(order.id)}</span>
+                <span style="font-size:0.85em; color:#666;">${escapeMerchantText(order.date)}</span>
             </div>
-            <div style="font-size:0.95em; color:#555; line-height:1.4;">${order.items}</div>
+            <div style="font-size:0.95em; color:#555; line-height:1.4;">${escapeMerchantText(order.items)}</div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px;">
-                <span style="font-weight:bold; color:#333;">${order.total}</span>
-                <span style="background:${order.statusColor}20; color:${order.statusColor}; padding:4px 8px; border-radius:6px; font-size:0.85em; font-weight:700;">${order.status}</span>
+                <span style="font-weight:bold; color:#333;">${escapeMerchantText(order.total)}</span>
+                <span style="background:${order.statusColor}20; color:${order.statusColor}; padding:4px 8px; border-radius:6px; font-size:0.85em; font-weight:700;">${escapeMerchantText(order.status)}</span>
             </div>
         `;
         merchantOrdersList.appendChild(card);
     });
 }
 
-if(merchantOrdersBtn) {
-    merchantOrdersBtn.addEventListener('click', () => {
-        renderMerchantOrders();
-        merchantOrdersScreen.classList.add('active');
-    });
+function openMerchantOrders() {
+    setMerchantNavView('orders');
+    renderMerchantOrders();
+    merchantOrdersScreen.classList.add('active');
 }
+
+if(merchantOrdersBtn) merchantOrdersBtn.addEventListener('click', openMerchantOrders);
 if(merchantOrdersBackBtn) {
     merchantOrdersBackBtn.addEventListener('click', () => merchantOrdersScreen.classList.remove('active'));
 }

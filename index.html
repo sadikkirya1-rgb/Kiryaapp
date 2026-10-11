@@ -1198,39 +1198,156 @@
 </div>
 
 <div id="shopPortalScreen" class="generic-screen">
-  <div class="generic-header">
+  <div class="generic-header merchant-header">
+    <button class="merchant-mobile-nav-toggle" id="merchantMobileNavToggle" type="button" aria-controls="merchantSidebar" aria-expanded="false" aria-label="Open vendor navigation">
+      <span aria-hidden="true">☰</span>
+    </button>
     <div class="generic-title">Merchant Portal</div>
   </div>
-  <div class="generic-content">
-    <div class="dashboard-card">
-      <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 10px;">Store Status: 🟢 Open</div>
-      <button style="width:100%; padding:10px; background:#ff4757; color:white; border:none; border-radius:8px; font-weight:bold;">Close Store</button>
+  <div class="merchant-layout">
+    <aside class="merchant-sidebar" id="merchantSidebar" aria-label="Vendor controls">
+      <div class="merchant-sidebar-heading">
+        <span>Vendor tools</span>
+        <button class="merchant-sidebar-collapse" id="merchantSidebarCollapse" type="button" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">
+          <span aria-hidden="true">‹</span>
+        </button>
+      </div>
+      <nav class="merchant-side-nav" aria-label="Vendor sections">
+        <button class="active" type="button" data-merchant-view="dashboard" aria-label="Dashboard" title="Dashboard" aria-current="page">
+          <span class="merchant-nav-icon" aria-hidden="true">⌂</span><span class="merchant-side-label">Dashboard</span>
+        </button>
+        <button type="button" data-merchant-view="kiosk" aria-label="Digital Menu" title="Digital Menu">
+          <span class="merchant-nav-icon" aria-hidden="true">▦</span><span class="merchant-side-label">Digital Menu</span>
+        </button>
+        <button type="button" id="merchantOrdersBtn" data-merchant-view="orders" aria-label="Past Orders" title="Past Orders">
+          <span class="merchant-nav-icon" aria-hidden="true">▤</span><span class="merchant-side-label">Past Orders</span>
+        </button>
+        <button type="button" id="merchantManageMenuBtn" data-merchant-view="menu" aria-label="Manage Menu" title="Manage Menu">
+          <span class="merchant-nav-icon" aria-hidden="true">☷</span><span class="merchant-side-label">Manage Menu</span>
+        </button>
+      </nav>
+      <div class="merchant-sidebar-footer">
+        <button class="merchant-store-toggle" id="merchantStoreToggleBtn" type="button" aria-label="Close store">
+          <span class="merchant-nav-icon" aria-hidden="true">◉</span><span class="merchant-side-label">Close store</span>
+        </button>
+        <button class="merchant-add-item-button" type="button" data-merchant-view="add-item" aria-label="Add menu item" title="Add menu item">
+          <span class="merchant-nav-icon" aria-hidden="true">＋</span><span class="merchant-side-label">Add menu item</span>
+        </button>
+      </div>
+    </aside>
+    <button class="merchant-sidebar-backdrop" id="merchantSidebarBackdrop" type="button" aria-label="Close vendor navigation" tabindex="-1"></button>
+    <main class="merchant-main">
+    <div class="generic-content" id="merchantPortalContent">
+    <div class="dashboard-card" id="merchantStoreCard">
+      <div class="merchant-store-status"><span class="merchant-status-dot" aria-hidden="true"></span><span>Store Status: <strong id="merchantStoreStatusText">Open</strong></span></div>
     </div>
-    <div class="dashboard-card">
-        <h3 style="margin-bottom: 20px; font-weight: 800;">Analytics</h3>
-        <div style="margin-bottom: 30px;">
-            <h4 style="font-size: 1em; color: #555; margin-bottom: 10px;">Daily Sales (UGX)</h4>
-            <canvas id="dailySalesChart"></canvas>
+    <section class="merchant-metrics" aria-label="Business overview">
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Sales this week</span><strong>UGX 1.33M</strong><small>Across the last 7 days</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Orders this week</span><strong>68</strong><small>Completed orders</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Average rating</span><strong>4.7 <span aria-hidden="true">★</span></strong><small>Customer score</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Available items</span><strong id="merchantAvailableMenuCount">4 / 5</strong><small>Menu items in stock</small></article>
+      <article class="merchant-metric-card"><span class="merchant-metric-label">Active orders</span><strong id="merchantActiveOrdersCount">3</strong><small>Orders in progress</small></article>
+    </section>
+    <section class="merchant-goals" aria-labelledby="merchantGoalsHeading">
+      <div class="merchant-section-heading"><h2 id="merchantGoalsHeading">Weekly goals</h2></div>
+      <div class="merchant-goal-grid">
+        <div class="merchant-goal">
+          <div class="merchant-goal-heading"><label for="merchantSalesGoal">Sales target</label><span>UGX 1.33M <small>of 2.00M</small></span></div>
+          <progress id="merchantSalesGoal" max="100" value="66.5" aria-label="Weekly sales target progress"></progress>
+          <small>66.5% of this week’s sales target</small>
         </div>
-        <div>
-            <h4 style="font-size: 1em; color: #555; margin-bottom: 10px;">Top Selling Items</h4>
-            <div style="max-width: 250px; margin: auto;">
-                <canvas id="topItemsChart"></canvas>
-            </div>
+        <div class="merchant-goal">
+          <div class="merchant-goal-heading"><label for="merchantOrdersGoal">Order target</label><span>68 <small>of 100 orders</small></span></div>
+          <progress id="merchantOrdersGoal" max="100" value="68" aria-label="Weekly order target progress"></progress>
+          <small>68% of this week’s order target</small>
         </div>
-    </div>
-    <div class="dashboard-card" id="merchantOrdersBtn" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-      <div style="font-weight:bold; font-size:1.1em;">📜 Past Orders</div>
-      <span style="font-size:1.2em;">></span>
-    </div>
-    <div class="dashboard-card" id="merchantManageMenuBtn" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-      <div style="font-weight:bold; font-size:1.1em;">🍔 Manage Menu</div>
-      <span style="font-size:1.2em;">></span>
-    </div>
-    <div class="dashboard-card">
-      <h3>Active Orders</h3>
-      <p style="color:#666; margin-top:10px;">No active orders pending.</p>
-    </div>
+      </div>
+    </section>
+    <section class="merchant-active-orders-section" aria-labelledby="merchantActiveOrdersHeading">
+      <div class="merchant-section-heading">
+        <h2 id="merchantActiveOrdersHeading">Active orders</h2>
+        <span class="merchant-order-count" id="merchantActiveOrdersBadge">3</span>
+      </div>
+      <div class="merchant-active-order-list" id="merchantActiveOrderList"></div>
+    </section>
+    <section class="merchant-analytics-section" aria-labelledby="merchantAnalyticsCard">
+      <h2 class="merchant-analytics-title" id="merchantAnalyticsCard">Analytics</h2>
+      <div class="merchant-chart-grid">
+        <article class="merchant-chart-card">
+          <h3>Top Selling Items</h3>
+          <div class="merchant-chart-frame"><canvas id="topItemsChart"></canvas></div>
+        </article>
+        <article class="merchant-chart-card">
+          <h3>Order Status</h3>
+          <div class="merchant-chart-frame"><canvas id="orderStatusChart"></canvas></div>
+        </article>
+        <article class="merchant-chart-card">
+          <h3>Menu Availability</h3>
+          <div class="merchant-chart-frame"><canvas id="menuAvailabilityChart"></canvas></div>
+        </article>
+        <article class="merchant-chart-card merchant-sales-chart">
+          <h3>Daily Sales (UGX)</h3>
+          <div class="merchant-chart-frame"><canvas id="dailySalesChart"></canvas></div>
+        </article>
+      </div>
+    </section>
+  </div>
+    </main>
+  </div>
+  <nav class="merchant-bottom-nav" id="merchantBottomNav" aria-label="Merchant navigation">
+    <button class="active" type="button" data-merchant-view="dashboard" aria-current="page">
+      <span class="merchant-nav-icon" aria-hidden="true">⌂</span>
+      <span>Dashboard</span>
+    </button>
+    <button type="button" data-merchant-view="orders">
+      <span class="merchant-nav-icon" aria-hidden="true">▤</span>
+      <span>Orders</span>
+    </button>
+    <button type="button" data-merchant-view="kiosk">
+      <span class="merchant-nav-icon" aria-hidden="true">☷</span>
+      <span>Menu</span>
+    </button>
+  </nav>
+</div>
+
+<div id="merchantKioskScreen" class="generic-screen merchant-kiosk-screen">
+  <div class="generic-header merchant-kiosk-header">
+    <button class="merchant-kiosk-back" id="merchantKioskBackBtn" type="button" aria-label="Back to merchant dashboard">‹</button>
+    <div class="merchant-kiosk-brand"><span aria-hidden="true">AR</span><div><strong>Al Reef Restaurant</strong><small>Restaurant menu</small></div></div>
+    <button class="merchant-kiosk-cart-jump" id="merchantKioskCartJump" type="button" aria-label="View order basket">Order <span id="merchantKioskHeaderCount">0</span></button>
+  </div>
+  <div class="merchant-kiosk-workspace">
+    <main class="merchant-kiosk-menu-main">
+      <div class="merchant-kiosk-closed" id="merchantKioskClosedNotice" role="status" hidden>This store is currently closed and cannot accept orders.</div>
+      <div class="merchant-kiosk-menu-heading">
+        <input class="merchant-kiosk-search" id="merchantKioskSearch" type="search" placeholder="Search menu" aria-label="Search menu items">
+        <span id="merchantKioskAvailableCount"></span>
+      </div>
+      <div class="merchant-kiosk-controls">
+        <div class="merchant-kiosk-categories" id="merchantKioskCategories" role="group" aria-label="Filter menu category"></div>
+      </div>
+      <div class="merchant-kiosk-products" id="merchantKioskProducts"></div>
+    </main>
+    <aside class="merchant-kiosk-cart" id="merchantKioskCartPanel" aria-labelledby="merchantKioskCartTitle">
+      <div class="merchant-kiosk-cart-heading"><h2 id="merchantKioskCartTitle">Your order</h2><span id="merchantKioskCartCount">0 items</span></div>
+      <div class="merchant-kiosk-cart-items" id="merchantKioskCartItems"></div>
+      <div class="merchant-kiosk-subtotal"><span>Subtotal</span><strong id="merchantKioskSubtotal">UGX 0</strong></div>
+      <div class="merchant-kiosk-customer-fields">
+        <div class="merchant-kiosk-field">
+          <label for="merchantKioskCustomerName">Name</label>
+          <input id="merchantKioskCustomerName" type="text" autocomplete="name" placeholder="Your name" required>
+        </div>
+        <div class="merchant-kiosk-field">
+          <label for="merchantKioskCustomerPhone">Contact</label>
+          <input id="merchantKioskCustomerPhone" type="tel" autocomplete="tel" placeholder="0700 123 456" required>
+        </div>
+        <div class="merchant-kiosk-field merchant-kiosk-table-field">
+          <label for="merchantKioskTableNumber">Table number</label>
+          <input id="merchantKioskTableNumber" type="number" min="1" max="999" inputmode="numeric" placeholder="e.g. 12" required>
+        </div>
+      </div>
+      <button class="merchant-kiosk-place-order" id="merchantKioskPlaceOrder" type="button" disabled>Place order</button>
+    </aside>
   </div>
 </div>
 
@@ -1255,8 +1372,23 @@
         <label for="editItemName">Item Name</label>
         <input type="text" id="editItemName" placeholder="e.g., Classic Burger">
         <label for="editItemPrice">Price (UGX)</label>
-        <input type="number" id="editItemPrice" placeholder="e.g., 25.00">
-        <label for="editItemImg">Image (Emoji)</label>
+        <input type="number" id="editItemPrice" min="0" step="500" placeholder="e.g., 25,000">
+        <label for="editItemCategory">Category</label>
+        <select id="editItemCategory">
+          <option>Burgers</option>
+          <option>Chicken</option>
+          <option>Drinks</option>
+          <option>Sides</option>
+          <option>Pizza</option>
+          <option>Other</option>
+        </select>
+        <label for="editItemDescription">Description</label>
+        <textarea id="editItemDescription" rows="2" placeholder="A short description of this item"></textarea>
+        <label for="editItemIngredients">Ingredients</label>
+        <textarea id="editItemIngredients" rows="2" placeholder="e.g., chicken, herbs, spices"></textarea>
+        <label for="editItemImage">Product photo URL</label>
+        <input type="url" id="editItemImage" placeholder="assets/product-photo.jpg">
+        <label for="editItemImg">Emoji fallback</label>
         <input type="text" id="editItemImg" placeholder="e.g., 🍔">
         <input type="hidden" id="editItemId">
     </div>
