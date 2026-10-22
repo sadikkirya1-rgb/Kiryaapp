@@ -860,6 +860,10 @@
                     <div style="font-size:1.4em; font-weight:900; color:#333; margin-top:5px;" id="riderTripsToday">0</div>
                 </div>
             </div>
+                <div class="rider-marketplace-summary">
+                  <div><strong>Nearby delivery offers</strong><span id="riderMarketplaceCount">0 available</span></div>
+                  <p>Tap a map marker to review the item, route distance, and rider commission.</p>
+                </div>
             <div style="margin-top:20px; font-size:0.9em; color:#888; text-align:center; padding: 10px; background: #f0f0f0; border-radius: 8px;" id="riderIdleMsg">
                 Go online to receive delivery offers sent by the merchant.
             </div>
@@ -871,6 +875,7 @@
                 <h3 style="font-weight:800; color:#333;">Current Delivery</h3>
                 <span id="riderCurrentOrderNumber" style="background:#e0f2f1; color:#019E81; padding:4px 10px; border-radius:10px; font-size:0.85em; font-weight:bold;">—</span>
             </div>
+            <p class="rider-marketplace-delivery-details" id="riderMarketplaceDeliveryDetails" hidden></p>
             
             <div class="step-card active" id="riderStepRider">
               <div style="font-weight:bold; font-size:0.8em; color:#666;">RIDER</div>
@@ -1184,6 +1189,17 @@
               <div class="alert-item info"><div class="alert-icon">⏱</div><div><strong>Rider M. Kasozi</strong><p>Average ETA is 11 minutes.</p></div></div>
               <div class="alert-item warning"><div class="alert-icon">⚠</div><div><strong>Rider P. Ndugwa</strong><p>Route delay in downtown zone.</p></div></div>
             </div>
+          </div>
+        </div>
+
+        <div class="admin-section" data-section="approvals">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <h3>Marketplace pickup approvals</h3>
+              <span class="tiny-pill" id="adminMarketplaceRequestCount">0 pending</span>
+            </div>
+            <p class="admin-marketplace-note">Review rider identity and delivery details before assigning a marketplace job.</p>
+            <div id="adminMarketplaceRequests" class="admin-marketplace-requests" aria-live="polite"></div>
           </div>
         </div>
 
@@ -1584,6 +1600,10 @@
       <div class="merchant-live-map-heading"><strong>Assign from live rider map</strong><span>Choose an order above, then select an eligible online rider marker.</span></div>
       <div id="merchantRiderLiveMap" class="merchant-rider-live-map" role="region" aria-label="Map of merchant pickup location and assigned riders sharing live locations"></div>
       <p id="merchantRiderLiveMapStatus" class="merchant-live-map-status" role="status">Choose an order above, then select an eligible rider marker. Review and send the offer in the dispatch form.</p>
+      <section class="merchant-marketplace-notice" aria-labelledby="merchantMarketplaceNoticeHeading">
+        <div class="merchant-section-heading"><h3 id="merchantMarketplaceNoticeHeading">Marketplace pickup notices</h3><span>Admin-approved rider requests</span></div>
+        <div id="merchantMarketplaceNotifications" aria-live="polite"></div>
+      </section>
       <div class="merchant-record-toolbar">
         <label class="merchant-visually-hidden" for="merchantDeliverySearch">Search rider assignments</label><input class="merchant-record-search" id="merchantDeliverySearch" type="search" placeholder="Search by order, customer, or rider">
         <label class="merchant-visually-hidden" for="merchantDeliveryFilter">Filter rider assignments</label><select class="merchant-record-filter" id="merchantDeliveryFilter"><option value="all">All assignments</option><option value="offered">Offered</option><option value="accepted">Accepted</option><option value="picked-up">Picked up</option><option value="in-transit">In transit</option><option value="delivered">Delivered</option><option value="declined">Declined</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option></select>

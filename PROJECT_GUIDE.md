@@ -108,9 +108,11 @@ Kiryaapp/
 - Online/offline status toggle
 - Rider bottom navigation: Home, Orders, Earnings, and Account
 - Review assigned merchant offers and accept or decline with a required reason
+- Browse sample food, grocery, and pharmacy delivery jobs on the rider map with commission, pickup/drop-off pins, route distance, and live-GPS distance to pickup
+- Request an available marketplace pickup; a platform admin must approve it before the job is assigned and the vendor is notified
 - Share current device GPS while online and advance deliveries through pickup, in-transit, and delivered
 - Customer address and tap-to-call contact on accepted deliveries
-- Completed-delivery history; payout amounts remain unconfigured
+- Completed-delivery history and marketplace commission totals (prototype only; no real payout processing)
 - Live rider marker on the rider map; GPS stops being shared when the rider goes offline
 
 ### Merchant App 🏪
@@ -119,6 +121,7 @@ Kiryaapp/
 - Incoming order queue
 - Order status updates
 - Store pickup address shared with rider offers and customer tracking
+- Marketplace pickup notices show the approved rider, item, commission, pickup/drop-off area, and route estimate
 - Live map of assigned riders with recent GPS locations
 - Customer orders and rider dispatch linked in the browser prototype
 - Sales analytics

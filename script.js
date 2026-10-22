@@ -2462,6 +2462,102 @@ document.getElementById('customerOrdersBack')?.addEventListener('click', () => {
 
 function openAdmin() {
     document.getElementById('adminScreen').classList.add('active');
+    renderAdminMarketplaceRequests();
+}
+
+const marketplaceOfferSeed = [
+    {
+        id: 901,
+        title: 'Family chicken biryani',
+        description: 'Two sealed meal packs, ready for pickup now.',
+        category: 'Food',
+        icon: '🍛',
+        vendorName: 'Al Reef Restaurant',
+        pickupAddress: 'Kisementi, Kampala',
+        pickupCoordinates: { latitude: 0.3371, longitude: 32.5864 },
+        dropoffAddress: 'Kololo, Kampala',
+        dropoffArea: 'Kololo, Kampala',
+        dropoffCoordinates: { latitude: 0.3219, longitude: 32.5940 },
+        pickupToDropoffKm: 3.2,
+        commissionAmount: 8000,
+        status: 'available'
+    },
+    {
+        id: 902,
+        title: 'Fresh grocery basket',
+        description: 'Fruit, bread, and household essentials packed by the vendor.',
+        category: 'Groceries',
+        icon: '🛍️',
+        vendorName: 'Ntinda Fresh Market',
+        pickupAddress: 'Ntinda Shopping Centre, Kampala',
+        pickupCoordinates: { latitude: 0.3578, longitude: 32.6131 },
+        dropoffAddress: 'Naguru, Kampala',
+        dropoffArea: 'Naguru, Kampala',
+        dropoffCoordinates: { latitude: 0.3458, longitude: 32.6075 },
+        pickupToDropoffKm: 2.6,
+        commissionAmount: 7000,
+        status: 'available'
+    },
+    {
+        id: 903,
+        title: 'Pharmacy parcel',
+        description: 'A small, sealed pharmacy order. Handle with care.',
+        category: 'Pharmacy',
+        icon: '💊',
+        vendorName: 'Wandegeya Pharmacy',
+        pickupAddress: 'Wandegeya, Kampala',
+        pickupCoordinates: { latitude: 0.3378, longitude: 32.5682 },
+        dropoffAddress: 'Rubaga, Kampala',
+        dropoffArea: 'Rubaga, Kampala',
+        dropoffCoordinates: { latitude: 0.3017, longitude: 32.5566 },
+        pickupToDropoffKm: 5.1,
+        commissionAmount: 9000,
+        status: 'available'
+    }
+];
+
+function isValidMarketplaceOffer(offer) {
+    const validCoordinate = coordinate => coordinate &&
+        Number.isFinite(coordinate.latitude) && Math.abs(coordinate.latitude) <= 90 &&
+        Number.isFinite(coordinate.longitude) && Math.abs(coordinate.longitude) <= 180;
+    return offer && Number.isInteger(offer.id) && typeof offer.title === 'string' &&
+        typeof offer.description === 'string' && typeof offer.vendorName === 'string' &&
+        typeof offer.pickupAddress === 'string' && typeof offer.dropoffArea === 'string' &&
+        validCoordinate(offer.pickupCoordinates) && validCoordinate(offer.dropoffCoordinates) &&
+        Number.isFinite(offer.pickupToDropoffKm) && Number.isFinite(offer.commissionAmount) &&
+        ['available', 'requested', 'approved', 'rejected'].includes(offer.status);
+}
+
+function loadMarketplaceOffers() {
+    try {
+        const saved = localStorage.getItem('kiryaMarketplaceOffers');
+        if (saved === null) {
+            localStorage.setItem('kiryaMarketplaceOffers', JSON.stringify(marketplaceOfferSeed));
+            return marketplaceOfferSeed.map(offer => ({ ...offer }));
+        }
+        const offers = JSON.parse(saved);
+        if (!Array.isArray(offers) || !offers.every(isValidMarketplaceOffer)) {
+            throw new Error('Saved marketplace offers have an invalid format.');
+        }
+        return offers;
+    } catch (error) {
+        console.error('Unable to load marketplace offers.', error);
+        return marketplaceOfferSeed.map(offer => ({ ...offer }));
+    }
+}
+
+let marketplaceOffers = loadMarketplaceOffers();
+
+function saveMarketplaceOffers(offers) {
+    try {
+        localStorage.setItem('kiryaMarketplaceOffers', JSON.stringify(offers));
+        marketplaceOffers = offers;
+        return true;
+    } catch (error) {
+        console.error('Unable to save marketplace offers.', error);
+        showToast('Marketplace changes could not be saved in this browser.');
+        return false;
+    }
 }
 
 const adminDashboardData = [
@@ -2486,6 +2582,7 @@ const adminNavConfig = [
     { section: 'overview', icon: '◉', label: 'Overview', count: () => adminDashboardData.length + adminUserData.length },
     { section: 'users', icon: '👥', label: 'Users', count: () => adminUserData.length },
     { section: 'riders', icon: '🏍', label: 'Riders', count: () => 86 },
+    { section: 'approvals', icon: '✓', label: 'Pickup approvals', count: () => marketplaceOffers.filter(offer => offer.status === 'requested').length },
     { section: 'merchants', icon: '🏪', label: 'Merchants', count: () => 28 },
     { section: 'payouts', icon: '💰', label: 'Payouts', count: () => 18 },
     { section: 'settings', icon: '⚙', label: 'Settings', count: () => 3 }
@@ -2707,6 +2804,10 @@ renderAdminNav();
 setupAdminMobileSidebar();
 setupGlobalNavigation();
 bindAdminDashboard();
+document.getElementById('adminMarketplaceRequests')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-marketplace-review]');
+    if (button) reviewMarketplaceRequest(button.dataset.marketplaceId, button.dataset.marketplaceReview);
+});
 
 const sideMenuOverlay = document.getElementById('sideMenuOverlay');
 if(sideMenuOverlay) sideMenuOverlay.addEventListener('click', closeProfile);
@@ -2749,6 +2850,9 @@ let riderSelectedPartnerId = null;
 let riderPendingOfferId = null;
 let riderWorkspaceInitialized = false;
 let riderRenderedDeliveryKey = null;
+const marketplaceDeliveryMarkers = new Map();
+const marketplaceDestinationMarkers = new Map();
+const marketplaceRouteLines = new Map();
 let merchantRiderTrackingMap = null;
 let merchantRiderTrackingMarkers = new Map();
 let merchantPickupMap = null;
@@ -2922,13 +3026,16 @@ function getFreshRiderLocation(locations, partnerId) {
 
 function updateRiderPickupDestination() {
     if (!riderMap) return;
-    if (!merchantPickupCoordinates) {
+    const delivery = getRiderActiveDelivery(readRiderDeliveries() || [], riderCurrentPartner());
+    const coordinates = delivery?.marketplace ? delivery.pickupCoordinates : merchantPickupCoordinates;
+    const address = delivery?.marketplace ? delivery.pickupAddress : merchantPickupAddress;
+    if (!coordinates) {
         riderPickupMarker?.remove();
         riderPickupMarker = null;
         return;
     }
-    const position = [merchantPickupCoordinates.latitude, merchantPickupCoordinates.longitude];
-    const popup = `${escapeMerchantText(merchantProfile.name)} · ${escapeMerchantText(merchantPickupAddress || 'Pickup location')}`;
+    const position = [coordinates.latitude, coordinates.longitude];
+    const popup = `${escapeMerchantText(delivery?.marketplace ? delivery.merchantName : merchantProfile.name)} · ${escapeMerchantText(address || 'Pickup location')}`;
     if (riderPickupMarker) {
         riderPickupMarker.setLatLng(position);
         riderPickupMarker.setPopupContent(popup);
@@ -2947,6 +3054,233 @@ function distanceBetweenCoordinates(first, second) {
         Math.cos(toRadians(first.lat)) * Math.cos(toRadians(second.lat)) *
         Math.sin(longitudeDelta / 2) ** 2;
     return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function marketplaceOfferIcon(offer) {
+    const commission = Math.round(offer.commissionAmount / 1000);
+    return L.divIcon({
+        className: 'marketplace-delivery-marker',
+        html: `<span aria-hidden="true">${escapeMerchantText(offer.icon || '📦')}</span><b>UGX ${commission}k</b>`,
+        iconSize: [86, 58],
+        iconAnchor: [43, 48]
+    });
+}
+
+function marketplaceOfferPopup(offer) {
+    const currentLocation = riderLocationMarker?.getLatLng();
+    const riderDistance = currentLocation
+        ? `${(distanceBetweenCoordinates(currentLocation, { lat: offer.pickupCoordinates.latitude, lng: offer.pickupCoordinates.longitude }) / 1000).toFixed(1)} km from you (straight-line)`
+        : 'Go online and share GPS to see distance from you';
+    const isRequestable = isRiderOnline && riderCurrentPartner()?.status === 'active';
+    return `<article class="marketplace-offer-popup">
+      <span class="marketplace-offer-category">${escapeMerchantText(offer.category || 'Delivery')}</span>
+      <h3>${escapeMerchantText(offer.title)}</h3>
+      <p>${escapeMerchantText(offer.description)}</p>
+      <strong class="marketplace-commission">Rider commission · ${formatMerchantCurrency(offer.commissionAmount)}</strong>
+      <dl><div><dt>Pickup</dt><dd>${escapeMerchantText(offer.pickupAddress)}</dd></div>
+        <div><dt>Drop-off area</dt><dd>${escapeMerchantText(offer.dropoffArea)}</dd></div>
+        <div><dt>Pickup to drop-off</dt><dd>~${Number(offer.pickupToDropoffKm).toFixed(1)} km route estimate</dd></div>
+        <div><dt>Pickup from you</dt><dd>${escapeMerchantText(riderDistance)}</dd></div></dl>
+      <button type="button" data-marketplace-request="${offer.id}" ${isRequestable ? '' : 'disabled'}>${isRequestable ? 'Request this pickup' : 'Go online to request'}</button>
+      <small>Admin approval is required before the vendor receives a confirmed rider assignment.</small>
+    </article>`;
+}
+
+function renderMarketplaceMapOffers() {
+    const count = document.getElementById('riderMarketplaceCount');
+    const offers = marketplaceOffers.filter(offer => offer.status === 'available');
+    if (count) count.textContent = `${offers.length} available`;
+    if (!riderMap) return;
+    const offerIds = new Set(offers.map(offer => String(offer.id)));
+    for (const [id, marker] of marketplaceDeliveryMarkers) {
+        if (!offerIds.has(id)) {
+            marker.remove();
+            marketplaceDeliveryMarkers.delete(id);
+            marketplaceDestinationMarkers.get(id)?.remove();
+            marketplaceDestinationMarkers.delete(id);
+            marketplaceRouteLines.get(id)?.remove();
+            marketplaceRouteLines.delete(id);
+        }
+    }
+    offers.forEach(offer => {
+        const id = String(offer.id);
+        let marker = marketplaceDeliveryMarkers.get(id);
+        const position = [offer.pickupCoordinates.latitude, offer.pickupCoordinates.longitude];
+        const tooltip = `<strong>${escapeMerchantText(offer.title)}</strong><br>${escapeMerchantText(offer.description)}<br><b>${formatMerchantCurrency(offer.commissionAmount)}</b>`;
+        if (!marker) {
+            marker = L.marker(position, { icon: marketplaceOfferIcon(offer), keyboard: true }).addTo(riderMap);
+            marker.bindTooltip(tooltip, { direction: 'top', sticky: true, opacity: 0.98 });
+            marker.bindPopup(marketplaceOfferPopup(offer), { maxWidth: 320, minWidth: 260 });
+            marker.on('popupopen', event => {
+                const button = event.popup.getElement()?.querySelector('[data-marketplace-request]');
+                button?.addEventListener('click', () => requestMarketplaceDelivery(button.dataset.marketplaceRequest), { once: true });
+            });
+            marketplaceDeliveryMarkers.set(id, marker);
+        } else {
+            marker.setLatLng(position);
+            marker.setIcon(marketplaceOfferIcon(offer));
+            marker.setTooltipContent(tooltip);
+            marker.setPopupContent(marketplaceOfferPopup(offer));
+        }
+        const destination = [offer.dropoffCoordinates.latitude, offer.dropoffCoordinates.longitude];
+        let destinationMarker = marketplaceDestinationMarkers.get(id);
+        if (!destinationMarker) {
+            destinationMarker = L.marker(destination, {
+                icon: L.divIcon({
+                    className: 'marketplace-dropoff-marker',
+                    html: '<span>DROP</span>',
+                    iconSize: [54, 22],
+                    iconAnchor: [27, 11]
+                })
+            }).addTo(riderMap).bindTooltip(`Approximate drop-off · ${escapeMerchantText(offer.dropoffArea)}`, { direction: 'top' });
+            marketplaceDestinationMarkers.set(id, destinationMarker);
+        } else {
+            destinationMarker.setLatLng(destination);
+            destinationMarker.setTooltipContent(`Approximate drop-off · ${escapeMerchantText(offer.dropoffArea)}`);
+        }
+        const routeCoordinates = [position, destination];
+        let routeLine = marketplaceRouteLines.get(id);
+        if (!routeLine) {
+            routeLine = L.polyline(routeCoordinates, { color: '#087a67', weight: 2, opacity: 0.58, dashArray: '5 7', interactive: false }).addTo(riderMap);
+            marketplaceRouteLines.set(id, routeLine);
+        } else {
+            routeLine.setLatLngs(routeCoordinates);
+        }
+    });
+}
+
+function requestMarketplaceDelivery(offerId) {
+    const partner = riderCurrentPartner();
+    if (!partner || partner.status !== 'active' || !isRiderOnline || partner.availability !== 'available') {
+        showToast('Go online with an active rider account before requesting a pickup.');
+        return;
+    }
+    const deliveries = readRiderDeliveries();
+    if (!deliveries) return;
+    if (getRiderActiveDelivery(deliveries, partner)) {
+        showToast('Complete your current delivery before requesting another pickup.');
+        return;
+    }
+    const offer = marketplaceOffers.find(record => String(record.id) === String(offerId));
+    if (!offer || offer.status !== 'available') {
+        showToast('This pickup is no longer available.');
+        renderMarketplaceMapOffers();
+        return;
+    }
+    const requestedAt = new Date().toISOString();
+    const nextOffers = marketplaceOffers.map(record => String(record.id) === String(offer.id)
+        ? {
+            ...record,
+            status: 'requested',
+            requestedPartnerId: partner.id,
+            requestedPartnerName: partner.name,
+            requestedPartnerPhone: partner.phone,
+            requestedAt,
+            statusHistory: [...(record.statusHistory || []), { status: 'requested', at: requestedAt, actor: partner.name }]
+        }
+        : record
+    );
+    if (!saveMarketplaceOffers(nextOffers)) return;
+    renderMarketplaceMapOffers();
+    renderAdminMarketplaceRequests();
+    renderAdminNav();
+    showToast(`Request sent for ${offer.title}. Waiting for admin approval.`);
+}
+
+function renderAdminMarketplaceRequests() {
+    const list = document.getElementById('adminMarketplaceRequests');
+    const count = document.getElementById('adminMarketplaceRequestCount');
+    if (!list || !count) return;
+    const requests = marketplaceOffers.filter(offer => offer.status === 'requested');
+    count.textContent = `${requests.length} pending`;
+    list.innerHTML = requests.length ? requests.map(offer => `
+      <article class="admin-marketplace-request">
+        <div><span class="marketplace-offer-category">${escapeMerchantText(offer.category || 'Delivery')}</span><h4>${escapeMerchantText(offer.title)}</h4>
+          <p>${escapeMerchantText(offer.description)}</p><p><strong>${escapeMerchantText(offer.requestedPartnerName || 'Rider')}</strong> · ${escapeMerchantText(offer.requestedPartnerPhone || '')}</p>
+          <p>${escapeMerchantText(offer.vendorName)} · ${escapeMerchantText(offer.pickupAddress)} → ${escapeMerchantText(offer.dropoffArea)}</p>
+          <strong>${formatMerchantCurrency(offer.commissionAmount)} · ~${Number(offer.pickupToDropoffKm).toFixed(1)} km</strong></div>
+        <div class="admin-marketplace-actions"><button type="button" data-marketplace-review="approve" data-marketplace-id="${offer.id}">Approve &amp; notify vendor</button><button type="button" class="reject" data-marketplace-review="reject" data-marketplace-id="${offer.id}">Reject</button></div>
+      </article>`).join('') : '<div class="admin-marketplace-empty">No rider pickup requests are waiting for approval.</div>';
+}
+
+function reviewMarketplaceRequest(offerId, decision) {
+    const offer = marketplaceOffers.find(record => String(record.id) === String(offerId));
+    if (!offer || offer.status !== 'requested') {
+        showToast('This request has already changed. Refresh the approval queue.');
+        renderAdminMarketplaceRequests();
+        return;
+    }
+    const now = new Date().toISOString();
+    const partner = merchantPartners.find(record => String(record.id) === String(offer.requestedPartnerId));
+    if (decision === 'approve' && (!partner || partner.status !== 'active')) {
+        showToast('The requesting rider is no longer active.');
+        return;
+    }
+    if (decision === 'approve' && merchantDeliveries.some(delivery =>
+        riderOwnsDelivery(delivery, partner) && riderActiveStatuses.includes(delivery.status)
+    )) {
+        showToast('This rider already has an active delivery. Reject this request so another rider can request it.');
+        return;
+    }
+    const nextOffer = {
+        ...offer,
+        status: decision === 'approve' ? 'approved' : 'available',
+        reviewedAt: now,
+        reviewedBy: 'Platform admin',
+        ...(decision === 'reject' ? { lastRejectedAt: now, lastRejectedBy: 'Platform admin' } : {}),
+        statusHistory: [...(offer.statusHistory || []), {
+            status: decision === 'approve' ? 'approved' : 'rejected',
+            at: now,
+            actor: 'Platform admin'
+        }]
+    };
+    const nextOffers = marketplaceOffers.map(record => record.id === offer.id ? nextOffer : record);
+    if (decision === 'approve') {
+        const deliveryId = offer.id;
+        if (merchantDeliveries.some(delivery => String(delivery.id) === String(deliveryId))) {
+            showToast('A delivery record already exists for this marketplace item.');
+            return;
+        }
+        const nextDeliveries = [...merchantDeliveries, {
+            id: deliveryId,
+            order: `MAP-${offer.id}`,
+            customer: 'Marketplace customer',
+            address: offer.dropoffArea,
+            driver: partner.name,
+            phone: partner.phone,
+            status: 'accepted',
+            partnerId: partner.id,
+            marketplace: true,
+            marketplaceOfferId: offer.id,
+            itemTitle: offer.title,
+            itemDescription: offer.description,
+            itemCategory: offer.category,
+            commissionAmount: offer.commissionAmount,
+            merchantName: offer.vendorName,
+            pickupAddress: offer.pickupAddress,
+            pickupCoordinates: offer.pickupCoordinates,
+            dropoffCoordinates: offer.dropoffCoordinates,
+            pickupToDropoffKm: offer.pickupToDropoffKm,
+            requestedAt: offer.requestedAt,
+            assignedAt: now,
+            updatedAt: now,
+            statusHistory: [
+                { status: 'requested', at: offer.requestedAt || now, actor: offer.requestedPartnerName || partner.name },
+                { status: 'accepted', at: now, actor: 'Platform admin' }
+            ]
+        }];
+        if (!saveMerchantCollections({ kiryaMarketplaceOffers: nextOffers, kiryaMerchantDeliveries: nextDeliveries })) return;
+        marketplaceOffers = nextOffers;
+        merchantDeliveries = nextDeliveries;
+        refreshMerchantAfterRiderWrite({ deliveries: nextDeliveries });
+        renderMerchantMarketplaceNotifications();
+        showToast(`${partner.name} is approved. ${offer.vendorName} has been notified to expect pickup.`);
+    } else if (saveMarketplaceOffers(nextOffers)) {
+        renderMarketplaceMapOffers();
+        showToast(`Request rejected. ${offer.title} is available for another rider.`);
+    }
+    renderAdminMarketplaceRequests();
+    renderAdminNav();
 }
 
 function updateRiderPickupRoute(location) {
@@ -2978,13 +3312,16 @@ function updateRiderPickupRoute(location) {
         directions.hidden = true;
         return;
     }
-    if (!merchantPickupCoordinates) {
+    const activeDelivery = getRiderActiveDelivery(readRiderDeliveries() || [], riderCurrentPartner());
+    const destination = activeDelivery?.marketplace ? activeDelivery.pickupCoordinates : merchantPickupCoordinates;
+    const pickupAddress = activeDelivery?.marketplace ? activeDelivery.pickupAddress : merchantPickupAddress;
+    if (!destination) {
         riderPickupRouteController?.abort();
         riderPickupRouteController = null;
         riderPickupRouteRequestId += 1;
         riderPickupLastRouteOrigin = null;
-        routeStatus.textContent = merchantPickupAddress
-            ? `${merchantPickupAddress} · business map pin not set`
+        routeStatus.textContent = pickupAddress
+            ? `${pickupAddress} · business map pin not set`
             : 'Merchant pickup map location has not been set.';
         directions.hidden = true;
         riderPickupRouteLayer?.remove();
@@ -2993,7 +3330,6 @@ function updateRiderPickupRoute(location) {
     }
 
     updateRiderPickupDestination();
-    const destination = merchantPickupCoordinates;
     const destinationKey = `${destination.latitude},${destination.longitude}`;
     const destinationChanged = riderPickupLastRouteDestination !== destinationKey;
     if (destinationChanged) {
@@ -3377,8 +3713,8 @@ function renderRiderAvailability() {
     const idleMessage = document.getElementById('riderIdleMsg');
     if (idleMessage && document.getElementById('riderDeliveryState').style.display !== 'none') return;
     if (idleMessage) idleMessage.textContent = isActive
-        ? 'You are online. New offers assigned by the merchant appear here.'
-        : partner.status === 'active' ? 'Go online to receive delivery offers.' : 'This partner account is inactive. Contact the merchant.';
+        ? 'You are online. Browse nearby map offers and request a pickup.'
+        : partner.status === 'active' ? 'Go online to request nearby pickups. Available jobs remain visible on the map.' : 'This partner account is inactive. Contact the merchant.';
 }
 
 function refreshMerchantAfterRiderWrite({ partners, deliveries, activeOrders, pastOrders } = {}) {
@@ -3393,6 +3729,7 @@ function refreshMerchantAfterRiderWrite({ partners, deliveries, activeOrders, pa
     if (deliveries || activeOrders || pastOrders) {
         renderMerchantActiveOrders();
         if (merchantAssignedRidersScreen?.classList.contains('active')) renderMerchantDeliveries();
+        renderMerchantMarketplaceNotifications();
         updateMerchantOrderMetrics();
         renderCustomerOrders();
     }
@@ -3548,13 +3885,14 @@ function renderRiderEarnings(deliveries, partner) {
     const completedCount = deliveries.filter(delivery =>
         riderOwnsDelivery(delivery, partner) && delivery.status === 'delivered'
     ).length;
+    const commissionEarned = completed.reduce((total, delivery) => total + Number(delivery.commissionAmount || 0), 0);
     document.getElementById('riderTripsToday').textContent = String(completed.length);
-    document.getElementById('riderCompletedSummary').textContent = `${completedCount} completed deliveries · payout rates are not configured`;
-    document.getElementById('riderEarningsToday').textContent = 'Payout n/a';
-    document.getElementById('riderEarningsSummary').textContent = 'Payout not configured';
+    document.getElementById('riderCompletedSummary').textContent = `${completedCount} completed deliveries · marketplace commissions only`;
+    document.getElementById('riderEarningsToday').textContent = formatMerchantCurrency(commissionEarned);
+    document.getElementById('riderEarningsSummary').textContent = `${formatMerchantCurrency(commissionEarned)} earned today`;
     const earningsList = document.getElementById('riderEarningsList');
     earningsList.innerHTML = completed.length ? completed.map(delivery =>
-        `<article class="rider-earning-card"><div class="rider-earning-card-top"><span>${escapeMerchantText(delivery.order)}</span><span>Delivered</span></div><p>Completed ${escapeMerchantText(new Date(delivery.updatedAt || delivery.assignedAt).toLocaleString())}. Payout amount is managed outside this prototype.</p></article>`
+        `<article class="rider-earning-card"><div class="rider-earning-card-top"><span>${escapeMerchantText(delivery.itemTitle || delivery.order)}</span><span>Delivered</span></div><p>Completed ${escapeMerchantText(new Date(delivery.updatedAt || delivery.assignedAt).toLocaleString())}.</p>${delivery.commissionAmount ? `<strong>${formatMerchantCurrency(delivery.commissionAmount)} commission</strong>` : '<p>Commission not recorded for this delivery.</p>'}</article>`
     ).join('') : '<div class="rider-empty-state">No completed deliveries today. Completed trip history will appear here.</div>';
 }
 
@@ -3576,17 +3914,28 @@ function renderRiderCurrentDelivery(delivery, partner) {
     dashboardState.style.display = 'none';
     riderCurrentStep = delivery.status === 'accepted' || delivery.status === 'assigned' ? 1 : 2;
     document.getElementById('riderCurrentOrderNumber').textContent = delivery.order;
+    const marketplaceDetails = document.getElementById('riderMarketplaceDeliveryDetails');
+    marketplaceDetails.hidden = !delivery.marketplace;
+    marketplaceDetails.textContent = delivery.marketplace
+        ? `${delivery.itemTitle} · ${formatMerchantCurrency(delivery.commissionAmount)} commission · approved by admin`
+        : '';
     document.getElementById('riderStepRiderName').textContent = partner.name;
     document.getElementById('riderStepRider').classList.toggle('active', isRiderOnline);
     document.getElementById('riderStepRider').style.opacity = isRiderOnline ? '1' : '0.55';
-    document.getElementById('riderPickupName').textContent = merchantProfile.name || order?.merchant || 'Merchant';
-    document.getElementById('riderPickupAddress').textContent = merchantPickupAddress || delivery.pickupAddress || order?.pickupAddress || 'Pickup address not recorded';
+    document.getElementById('riderPickupName').textContent = delivery.marketplace
+        ? delivery.merchantName || 'Marketplace vendor'
+        : merchantProfile.name || order?.merchant || 'Merchant';
+    document.getElementById('riderPickupAddress').textContent = delivery.marketplace
+        ? delivery.pickupAddress || 'Pickup address not recorded'
+        : merchantPickupAddress || delivery.pickupAddress || order?.pickupAddress || 'Pickup address not recorded';
     const businessCall = document.getElementById('riderPickupContact');
-    const businessPhone = String(merchantProfile.phone || '').replace(/[^\d+]/g, '');
+    const businessPhone = String(delivery.marketplace ? '' : merchantProfile.phone || '').replace(/[^\d+]/g, '');
     businessCall.href = businessPhone ? `tel:${businessPhone}` : '#';
     businessCall.hidden = !businessPhone;
-    document.getElementById('riderCustomerName').textContent = delivery.customer || 'Customer';
-    document.getElementById('riderDropoffAddress').textContent = delivery.address;
+    document.getElementById('riderCustomerName').textContent = delivery.marketplace ? 'Delivery drop-off' : delivery.customer || 'Customer';
+    document.getElementById('riderDropoffAddress').textContent = delivery.marketplace
+        ? `${delivery.address} · approximately ${Number(delivery.pickupToDropoffKm).toFixed(1)} km from pickup`
+        : delivery.address;
     const callLink = document.getElementById('riderCustomerCall');
     const phone = String(delivery.customerPhone || '').replace(/[^\d+]/g, '');
     callLink.href = phone ? `tel:${phone}` : '#';
@@ -3614,6 +3963,7 @@ function refreshRiderWorkflow() {
     renderRiderCurrentDelivery(activeDelivery, partner);
     renderRiderOrders(deliveries, partner, activeDelivery);
     renderRiderEarnings(deliveries, partner);
+    renderMarketplaceMapOffers();
     const pendingOffer = deliveries.find(delivery => String(delivery.id) === String(riderPendingOfferId));
     const pendingOfferIsValid = pendingOffer?.status === 'offered' &&
         riderOwnsDelivery(pendingOffer, partner) &&
@@ -3825,6 +4175,7 @@ function initRiderMap() {
     };
     L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(riderMap);
     refreshLiveRiderMaps();
+    renderMarketplaceMapOffers();
 }
 
 function initMerchantRiderTrackingMap() {
@@ -5182,7 +5533,26 @@ function renderMerchantDeliveries() {
         : '<tr><td class="merchant-record-empty" colspan="8">No rider assignments match your filters.</td></tr>';
     checkMerchantOverdueDeliveries();
     updateMerchantOrderMetrics();
+    renderMerchantMarketplaceNotifications();
     refreshLiveRiderMaps();
+}
+
+function renderMerchantMarketplaceNotifications() {
+    const list = document.getElementById('merchantMarketplaceNotifications');
+    if (!list) return;
+    const marketplaceDeliveries = merchantDeliveries
+        .filter(delivery => delivery.marketplace && delivery.status !== 'cancelled' && delivery.status !== 'failed')
+        .sort((first, second) => Date.parse(second.assignedAt || '') - Date.parse(first.assignedAt || ''));
+    list.innerHTML = marketplaceDeliveries.length ? marketplaceDeliveries.map(delivery => `
+      <article class="merchant-marketplace-notice-card">
+        <div><strong>${escapeMerchantText(delivery.itemTitle || 'Marketplace delivery')}</strong><span class="merchant-status-pill ${escapeMerchantText(delivery.status)}">${escapeMerchantText(merchantDeliveryStatusLabels[delivery.status] || delivery.status)}</span></div>
+        <p><strong>${escapeMerchantText(delivery.driver)}</strong> is coming to collect this item. Admin approved ${escapeMerchantText(delivery.assignedAt ? new Date(delivery.assignedAt).toLocaleString() : 'just now')}.</p>
+        <p>${escapeMerchantText(delivery.itemDescription || '')}</p>
+        <dl><div><dt>Pickup</dt><dd>${escapeMerchantText(delivery.pickupAddress || '—')}</dd></div>
+          <div><dt>Drop-off area</dt><dd>${escapeMerchantText(delivery.address || '—')}</dd></div>
+          <div><dt>Route estimate</dt><dd>~${Number(delivery.pickupToDropoffKm || 0).toFixed(1)} km</dd></div>
+          <div><dt>Rider commission</dt><dd>${formatMerchantCurrency(delivery.commissionAmount || 0)}</dd></div></dl>
+      </article>`).join('') : '<p class="merchant-marketplace-empty">Approved marketplace pickups will appear here.</p>';
 }
 
 function resetMerchantCustomerForm() {
@@ -6243,6 +6613,21 @@ renderMerchantActiveOrders();
 updateMerchantOrderMetrics();
 
 window.addEventListener('storage', event => {
+    if (event.key === 'kiryaMarketplaceOffers') {
+        try {
+            const offers = event.newValue === null ? marketplaceOfferSeed : JSON.parse(event.newValue);
+            if (!Array.isArray(offers) || !offers.every(isValidMarketplaceOffer)) throw new Error('Saved marketplace offers have an invalid format.');
+            marketplaceOffers = offers;
+            renderMarketplaceMapOffers();
+            renderAdminMarketplaceRequests();
+            renderAdminNav();
+            renderMerchantMarketplaceNotifications();
+        } catch (error) {
+            console.error('Unable to synchronize marketplace offers.', error);
+            showToast('A marketplace update could not be synchronized in this tab.');
+        }
+        return;
+    }
     if (event.key === riderLocationStorageKey) {
         refreshLiveRiderMaps();
         return;
