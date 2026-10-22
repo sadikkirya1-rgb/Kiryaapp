@@ -2,6 +2,7 @@
 import { appState, ui } from './modules/state.js';
 import { updateAddressSummary } from './modules/mapHelpers.js';
 import { computeCartSummary } from './modules/cartHelpers.js';
+import { ugandaRegionalOffers, ugandaRegionalCustomers, ugandaRegionalRiders, ugandaRegionalMerchants, ugandaRegionalTransactions } from './modules/ugandaDemoData.js';
 
 // --- Shared app state ---
 
@@ -2349,9 +2350,30 @@ function readCustomerWorkflowCollections() {
             if (!Array.isArray(records)) throw new Error(`Saved ${key} data is not a list.`);
             return records;
         };
+        const active = parseCollection('kiryaMerchantActiveOrders');
+        const past = parseCollection('kiryaMerchantPastOrders');
+        const knownPastIds = new Set(past.map(order => String(order.id)));
+        const regionalDemoHistory = ugandaRegionalOffers.map(offer => {
+            const customer = ugandaRegionalCustomers.find(record => record.id === offer.customerId);
+            return {
+                id: `${offer.orderNumber}-HIST`,
+                customer: offer.customerName,
+                customerId: offer.customerId,
+                phone: customer?.phone || '',
+                merchant: offer.vendorName,
+                items: offer.title,
+                total: offer.sampleOrderTotal || 'Sample order total',
+                date: 'Sample delivery history',
+                status: 'Delivered',
+                fulfillment: 'delivery',
+                deliveryAddress: offer.dropoffAddress,
+                demoSample: true,
+                createdAt: customer?.lastOrderAt || new Date().toISOString()
+            };
+        }).filter(order => !knownPastIds.has(String(order.id)));
         return {
-            active: parseCollection('kiryaMerchantActiveOrders'),
-            past: parseCollection('kiryaMerchantPastOrders'),
+            active,
+            past: [...past, ...regionalDemoHistory],
             deliveries: parseCollection('kiryaMerchantDeliveries')
         };
     } catch (error) {
@@ -2437,7 +2459,7 @@ function renderCustomerOrders() {
         const showLiveMap = order.deliveryId && ['accepted', 'assigned', 'picked-up', 'in-transit'].includes(order.deliveryStatus);
         const pickupAddress = order.pickupAddress || merchantPickupAddress;
         return `<article class="customer-order-card">
-          <div class="customer-order-heading"><span>${escapeMerchantText(order.id)} · ${escapeMerchantText(order.merchant || 'Kirya merchant')}</span><span class="customer-order-status">${escapeMerchantText(status)}</span></div>
+          <div class="customer-order-heading"><span>${escapeMerchantText(order.id)} · ${escapeMerchantText(order.merchant || 'Kirya merchant')}${order.demoSample ? ' · SAMPLE' : ''}</span><span class="customer-order-status">${escapeMerchantText(status)}</span></div>
           <p>${escapeMerchantText(order.items || '')}<br>${escapeMerchantText(order.total || '')}</p>
           ${pickupAddress ? `<p><strong>Pickup:</strong> ${escapeMerchantText(pickupAddress)}</p>` : ''}
           ${order.deliveryAddress ? `<p>Delivering to ${escapeMerchantText(order.deliveryAddress)}</p>` : ''}
@@ -2452,6 +2474,24 @@ function renderCustomerOrders() {
 }
 
 function openCustomerOrders() {
+    const select = document.getElementById('customerDemoProfileSelect');
+    if (select && !select.dataset.bound) {
+        const sampleCustomers = merchantCustomers.filter(customer => customer.demoSample);
+        select.innerHTML = `<option value="">Choose a sample profile to view demo orders</option>${sampleCustomers.map(customer => `<option value="${escapeMerchantText(customer.id)}">${escapeMerchantText(customer.name)} · ${escapeMerchantText(customer.address)}</option>`).join('')}`;
+        select.addEventListener('change', () => {
+            const customer = sampleCustomers.find(record => String(record.id) === select.value);
+            if (!customer) return;
+            userPhoneNumber = customer.phone;
+            recipientDetails.phone = customer.phone;
+            try {
+                localStorage.setItem('kiryaCustomerPhone', customer.phone);
+            } catch (error) {
+                console.error('Unable to save selected demo customer.', error);
+            }
+            renderCustomerOrders();
+        });
+        select.dataset.bound = 'true';
+    }
     renderCustomerOrders();
     document.getElementById('customerOrdersScreen').classList.add('active');
 }
@@ -2462,10 +2502,12 @@ document.getElementById('customerOrdersBack')?.addEventListener('click', () => {
 
 function openAdmin() {
     document.getElementById('adminScreen').classList.add('active');
+    renderAdminDemoMetrics();
     renderAdminMarketplaceRequests();
     renderAdminMarketplaceAudit();
     renderAdminRiderReview();
     renderAdminMarketplacePayouts();
+    renderAdminRegionalMerchants();
     if (document.querySelector('.admin-section.active')?.dataset.section === 'approvals') {
         initAdminMarketplaceMap();
         setTimeout(() => adminMarketplaceMap?.invalidateSize(), 100);
@@ -2523,8 +2565,15 @@ const marketplaceOfferSeed = [
         pickupToDropoffKm: 5.1,
         commissionAmount: 9000,
         status: 'available'
-    }
+    },
+    ...ugandaRegionalOffers
 ];
+
+function mergeDemoRecords(records, samples) {
+    const existingIds = new Set(records.map(record => String(record.id)));
+    const additions = samples.filter(record => !existingIds.has(String(record.id)));
+    return [...records, ...additions.map(record => ({ ...record }))];
+}
 
 function isValidMarketplaceOffer(offer) {
     const validCoordinate = coordinate => coordinate &&
@@ -2545,13 +2594,15 @@ function loadMarketplaceOffers() {
             localStorage.setItem('kiryaMarketplaceOffers', JSON.stringify(marketplaceOfferSeed));
             return marketplaceOfferSeed.map(offer => ({ ...offer }));
         }
-        const offers = JSON.parse(saved).map(offer => ({
+        const savedOffers = JSON.parse(saved).map(offer => ({
             ...offer,
             vendorCoordinates: offer.vendorCoordinates || offer.pickupCoordinates
         }));
+        const offers = mergeDemoRecords(savedOffers, ugandaRegionalOffers);
         if (!Array.isArray(offers) || !offers.every(isValidMarketplaceOffer)) {
             throw new Error('Saved marketplace offers have an invalid format.');
         }
+        if (offers.length !== savedOffers.length) localStorage.setItem('kiryaMarketplaceOffers', JSON.stringify(offers));
         return offers;
     } catch (error) {
         console.error('Unable to load marketplace offers.', error);
@@ -2590,15 +2641,50 @@ const adminDashboardData = [
     { merchant: 'Moses Rider', order: '#8771', amount: 420000, status: 'Verified', type: 'users', role: 'rider' },
     { merchant: 'Grace Admin', order: '#8759', amount: 310000, status: 'Active', type: 'users', role: 'user' },
     { merchant: 'Boda Hub', order: '#8745', amount: 2100000, status: 'Pending', type: 'orders', role: 'merchant' },
-    { merchant: 'Kampala Eats', order: '#8732', amount: 1180000, status: 'Cleared', type: 'revenue', role: 'merchant' }
+    { merchant: 'Kampala Eats', order: '#8732', amount: 1180000, status: 'Cleared', type: 'revenue', role: 'merchant' },
+    ...ugandaRegionalTransactions
 ];
 
 const adminUserData = [
     { name: 'J. Smith', role: 'Verified rider', group: 'riders', initials: 'JS', tone: 'green', action: 'View' },
     { name: 'A. Muwonge', role: 'Merchant', group: 'merchants', initials: 'AM', tone: 'blue', action: 'View' },
     { name: 'H. Kato', role: 'Customer', group: 'users', initials: 'HK', tone: 'amber', action: 'View' },
-    { name: 'L. Gikonyo', role: 'Suspended', group: 'compliance', initials: 'LG', tone: 'red', action: 'Review' }
+    { name: 'L. Gikonyo', role: 'Suspended', group: 'compliance', initials: 'LG', tone: 'red', action: 'Review' },
+    ...ugandaRegionalRiders.map(rider => ({
+        name: rider.name,
+        role: `Sample rider · ${rider.area}`,
+        group: 'riders',
+        initials: rider.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(),
+        tone: 'green',
+        action: 'View'
+    })),
+    ...ugandaRegionalCustomers.map(customer => ({
+        name: customer.name,
+        role: `Sample customer · ${customer.address}`,
+        group: 'users',
+        initials: customer.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(),
+        tone: 'amber',
+        action: 'View'
+    }))
 ];
+
+function renderAdminDemoMetrics() {
+    const sampleOrderValue = adminDashboardData
+        .filter(record => ['orders', 'revenue'].includes(record.type))
+        .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+    const activeRiders = merchantPartners.filter(partner => partner.status === 'active');
+    const availableRiders = activeRiders.filter(partner => partner.availability === 'available' && partner.verificationStatus === 'verified');
+    const demoJobs = marketplaceOffers.length + demoActiveOrders.length + dummyPastOrders.length;
+    const pendingReviews = marketplaceOffers.filter(offer => offer.status === 'requested').length +
+        merchantPartners.filter(partner => partner.verificationStatus === 'pending').length;
+    document.querySelector('[data-metric="revenue"]').textContent = formatMerchantCurrency(sampleOrderValue);
+    document.getElementById('adminRiderSampleNote').textContent = `${availableRiders.length} available · sample GPS clearly labeled`;
+    document.querySelector('[data-metric="riders"]').textContent = String(activeRiders.length);
+    document.getElementById('adminOrderSampleNote').textContent = `${demoJobs} sample records · not live platform volume`;
+    document.querySelector('[data-metric="orders"]').textContent = String(demoJobs);
+    document.getElementById('adminAlertSampleNote').textContent = `${pendingReviews} pending rider reviews`;
+    document.querySelector('[data-metric="alerts"]').textContent = String(pendingReviews);
+}
 
 const adminNavConfig = [
     { section: 'overview', icon: '◉', label: 'Overview', count: () => adminDashboardData.length + adminUserData.length },
@@ -2634,7 +2720,7 @@ function renderAdminTable() {
     const sortValue = document.getElementById('adminSortSelect')?.value || 'newest';
 
     let rows = [...adminDashboardData].filter((row) => {
-        const haystack = `${row.merchant} ${row.order} ${row.status} ${row.type}`.toLowerCase();
+        const haystack = `${row.merchant} ${row.order} ${row.area || ''} ${row.status} ${row.type}`.toLowerCase();
         const matchesSearch = !search || haystack.includes(search);
         const matchesFilter = selectedFilter === 'all' || row.type === selectedFilter || row.role === selectedFilter;
         return matchesSearch && matchesFilter;
@@ -2658,12 +2744,42 @@ function renderAdminTable() {
 
     tableBody.innerHTML = rows.map((row) => `
         <tr>
-            <td>${escapeHtml(row.merchant)}</td>
+            <td>${escapeHtml(row.merchant)}${row.area ? `<small class="admin-table-area">${escapeHtml(row.area)}</small>` : ''}</td>
             <td>${escapeHtml(row.order)}</td>
-            <td>UGX ${escapeHtml((row.amount / 1000000).toFixed(2))}M</td>
+            <td>${row.amount >= 1000000 ? `UGX ${escapeHtml((row.amount / 1000000).toFixed(2))}M` : `UGX ${escapeHtml(Number(row.amount).toLocaleString('en-UG'))}`}</td>
             <td><span class="status-badge ${getStatusClass(row.status)}">${escapeHtml(row.status)}</span></td>
         </tr>
     `).join('');
+}
+
+let adminRegionalMerchantControlsBound = false;
+
+function renderAdminRegionalMerchants() {
+        const list = document.getElementById('adminRegionalMerchantList');
+        const areaSelect = document.getElementById('adminRegionalMerchantArea');
+        const count = document.getElementById('adminRegionalMerchantCount');
+        if (!list || !areaSelect || !count) return;
+        const selectedArea = areaSelect.value || 'all';
+        const areas = [...new Set(ugandaRegionalMerchants.map(merchant => merchant.area))].sort((first, second) => first.localeCompare(second));
+        areaSelect.innerHTML = `<option value="all">All Uganda regions</option>${areas.map(area => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join('')}`;
+        areaSelect.value = areas.includes(selectedArea) ? selectedArea : 'all';
+        const search = (document.getElementById('adminRegionalMerchantSearch')?.value || '').trim().toLowerCase();
+        const selected = areaSelect.value;
+        const merchants = ugandaRegionalMerchants.filter(merchant =>
+                (selected === 'all' || merchant.area === selected) &&
+                `${merchant.name} ${merchant.category} ${merchant.area} ${merchant.address}`.toLowerCase().includes(search)
+        );
+        count.textContent = String(merchants.length);
+        list.innerHTML = merchants.length ? merchants.map(merchant => `
+            <article class="admin-regional-merchant-card">
+                <div><strong>${escapeHtml(merchant.name)}</strong><span>${escapeHtml(merchant.category)} · ${escapeHtml(merchant.area)}</span><small>${escapeHtml(merchant.address)} · ${merchant.ordersToday} sample orders today · ★ ${merchant.rating}</small></div>
+                <span class="merchant-status-pill delivered">${escapeHtml(merchant.status)} · sample</span>
+            </article>`).join('') : '<p class="admin-marketplace-empty">No sample merchants match this search.</p>';
+        if (!adminRegionalMerchantControlsBound) {
+                adminRegionalMerchantControlsBound = true;
+                document.getElementById('adminRegionalMerchantSearch')?.addEventListener('input', renderAdminRegionalMerchants);
+                areaSelect.addEventListener('change', renderAdminRegionalMerchants);
+        }
 }
 
 function renderAdminUsers() {
@@ -2770,6 +2886,7 @@ function bindAdminSectionNavigation() {
             }
             if (sectionName === 'riders') renderAdminRiderReview();
             if (sectionName === 'approvals') renderAdminMarketplaceAudit();
+            if (sectionName === 'merchants') renderAdminRegionalMerchants();
             if (sectionName === 'payouts') renderAdminMarketplacePayouts();
             if (sectionName === 'approvals') {
                 initAdminMarketplaceMap();
@@ -2909,12 +3026,42 @@ let customerTrackingMaps = new Map();
 let liveRiderMapRefreshTimer = null;
 const riderLocationStorageKey = 'kiryaRiderLiveLocations';
 const riderLocationMaxAgeMs = 120000;
+let riderLocationIsDemo = false;
+let riderDemoRegion = (() => {
+    try {
+        const saved = localStorage.getItem('kiryaRiderDemoRegion');
+        return ['live', 'kampala', 'wakiso', 'entebbe', 'jinja', 'mbarara', 'gulu', 'mbale', 'fort portal', 'masaka', 'lira'].includes(saved) ? saved : 'live';
+    } catch (error) {
+        return 'live';
+    }
+})();
 let customerTrackingOrders = [];
 
 const riderPartnerFallback = [
-    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', availability: 'off-duty', verificationStatus: 'verified' },
-    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', availability: 'off-duty', verificationStatus: 'verified' }
+    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', availability: 'off-duty', verificationStatus: 'verified', sampleCoordinates: { latitude: 0.3578, longitude: 32.6131 } },
+    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', availability: 'off-duty', verificationStatus: 'verified', sampleCoordinates: { latitude: 0.3080, longitude: 32.6240 } },
+    ...ugandaRegionalRiders
 ];
+const ugandaDemoAreaCenters = {
+    kampala: { latitude: 0.3476, longitude: 32.5825 },
+    wakiso: { latitude: 0.3476, longitude: 32.5825 },
+    entebbe: { latitude: 0.0515, longitude: 32.4634 },
+    jinja: { latitude: 0.4247, longitude: 33.2042 },
+    mbarara: { latitude: -0.6077, longitude: 30.6540 },
+    gulu: { latitude: 2.7742, longitude: 32.2995 },
+    mbale: { latitude: 1.0780, longitude: 34.1805 },
+    'fort portal': { latitude: 0.6705, longitude: 30.2745 },
+    masaka: { latitude: -0.3333, longitude: 31.7336 },
+    lira: { latitude: 2.2494, longitude: 32.8994 }
+};
+
+function getRiderDemoPosition(partner) {
+    if (riderDemoRegion !== 'live' && ugandaDemoAreaCenters[riderDemoRegion]) return ugandaDemoAreaCenters[riderDemoRegion];
+    if (partner?.sampleCoordinates) return partner.sampleCoordinates;
+    const area = String(partner?.area || '').toLowerCase();
+    const match = Object.entries(ugandaDemoAreaCenters).find(([name]) => area.includes(name));
+    return match?.[1] || ugandaDemoAreaCenters.kampala;
+}
 const riderActiveStatuses = ['accepted', 'assigned', 'picked-up', 'in-transit'];
 
 function readRiderCollection(key, fallback = []) {
@@ -3110,6 +3257,25 @@ function distanceBetweenCoordinates(first, second) {
     return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
+function getRiderMarketplacePosition() {
+    const liveMarkerLocation = riderLocationMarker?.getLatLng();
+    if (liveMarkerLocation) return { position: liveMarkerLocation, source: riderLocationIsDemo ? 'demo area' : 'live GPS' };
+    const partner = riderCurrentPartner();
+    const storedLocation = partner && getFreshRiderLocation(readLiveRiderLocations() || [], partner.id);
+    if (storedLocation) return { position: { lat: storedLocation.latitude, lng: storedLocation.longitude }, source: storedLocation.demoSample ? 'demo area' : 'live GPS' };
+    const sample = getRiderDemoPosition(partner);
+    return { position: { lat: sample.latitude, lng: sample.longitude }, source: 'sample area' };
+}
+
+function getOfferDistanceFromRider(offer) {
+    const { position, source } = getRiderMarketplacePosition();
+    const pickup = { lat: offer.pickupCoordinates.latitude, lng: offer.pickupCoordinates.longitude };
+    return {
+        distanceKm: distanceBetweenCoordinates(position, pickup) / 1000,
+        source
+    };
+}
+
 function marketplaceOfferIcon(offer) {
     const commission = Math.round(offer.commissionAmount / 1000);
     return L.divIcon({
@@ -3121,20 +3287,18 @@ function marketplaceOfferIcon(offer) {
 }
 
 function marketplaceOfferPopup(offer) {
-    const currentLocation = riderLocationMarker?.getLatLng();
-    const riderDistance = currentLocation
-        ? `${(distanceBetweenCoordinates(currentLocation, { lat: offer.pickupCoordinates.latitude, lng: offer.pickupCoordinates.longitude }) / 1000).toFixed(1)} km from you (straight-line)`
-        : 'Go online and share GPS to see distance from you';
+    const riderDistance = getOfferDistanceFromRider(offer);
     const isRequestable = isRiderOnline && riderCurrentPartner()?.status === 'active';
     return `<article class="marketplace-offer-popup">
       <span class="marketplace-offer-category">${escapeMerchantText(offer.category || 'Delivery')}</span>
-      <h3>${escapeMerchantText(offer.title)}</h3>
+    <h3>${escapeMerchantText(offer.orderNumber || `MAP-${offer.id}`)} · ${escapeMerchantText(offer.title)}</h3>
+    <p>${escapeMerchantText(offer.customerName || 'Sample customer')} · ${escapeMerchantText(offer.dropoffArea)}</p>
       <p>${escapeMerchantText(offer.description)}</p>
       <strong class="marketplace-commission">Rider commission · ${formatMerchantCurrency(offer.commissionAmount)}</strong>
       <dl><div><dt>Pickup</dt><dd>${escapeMerchantText(offer.pickupAddress)}</dd></div>
         <div><dt>Drop-off area</dt><dd>${escapeMerchantText(offer.dropoffArea)}</dd></div>
         <div><dt>Pickup to drop-off</dt><dd>~${Number(offer.pickupToDropoffKm).toFixed(1)} km route estimate</dd></div>
-        <div><dt>Pickup from you</dt><dd>${escapeMerchantText(riderDistance)}</dd></div></dl>
+        <div><dt>Pickup from you</dt><dd>${riderDistance.distanceKm.toFixed(1)} km · ${escapeMerchantText(riderDistance.source)} straight-line estimate</dd></div></dl>
       <button type="button" data-marketplace-request="${offer.id}" ${isRequestable ? '' : 'disabled'}>${isRequestable ? 'Request this pickup' : 'Go online to request'}</button>
       <small>Admin approval is required before the vendor receives a confirmed rider assignment.</small>
     </article>`;
@@ -3200,7 +3364,8 @@ function formatLocationAge(updatedAt) {
 
 function requestAdminMarketplaceRoute(offer, routeCoordinates) {
     const key = String(offer.id);
-    if (adminMarketplaceRouteCache.has(key) || adminMarketplaceRouteRequests.has(key)) return;
+    if (adminMarketplaceRouteCache.has(key) || adminMarketplaceRouteRequests.has(key) ||
+        adminMarketplaceRouteCache.size + adminMarketplaceRouteRequests.size >= 3) return;
     adminMarketplaceRouteRequests.add(key);
     const [pickup, dropoff] = routeCoordinates;
     const routeUrl = `https://router.project-osrm.org/route/v1/driving/${pickup[1]},${pickup[0]};${dropoff[1]},${dropoff[0]}?overview=full&geometries=geojson&steps=false`;
@@ -3240,6 +3405,7 @@ function initAdminMarketplaceMap() {
     const element = document.getElementById('adminMarketplaceMap');
     if (!element || adminMarketplaceMap) return;
     adminMarketplaceMap = createTrackingMap(element);
+    adminMarketplaceMap.setView([1.15, 32.35], 6);
     ensureLiveRiderMapRefresh();
     bindAdminMarketplaceMapControls();
     renderAdminMarketplaceMap();
@@ -3268,7 +3434,7 @@ function renderAdminMarketplaceMap() {
             ? savedLocation
             : null;
         const location = freshLocation || staleLocation;
-        const sample = samplePositions[index % samplePositions.length];
+        const sample = partner.sampleCoordinates || samplePositions[index % samplePositions.length];
         return {
             id: `partner-${partner.id}`,
             name: partner.name,
@@ -3278,7 +3444,8 @@ function renderAdminMarketplaceMap() {
             latitude: location?.latitude ?? sample.latitude,
             longitude: location?.longitude ?? sample.longitude,
             area: partner.area || '',
-            live: Boolean(freshLocation),
+            live: Boolean(freshLocation && !freshLocation.demoSample),
+            demo: Boolean(freshLocation?.demoSample),
             stale: Boolean(staleLocation),
             updatedAt: location?.updatedAt
         };
@@ -3293,7 +3460,8 @@ function renderAdminMarketplaceMap() {
         visibleKeys.add(key);
         const locationLabel = rider.live
             ? `Live GPS · ${formatLocationAge(rider.updatedAt)}`
-            : rider.stale ? `STALE GPS · last update ${formatLocationAge(rider.updatedAt)}` : 'Sample position · not live';
+            : rider.demo ? `Demo location · ${formatLocationAge(rider.updatedAt)}`
+                : rider.stale ? `STALE GPS · last update ${formatLocationAge(rider.updatedAt)}` : 'Sample position · not live';
         upsertAdminMarketplaceMarker(key, [rider.latitude, rider.longitude], adminRiderMapIcon(rider.vehicle, rider.stale),
             `<strong>${escapeMerchantText(rider.name)}</strong><br>${escapeMerchantText(rider.vehicle)} rider · ${escapeMerchantText(rider.availability)}<br>Verification: ${escapeMerchantText(rider.verificationStatus || 'verified demo')}<br>${escapeMerchantText(rider.area || 'Kampala')}<br>${escapeMerchantText(locationLabel)}`);
     });
@@ -3326,7 +3494,7 @@ function renderAdminMarketplaceMap() {
                 : `Sample estimate: ~${Number(offer.pickupToDropoffKm).toFixed(1)} km`;
             upsertAdminMarketplaceMarker(itemKey, pickup,
                 adminMapIcon('admin-map-item-icon', `<span aria-hidden="true">${escapeMerchantText(offer.icon || '📦')}</span><b>${formatMerchantCurrency(offer.commissionAmount)}</b>`, [118, 54], [59, 46]),
-                `<strong>${escapeMerchantText(offer.title)}</strong><br>${escapeMerchantText(offer.description)}<br>${escapeMerchantText(offer.vendorName)}<br>Commission: ${formatMerchantCurrency(offer.commissionAmount)}<br>${escapeMerchantText(estimateText)}<br>Status: ${escapeMerchantText(offer.status)}`);
+                `<strong>${escapeMerchantText(offer.orderNumber || `MAP-${offer.id}`)} · ${escapeMerchantText(offer.title)}</strong><br>${escapeMerchantText(offer.description)}<br>${escapeMerchantText(offer.customerName || 'Sample customer')}<br>${escapeMerchantText(offer.vendorName)}<br>Commission: ${formatMerchantCurrency(offer.commissionAmount)}<br>${escapeMerchantText(estimateText)}<br>Status: ${escapeMerchantText(offer.status)}`);
             const routeKey = `route:${id}`;
             visibleKeys.add(routeKey);
             const existingRoute = adminMarketplaceMarkers.get(routeKey);
@@ -3363,8 +3531,14 @@ function renderAdminMarketplaceMap() {
 
 function renderMarketplaceMapOffers() {
     const count = document.getElementById('riderMarketplaceCount');
-    const offers = marketplaceOffers.filter(offer => offer.status === 'available');
-    if (count) count.textContent = `${offers.length} available`;
+    const partner = riderCurrentPartner();
+    const riderPosition = getRiderMarketplacePosition().position;
+    const offers = marketplaceOffers.filter(offer => {
+        if (offer.status !== 'available') return false;
+        const pickup = { lat: offer.pickupCoordinates.latitude, lng: offer.pickupCoordinates.longitude };
+        return distanceBetweenCoordinates(riderPosition, pickup) / 1000 <= 35;
+    });
+    if (count) count.textContent = `${offers.length} nearby · ${partner?.area || 'Uganda'}`;
     if (!riderMap) return;
     const offerIds = new Set(offers.map(offer => String(offer.id)));
     for (const [id, marker] of marketplaceDeliveryMarkers) {
@@ -3460,6 +3634,7 @@ function requestMarketplaceDelivery(offerId) {
     renderAdminMarketplaceMap();
     renderAdminMarketplaceRequests();
     renderAdminMarketplaceAudit();
+    renderAdminDemoMetrics();
     renderAdminNav();
     showToast(`Request sent for ${offer.title}. Waiting for admin approval.`);
 }
@@ -3627,6 +3802,7 @@ function reviewAdminRider(partnerId, action) {
     renderRiderPartnerOptions();
     refreshRiderWorkflow();
     renderAdminMarketplaceMap();
+    renderAdminDemoMetrics();
     showToast(`${partner.name}: ${action} recorded in the admin audit.`);
 }
 
@@ -3678,8 +3854,9 @@ function reviewMarketplaceRequest(offerId, decision) {
         }
         const nextDeliveries = [...merchantDeliveries, {
             id: deliveryId,
-            order: `MAP-${offer.id}`,
-            customer: 'Marketplace customer',
+            order: offer.orderNumber || `MAP-${offer.id}`,
+            customer: offer.customerName || 'Marketplace customer',
+            customerId: offer.customerId || null,
             address: offer.dropoffArea,
             driver: partner.name,
             phone: partner.phone,
@@ -3723,6 +3900,7 @@ function reviewMarketplaceRequest(offerId, decision) {
     renderAdminMarketplaceRequests();
     renderAdminMarketplaceAudit();
     renderAdminNav();
+    renderAdminDemoMetrics();
 }
 
 function updateRiderPickupRoute(location) {
@@ -3825,9 +4003,10 @@ function updateRiderPickupRoute(location) {
 }
 
 function updateRiderMapLocation(location) {
+    riderLocationIsDemo = Boolean(location?.demoSample);
     const locationText = document.getElementById('riderStepLocation');
     if (locationText) locationText.textContent = location
-        ? `GPS · ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`
+        ? `${location.demoSample ? 'DEMO LOCATION' : 'GPS'} · ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`
         : isRiderOnline ? 'Waiting for your live GPS location…' : 'Go online to share your live GPS location.';
     if (!location) {
         if (riderMarkerAnimationFrame !== null) {
@@ -3836,6 +4015,10 @@ function updateRiderMapLocation(location) {
         }
         riderLocationMarker?.remove();
         riderLocationMarker = null;
+        if (riderMap && !isRiderOnline) {
+            const samplePosition = getRiderDemoPosition(riderCurrentPartner());
+            riderMap.setView([samplePosition.latitude, samplePosition.longitude], 12);
+        }
         updateRiderPickupRoute(null);
         return;
     }
@@ -3844,7 +4027,7 @@ function updateRiderMapLocation(location) {
     if (!riderLocationMarker) {
         riderLocationMarker = L.marker(position, { icon: liveRiderMarkerIcon() })
             .addTo(riderMap)
-            .bindPopup(`${escapeMerchantText(location.name)} · your live location`);
+            .bindPopup(`${escapeMerchantText(location.name)} · ${location.demoSample ? 'demo map position' : 'your live location'}`);
         riderMap.setView(position, 16);
     } else {
         if (riderMarkerAnimationFrame !== null) cancelAnimationFrame(riderMarkerAnimationFrame);
@@ -4028,6 +4211,27 @@ function stopRiderLocationTracking(partnerId) {
 function startRiderLocationTracking(partner) {
     if (riderLocationWatchId !== null || !partner) return;
     const status = document.getElementById('riderLocationStatus');
+    if (riderDemoRegion !== 'live') {
+        const position = getRiderDemoPosition(partner);
+        const location = {
+            partnerId: partner.id,
+            name: partner.name,
+            latitude: position.latitude,
+            longitude: position.longitude,
+            updatedAt: new Date().toISOString(),
+            demoSample: true
+        };
+        const locations = readLiveRiderLocations();
+        if (!locations) return;
+        if (!writeLiveRiderLocations([
+            ...locations.filter(record => String(record.partnerId) !== String(partner.id)),
+            location
+        ])) return;
+        if (status) status.textContent = `Demo position enabled · ${partner.area || 'Uganda'} · device GPS is not shared.`;
+        ensureLiveRiderMapRefresh();
+        refreshLiveRiderMaps();
+        return;
+    }
     if (!navigator.geolocation || !window.isSecureContext) {
         if (status) status.textContent = 'Live GPS requires location permission and a secure (HTTPS) connection.';
         showToast('Live rider tracking requires GPS permission and HTTPS.');
@@ -4106,7 +4310,7 @@ function setRiderAvailability(isAvailable, forceOffline = false) {
         showToast('Only an active, verified rider partner can go online.');
         return false;
     }
-    if (isAvailable && (!navigator.geolocation || !window.isSecureContext)) {
+    if (isAvailable && riderDemoRegion === 'live' && (!navigator.geolocation || !window.isSecureContext)) {
         showToast('Going online requires GPS support, location permission, and an HTTPS connection.');
         return false;
     }
@@ -4177,6 +4381,7 @@ function refreshMerchantAfterRiderWrite({ partners, deliveries, activeOrders, pa
         renderMerchantMarketplaceNotifications();
         renderAdminMarketplacePayouts();
         renderAdminMarketplaceAudit();
+        renderAdminDemoMetrics();
         updateMerchantOrderMetrics();
         renderCustomerOrders();
     }
@@ -4237,6 +4442,27 @@ function initializeRiderWorkspace() {
     if (!riderWorkspaceInitialized) {
         riderWorkspaceInitialized = true;
         renderRiderPartnerOptions();
+        const demoRegionSelect = document.getElementById('riderDemoRegionSelect');
+        if (demoRegionSelect) {
+            demoRegionSelect.value = riderDemoRegion;
+            demoRegionSelect.addEventListener('change', event => {
+                if (isRiderOnline) {
+                    event.target.value = riderDemoRegion;
+                    showToast('Go offline before changing between device GPS and demo map regions.');
+                    return;
+                }
+                riderDemoRegion = event.target.value;
+                try {
+                    localStorage.setItem('kiryaRiderDemoRegion', riderDemoRegion);
+                } catch (error) {
+                    console.error('Unable to save the selected demo region.', error);
+                }
+                const position = getRiderDemoPosition(riderCurrentPartner());
+                riderMap?.setView([position.latitude, position.longitude], 12);
+                renderMarketplaceMapOffers();
+                showToast(riderDemoRegion === 'live' ? 'Device GPS mode selected.' : `Demo map region set to ${riderDemoRegion}.`);
+            });
+        }
         document.querySelector('.rider-bottom-nav')?.addEventListener('click', event => {
             const button = event.target.closest('[data-rider-tab]');
             if (button) setRiderTab(button.dataset.riderTab);
@@ -4640,7 +4866,8 @@ function initRiderMap() {
     });
     const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 19 });
 
-    riderMap = L.map('riderMap', { zoomControl: false, layers: [streetLayer] }).setView([0.3476, 32.5825], 12);
+    const riderDemoPosition = getRiderDemoPosition(riderCurrentPartner());
+    riderMap = L.map('riderMap', { zoomControl: false, layers: [streetLayer] }).setView([riderDemoPosition.latitude, riderDemoPosition.longitude], 12);
 
     const baseMaps = {
         "Street View": streetLayer,
@@ -5514,6 +5741,13 @@ document.addEventListener('keydown', event => {
     }
 });
 
+const merchantOrderSamples = [
+    { id: '#8909', customer: 'Joel M. (sample)', customerId: 12, phone: '+256 700 030112', items: '1x Spicy Chicken Wings, 1x Fresh Orange Juice', total: 'UGX 38,000', received: '11:02 AM', status: 'new', demoSample: true, area: 'Ntinda, Kampala' },
+    { id: '#8908', customer: 'Esther A. (sample)', customerId: 13, phone: '+256 700 030113', items: '1x Chicken Pizza, 1x French Fries', total: 'UGX 50,000', received: '11:08 AM', status: 'preparing', demoSample: true, area: 'Kisaasi, Kampala' },
+    { id: '#8907', customer: 'Brian T. (sample)', customerId: 14, phone: '+256 700 030114', items: '2x Double Cheese Burger', total: 'UGX 50,000', received: '11:14 AM', status: 'ready', demoSample: true, area: 'Ntinda, Kampala' },
+    { id: '#8906', customer: 'Lydia K. (sample)', customerId: 15, phone: '+256 700 030115', items: '1x Spicy Chicken Wings, 2x Fresh Orange Juice', total: 'UGX 46,000', received: '11:19 AM', status: 'new', demoSample: true, area: 'Bukoto, Kampala' }
+];
+
 let demoActiveOrders = loadMerchantCollection('kiryaMerchantActiveOrders', [
     { id: '#8912', customer: 'Sarah N.', items: '2x Chicken Biryani, 1x Mango Juice', total: 'UGX 42,000', received: '10:42 AM', status: 'new' },
     { id: '#8911', customer: 'Daniel K.', items: '1x Family Pizza, 2x Soda', total: 'UGX 68,000', received: '10:35 AM', status: 'preparing' },
@@ -5524,18 +5758,28 @@ let demoActiveOrders = loadMerchantCollection('kiryaMerchantActiveOrders', [
     /\d/.test(order.total) && typeof order.received === 'string' &&
     ['new', 'preparing', 'ready'].includes(order.status)
 );
+const savedMerchantOrders = demoActiveOrders;
+demoActiveOrders = mergeDemoRecords(demoActiveOrders, merchantOrderSamples);
+if (demoActiveOrders.length !== savedMerchantOrders.length) saveMerchantCollection('kiryaMerchantActiveOrders', demoActiveOrders);
 
 let merchantCustomers = [
     { id: 1, name: 'Sarah N.', phone: '+256 772 123456', email: 'sarah@example.com', address: 'Kololo, Kampala', orders: 12, lastOrderAt: new Date(Date.now() - 1 * 86400000).toISOString() },
     { id: 2, name: 'Daniel K.', phone: '+256 701 234567', email: 'daniel@example.com', address: 'Ntinda, Kampala', orders: 8, lastOrderAt: new Date(Date.now() - 4 * 86400000).toISOString() },
-    { id: 3, name: 'Amina S.', phone: '+256 783 345678', email: 'amina@example.com', address: 'Bugolobi, Kampala', orders: 5, lastOrderAt: new Date(Date.now() - 2 * 86400000).toISOString() }
+    { id: 3, name: 'Amina S.', phone: '+256 783 345678', email: 'amina@example.com', address: 'Bugolobi, Kampala', orders: 5, lastOrderAt: new Date(Date.now() - 2 * 86400000).toISOString() },
+    { id: 12, name: 'Joel M. (sample)', phone: '+256 700 030112', email: 'joel.demo@example.test', address: 'Ntinda, Kampala', orders: 1, lastOrderAt: new Date().toISOString(), demoSample: true },
+    { id: 13, name: 'Esther A. (sample)', phone: '+256 700 030113', email: 'esther.demo@example.test', address: 'Kisaasi, Kampala', orders: 2, lastOrderAt: new Date().toISOString(), demoSample: true },
+    { id: 14, name: 'Brian T. (sample)', phone: '+256 700 030114', email: 'brian.demo@example.test', address: 'Ntinda, Kampala', orders: 3, lastOrderAt: new Date().toISOString(), demoSample: true },
+    { id: 15, name: 'Lydia K. (sample)', phone: '+256 700 030115', email: 'lydia.demo@example.test', address: 'Bukoto, Kampala', orders: 1, lastOrderAt: new Date().toISOString(), demoSample: true },
+    ...ugandaRegionalCustomers
 ];
 
-merchantCustomers = loadMerchantCollection('kiryaMerchantCustomers', merchantCustomers, customer =>
+const savedMerchantCustomers = loadMerchantCollection('kiryaMerchantCustomers', merchantCustomers, customer =>
     customer && Number.isInteger(customer.id) && typeof customer.name === 'string' &&
     typeof customer.phone === 'string' && typeof customer.email === 'string' &&
     typeof customer.address === 'string' && Number.isInteger(customer.orders) && customer.orders >= 0
 );
+merchantCustomers = mergeDemoRecords(savedMerchantCustomers, merchantCustomers);
+if (merchantCustomers.length !== savedMerchantCustomers.length) saveMerchantCollection('kiryaMerchantCustomers', merchantCustomers);
 
 let merchantNeedsOrderMigration = false;
 demoActiveOrders = demoActiveOrders.map(order => {
@@ -5570,20 +5814,23 @@ if (merchantNeedsOrderMigration) saveMerchantCollection('kiryaMerchantActiveOrde
 
 let merchantPartners = [
     { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', verificationStatus: 'verified' },
-    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', verificationStatus: 'verified' }
+    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', verificationStatus: 'verified' },
+    ...ugandaRegionalRiders
 ];
 
-merchantPartners = loadMerchantCollection('kiryaMerchantPartners', merchantPartners, partner =>
+const savedMerchantPartners = loadMerchantCollection('kiryaMerchantPartners', merchantPartners, partner =>
     partner && Number.isInteger(partner.id) && typeof partner.name === 'string' &&
     typeof partner.phone === 'string' && typeof partner.email === 'string' &&
     typeof partner.vehicle === 'string' && typeof partner.area === 'string' &&
     ['active', 'inactive'].includes(partner.status)
-).map(partner => ({
+);
+merchantPartners = mergeDemoRecords(savedMerchantPartners, merchantPartners).map(partner => ({
     ...partner,
     availability: ['available', 'off-duty'].includes(partner.availability) ? partner.availability : 'available',
     verificationStatus: ['verified', 'pending', 'rejected'].includes(partner.verificationStatus) ? partner.verificationStatus : 'verified',
     adminAudit: Array.isArray(partner.adminAudit) ? partner.adminAudit : []
 }));
+if (merchantPartners.length !== savedMerchantPartners.length) saveMerchantCollection('kiryaMerchantPartners', merchantPartners);
 
 let merchantDeliveries = [
     { id: 1, order: '#8911', customer: 'Daniel K.', address: 'Ntinda, Kampala', driver: 'James M.', phone: '+256 700 111222', status: 'in-transit' },

@@ -15,7 +15,7 @@ Kirya is a **browser-based frontend prototype** for a multi-role delivery ecosys
 | 🏪 **Merchant** | Seller Dashboard | Manage orders, pickup location, customers, and dispatch | 🧪 Prototype |
 | 🛡️ **Admin** | Platform Control | Inspect platform dashboard prototype | 🧪 Prototype |
 
-The role-specific entry pages embed `index.html`. In this prototype, all customer marketplace restaurant selections enter the single Al Reef demo merchant queue; the order retains its selected restaurant name, and riders use the configured demo pickup address. Merchant orders, customer tracking, rider assignments, and rider GPS locations share browser `localStorage` when opened on the same origin. The rider, merchant assignments, and customer order maps show recent rider GPS while the rider is online; customers only see the rider assigned to their active order. GPS requires location permission and HTTPS (or localhost). This does not synchronize across devices or provide authenticated identities, server-side concurrency, push notifications, turn-by-turn navigation, or configured rider payouts.
+The role-specific entry pages embed `index.html`. Customer checkout still routes to the single Al Reef demo merchant queue, while the separate Uganda marketplace fixture pack provides synthetic sample jobs, merchants, riders, and customers across Kampala, Entebbe/Wakiso, Jinja, Mbarara, Gulu, Mbale, Fort Portal, Masaka, and Lira. Merchant orders, customer tracking, rider assignments, and rider GPS locations share browser `localStorage` when opened on the same origin. The rider, merchant assignments, and customer order maps show recent rider GPS while the rider is online; customers only see the rider assigned to their active order. GPS requires location permission and HTTPS (or localhost). This does not synchronize across devices or provide authenticated identities, server-side concurrency, push notifications, turn-by-turn navigation, identity verification, or real payouts.
 
 ---
 
@@ -34,6 +34,17 @@ python3 -m http.server 8000
 - **Rider App:** http://localhost:8000/apps/rider/index.html
 - **Merchant App:** http://localhost:8000/apps/merchant/index.html
 - **Admin App:** http://localhost:8000/apps/admin/index.html
+
+### Demo Data Walkthrough
+
+All added accounts and orders are synthetic browser-demo records; they are not real Ugandan businesses or people. The regional fixtures cover Kampala, Entebbe/Wakiso, Jinja, Mbarara, Gulu, Mbale, Fort Portal, Masaka, and Lira.
+
+- **Customer:** Open Orders and choose a sample profile. For example, Naki T. uses `+256 700 010104` and has sample Entebbe order history.
+- **Rider:** Open Account, choose a regional demo rider, select a Demo map region such as Jinja, then go online to see nearby sample jobs without sharing device GPS.
+- **Admin:** Open Pickup approvals to inspect the Uganda-wide map, filter jobs and merchants, approve rider requests, and review the dispatch audit.
+- **Merchant:** Check the regional partner/customer directory and the additional Kampala order queue; approved marketplace jobs appear in Marketplace pickup notices.
+
+These flows use local browser storage and sample route/commission estimates. They are for UI testing only and do not send real notifications, verify identity, or transfer payouts.
 
 ---
 
@@ -100,6 +111,7 @@ Kiryaapp/
 - Checkout flow
 - Order tracking with merchant preparation and rider-delivery status
 - Active-order badge in customer navigation
+- Select a sample customer profile to inspect region-specific sample order history
 - Favorite restaurants
 - Order history
 - Profile management
@@ -109,6 +121,7 @@ Kiryaapp/
 - Rider bottom navigation: Home, Orders, Earnings, and Account
 - Review assigned merchant offers and accept or decline with a required reason
 - Browse sample food, grocery, and pharmacy delivery jobs on the rider map with commission, pickup/drop-off pins, route distance, and live-GPS distance to pickup
+- Test nearby offers across Kampala, Entebbe/Wakiso, Jinja, Mbarara, Gulu, Mbale, Fort Portal, Masaka, and Lira with the rider's demo-region selector
 - Request an available marketplace pickup; a platform admin must approve it before the job is assigned and the vendor is notified
 - New rider registrations stay off duty until admin verification; pickup/drop-off confirmations are rider attestations, not independent proof
 - Share current device GPS while online and advance deliveries through pickup, in-transit, and delivered
@@ -134,6 +147,7 @@ Kiryaapp/
 - Platform metrics dashboard
 - User/rider/merchant monitoring
 - Kampala operations map with partner transport icons, vendors, sample pickup items and commissions, route lines, and customer drop-off pins
+- Uganda demo merchant directory with region/category filtering and sample riders/customers/orders across eight additional regions
 - Map filters, layer toggles, fit-visible control, road route/ETA when routing is available, and live/stale/sample GPS labels
 - Rider verification, rejection/suspension audit, and manual commission ledger (recording a payout does not transfer money)
 - Review and approve or reject marketplace rider pickup requests

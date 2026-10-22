@@ -921,6 +921,20 @@
     <p class="rider-prototype-note">Prototype mode: choose a demo partner. Production rider identity and availability must be verified and saved by the server.</p>
     <label for="riderPartnerSelect">Rider account</label>
     <select id="riderPartnerSelect" class="rider-partner-select"></select>
+    <label for="riderDemoRegionSelect">Demo map region</label>
+    <select id="riderDemoRegionSelect" class="rider-partner-select">
+      <option value="live">Use device GPS</option>
+      <option value="kampala">Kampala</option>
+      <option value="entebbe">Entebbe / Wakiso</option>
+      <option value="jinja">Jinja</option>
+      <option value="mbarara">Mbarara</option>
+      <option value="gulu">Gulu</option>
+      <option value="mbale">Mbale</option>
+      <option value="fort portal">Fort Portal</option>
+      <option value="masaka">Masaka</option>
+      <option value="lira">Lira</option>
+    </select>
+    <p class="rider-demo-location-note">Selecting a demo region simulates a map position; it does not share device GPS.</p>
     <div class="rider-account-summary"><span>Vehicle</span><strong id="riderVehicleSummary">—</strong></div>
     <div class="rider-account-summary"><span>Service area</span><strong id="riderAreaSummary">—</strong></div>
     <button class="rider-support-button" id="riderSupportButton" type="button">Contact dispatch support</button>
@@ -965,6 +979,7 @@
     <div class="generic-title">Your orders</div>
   </div>
   <div class="generic-content customer-orders-content">
+    <label class="customer-demo-profile-label" for="customerDemoProfileSelect">Sample customer profile<select id="customerDemoProfileSelect"><option value="">Choose a sample profile to view demo orders</option></select></label>
     <p class="customer-orders-note">Merchant and rider updates appear here in this browser prototype.</p>
     <div id="customerOrdersList" class="customer-orders-list" aria-live="polite"></div>
   </div>
@@ -998,7 +1013,7 @@
           <label class="admin-search-wrap">
             <input id="adminSearchInput" type="search" placeholder="Search merchants, riders, orders..." aria-label="Search admin dashboard" />
           </label>
-          <div class="admin-status-pill"><span class="live-dot"></span> Live</div>
+          <div class="admin-status-pill admin-demo-status"><span class="demo-dot"></span> Demo data</div>
         </div>
       </div>
 
@@ -1025,24 +1040,24 @@
 
           <div class="admin-summary-grid" id="adminSummaryGrid">
             <div class="dashboard-card stat-card accent">
-              <div class="stat-label">Gross revenue</div>
-              <div class="stat-value" data-metric="revenue">UGX 2.85B</div>
-              <div class="stat-trend positive">+12.4% vs last week</div>
+              <div class="stat-label">Sample order value</div>
+              <div class="stat-value" data-metric="revenue">UGX 0</div>
+              <div class="stat-trend neutral" id="adminRevenueSampleNote">Demo records only</div>
             </div>
             <div class="dashboard-card stat-card">
-              <div class="stat-label">Active riders</div>
-              <div class="stat-value" data-metric="riders">1,350</div>
-              <div class="stat-trend positive">+86 online now</div>
+              <div class="stat-label">Rider partners</div>
+              <div class="stat-value" data-metric="riders">0</div>
+              <div class="stat-trend neutral" id="adminRiderSampleNote">0 available now</div>
             </div>
             <div class="dashboard-card stat-card">
-              <div class="stat-label">Orders today</div>
-              <div class="stat-value" data-metric="orders">4,822</div>
-              <div class="stat-trend neutral">96.8% completion</div>
+              <div class="stat-label">Demo orders and jobs</div>
+              <div class="stat-value" data-metric="orders">0</div>
+              <div class="stat-trend neutral" id="adminOrderSampleNote">Sample records across Uganda</div>
             </div>
             <div class="dashboard-card stat-card warning">
               <div class="stat-label">Open alerts</div>
-              <div class="stat-value" data-metric="alerts">03</div>
-              <div class="stat-trend negative">2 payment issues</div>
+              <div class="stat-value" data-metric="alerts">0</div>
+              <div class="stat-trend neutral" id="adminAlertSampleNote">Pending rider reviews</div>
             </div>
           </div>
 
@@ -1164,12 +1179,7 @@
               <h3>User directory</h3>
               <button class="ghost-btn" type="button">Add user</button>
             </div>
-            <div class="user-list expanded-list">
-              <div class="user-row"><div class="user-meta"><span class="user-avatar green">JS</span><div><strong>J. Smith</strong><small>Verified rider</small></div></div><button class="mini-btn" type="button">View</button></div>
-              <div class="user-row"><div class="user-meta"><span class="user-avatar blue">AM</span><div><strong>A. Muwonge</strong><small>Merchant</small></div></div><button class="mini-btn" type="button">View</button></div>
-              <div class="user-row"><div class="user-meta"><span class="user-avatar amber">HK</span><div><strong>H. Kato</strong><small>Customer</small></div></div><button class="mini-btn" type="button">View</button></div>
-              <div class="user-row"><div class="user-meta"><span class="user-avatar red">LG</span><div><strong>L. Gikonyo</strong><small>Suspended</small></div></div><button class="mini-btn danger" type="button">Review</button></div>
-            </div>
+            <div class="user-list expanded-list" id="adminFullUserList" aria-live="polite"></div>
           </div>
         </div>
 
@@ -1199,7 +1209,7 @@
           <div class="dashboard-card">
             <div class="section-header">
               <h3>Delivery marketplace map</h3>
-              <span class="tiny-pill">Sample operations</span>
+              <span class="tiny-pill">Uganda demo network</span>
             </div>
             <div class="admin-map-controls">
               <label>Job status<select id="adminMapStatusFilter"><option value="all">All jobs</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option></select></label>
@@ -1247,6 +1257,12 @@
               <div class="region-item"><span>Pizza Kingdom</span><div class="bar-track"><i style="width: 82%"></i></div><strong>82%</strong></div>
               <div class="region-item"><span>Fresh Mart</span><div class="bar-track"><i style="width: 68%"></i></div><strong>68%</strong></div>
             </div>
+            <div class="section-header admin-regional-merchant-heading"><h3>Regional demo merchants</h3><span class="tiny-pill" id="adminRegionalMerchantCount">0</span></div>
+            <div class="admin-regional-merchant-controls">
+              <label>Search<input id="adminRegionalMerchantSearch" type="search" placeholder="Vendor, category, or city" /></label>
+              <label>Region<select id="adminRegionalMerchantArea"><option value="all">All Uganda regions</option></select></label>
+            </div>
+            <div id="adminRegionalMerchantList" class="admin-regional-merchant-list" aria-live="polite"></div>
           </div>
         </div>
 

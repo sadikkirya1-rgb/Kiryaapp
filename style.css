@@ -1107,6 +1107,8 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .admin-search-wrap input { width: 100%; min-width: 180px; padding: 10px 12px; border-radius: 12px; background: #f1f5f9; color: #0f172a; border: 1px solid #e2e8f0; font-size: 0.85rem; box-sizing: border-box; }
 .admin-status-pill { background: rgba(16, 185, 129, 0.12); color: #047857; border-radius: 999px; padding: 8px 12px; font-size: 0.75rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
 .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2); }
+.demo-dot { width: 8px; height: 8px; border-radius: 50%; background: #d58a2a; display: inline-block; box-shadow: 0 0 0 4px rgba(213, 138, 42, 0.14); }
+.admin-demo-status { background: rgba(213, 138, 42, 0.12); color: #8a5d1b; }
 .admin-dashboard { background: linear-gradient(180deg, #f4f7fb 0%, #eef4ff 100%); }
 .admin-sidebar-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.34); opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 30; }
 .admin-sidebar-backdrop.active { opacity: 1; pointer-events: auto; }
@@ -1164,6 +1166,7 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .table-wrap { overflow-x: auto; }
 .admin-table { width: 100%; border-collapse: collapse; }
 .admin-table th, .admin-table td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 0.82rem; }
+.admin-table-area { display: block; margin-top: 3px; color: #64748b; font-size: 0.68rem; }
 .admin-table th { color: #64748b; font-weight: 700; }
 .status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 9px; font-weight: 700; font-size: 0.68rem; }
 .status-badge.success { background: rgba(16, 185, 129, 0.12); color: #047857; }
@@ -1398,6 +1401,16 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .admin-marketplace-audit-entry strong { color: #203b33; font-size: 0.78rem; }
 .admin-marketplace-audit-entry span, .admin-marketplace-audit-entry small { color: #687570; font-size: 0.7rem; }
 .admin-marketplace-audit-entry p { margin: 2px 0 0; color: #52645b; font-size: 0.72rem; line-height: 1.4; }
+.admin-regional-merchant-heading { margin-top: 22px; }
+.admin-regional-merchant-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 9px; margin-bottom: 10px; }
+.admin-regional-merchant-controls label { display: grid; gap: 4px; color: #52645b; font-size: 0.72rem; font-weight: 750; }
+.admin-regional-merchant-controls input, .admin-regional-merchant-controls select { min-height: 38px; padding: 7px 9px; border: 1px solid #d7e1dc; border-radius: 5px; background: #fff; color: #203b33; font: inherit; font-size: 0.76rem; }
+.admin-regional-merchant-list { display: grid; gap: 7px; }
+.admin-regional-merchant-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid #dce6e2; border-radius: 6px; background: #fff; }
+.admin-regional-merchant-card > div { display: grid; gap: 4px; min-width: 0; }
+.admin-regional-merchant-card strong { color: #203b33; font-size: 0.8rem; }
+.admin-regional-merchant-card span, .admin-regional-merchant-card small { color: #687570; font-size: 0.7rem; line-height: 1.4; }
+.admin-regional-merchant-card .merchant-status-pill { flex: 0 0 auto; color: #087a67; }
 .merchant-marketplace-notice { margin: 16px 0; padding: 14px; border: 1px solid #dce6e2; border-radius: 8px; background: #f9fbfa; }
 .merchant-marketplace-notice .merchant-section-heading { margin-bottom: 10px; }
 .merchant-marketplace-notice .merchant-section-heading h3 { margin: 0; font-size: 0.95rem; }
@@ -1460,6 +1473,8 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 #riderScreen .rider-offer-detail { color: #687570; font-size: 0.8rem; line-height: 1.45; }
 #riderScreen .rider-secondary-view[hidden], #riderScreen [hidden] { display: none !important; }
 #customerOrdersScreen .customer-orders-content { padding-bottom: 32px; }
+#customerOrdersScreen .customer-demo-profile-label { display: grid; max-width: 420px; gap: 5px; margin: 0 0 12px; color: #41534a; font-size: 0.78rem; font-weight: 750; }
+#customerOrdersScreen .customer-demo-profile-label select { min-height: 42px; padding: 8px 10px; border: 1px solid #d6e1db; border-radius: 7px; background: #fff; color: #203b33; font: inherit; }
 #customerOrdersScreen .customer-orders-note { color: #687570; font-size: 0.84rem; line-height: 1.5; }
 #customerOrdersScreen .customer-orders-list { display: grid; gap: 12px; }
 #customerOrdersScreen .customer-order-card { padding: 15px; border: 1px solid #e1e9e5; border-radius: 12px; background: #fff; }
