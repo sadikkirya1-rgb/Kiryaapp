@@ -3131,11 +3131,13 @@ function upsertAdminMarketplaceMarker(key, position, icon, popupContent) {
     if (!marker) {
         marker = L.marker(position, { icon, keyboard: true }).addTo(adminMarketplaceMap);
         marker.bindPopup(popupContent, { maxWidth: 300 });
+        marker.bindTooltip(popupContent, { direction: 'top', sticky: true, opacity: 0.98, className: 'admin-map-hover-tooltip' });
         adminMarketplaceMarkers.set(key, marker);
     } else {
         marker.setLatLng(position);
         marker.setIcon(icon);
         marker.setPopupContent(popupContent);
+        marker.setTooltipContent(popupContent);
     }
     return marker;
 }
