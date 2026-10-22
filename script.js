@@ -2,7 +2,7 @@
 import { appState, ui } from './modules/state.js';
 import { updateAddressSummary } from './modules/mapHelpers.js';
 import { computeCartSummary } from './modules/cartHelpers.js';
-import { ugandaRegionalOffers, ugandaRegionalCustomers, ugandaRegionalRiders, ugandaRegionalMerchants, ugandaRegionalTransactions } from './modules/ugandaDemoData.js';
+import { ugandaRegionalOffers, ugandaRegionalCustomers, ugandaRegionalRiders, ugandaRegionalMerchants, ugandaRegionalTransactions, ugandaCategoryOffers, ugandaCategoryMerchants, ugandaCategoryTransactions } from './modules/ugandaDemoData.js';
 
 // --- Shared app state ---
 
@@ -2353,7 +2353,7 @@ function readCustomerWorkflowCollections() {
         const active = parseCollection('kiryaMerchantActiveOrders');
         const past = parseCollection('kiryaMerchantPastOrders');
         const knownPastIds = new Set(past.map(order => String(order.id)));
-        const regionalDemoHistory = ugandaRegionalOffers.map(offer => {
+        const regionalDemoHistory = [...ugandaRegionalOffers, ...ugandaCategoryOffers].map(offer => {
             const customer = ugandaRegionalCustomers.find(record => record.id === offer.customerId);
             return {
                 id: `${offer.orderNumber}-HIST`,
@@ -2566,7 +2566,8 @@ const marketplaceOfferSeed = [
         commissionAmount: 9000,
         status: 'available'
     },
-    ...ugandaRegionalOffers
+    ...ugandaRegionalOffers,
+    ...ugandaCategoryOffers
 ];
 
 function mergeDemoRecords(records, samples) {
@@ -2598,7 +2599,7 @@ function loadMarketplaceOffers() {
             ...offer,
             vendorCoordinates: offer.vendorCoordinates || offer.pickupCoordinates
         }));
-        const offers = mergeDemoRecords(savedOffers, ugandaRegionalOffers);
+        const offers = mergeDemoRecords(savedOffers, [...ugandaRegionalOffers, ...ugandaCategoryOffers]);
         if (!Array.isArray(offers) || !offers.every(isValidMarketplaceOffer)) {
             throw new Error('Saved marketplace offers have an invalid format.');
         }
@@ -2612,6 +2613,7 @@ function loadMarketplaceOffers() {
 
 let marketplaceOffers = loadMarketplaceOffers();
 let adminMarketplaceMap = null;
+let adminMarketplaceCluster = null;
 let adminMarketplaceMapControlsInitialized = false;
 const adminMarketplaceMarkers = new Map();
 const adminMarketplaceRouteCache = new Map();
@@ -2642,7 +2644,8 @@ const adminDashboardData = [
     { merchant: 'Grace Admin', order: '#8759', amount: 310000, status: 'Active', type: 'users', role: 'user' },
     { merchant: 'Boda Hub', order: '#8745', amount: 2100000, status: 'Pending', type: 'orders', role: 'merchant' },
     { merchant: 'Kampala Eats', order: '#8732', amount: 1180000, status: 'Cleared', type: 'revenue', role: 'merchant' },
-    ...ugandaRegionalTransactions
+    ...ugandaRegionalTransactions,
+    ...ugandaCategoryTransactions
 ];
 
 const adminUserData = [
@@ -2759,13 +2762,14 @@ function renderAdminRegionalMerchants() {
         const areaSelect = document.getElementById('adminRegionalMerchantArea');
         const count = document.getElementById('adminRegionalMerchantCount');
         if (!list || !areaSelect || !count) return;
+        const demoMerchants = [...ugandaRegionalMerchants, ...ugandaCategoryMerchants];
         const selectedArea = areaSelect.value || 'all';
-        const areas = [...new Set(ugandaRegionalMerchants.map(merchant => merchant.area))].sort((first, second) => first.localeCompare(second));
+        const areas = [...new Set(demoMerchants.map(merchant => merchant.area))].sort((first, second) => first.localeCompare(second));
         areaSelect.innerHTML = `<option value="all">All Uganda regions</option>${areas.map(area => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join('')}`;
         areaSelect.value = areas.includes(selectedArea) ? selectedArea : 'all';
         const search = (document.getElementById('adminRegionalMerchantSearch')?.value || '').trim().toLowerCase();
         const selected = areaSelect.value;
-        const merchants = ugandaRegionalMerchants.filter(merchant =>
+        const merchants = demoMerchants.filter(merchant =>
                 (selected === 'all' || merchant.area === selected) &&
                 `${merchant.name} ${merchant.category} ${merchant.area} ${merchant.address}`.toLowerCase().includes(search)
         );
@@ -3276,11 +3280,31 @@ function getOfferDistanceFromRider(offer) {
     };
 }
 
+function getMerchantCategoryKey(category) {
+    const value = String(category || '').trim().toLowerCase();
+    if (['restaurant', 'food', 'bakery'].includes(value)) return 'restaurant';
+    if (['grocery', 'groceries'].includes(value)) return 'grocery';
+    if (value === 'pharmacy') return 'pharmacy';
+    if (value === 'bar') return 'bar';
+    if (value === 'retail') return 'retail';
+    return value || 'delivery';
+}
+
+function getMerchantCategoryIcon(category) {
+    return {
+        restaurant: '\ud83c\udf7d\ufe0f',
+        pharmacy: '\ud83d\udc8a',
+        bar: '\ud83c\udf78',
+        grocery: '\ud83d\uded2',
+        retail: '\ud83d\udecd\ufe0f'
+    }[getMerchantCategoryKey(category)] || '\ud83d\udce6';
+}
+
 function marketplaceOfferIcon(offer) {
     const commission = Math.round(offer.commissionAmount / 1000);
     return L.divIcon({
         className: 'marketplace-delivery-marker',
-        html: `<span aria-hidden="true">${escapeMerchantText(offer.icon || '📦')}</span><b>UGX ${commission}k</b>`,
+        html: `<span aria-hidden="true">${getMerchantCategoryIcon(offer.category)}</span><b>UGX ${commission}k</b>`,
         iconSize: [86, 58],
         iconAnchor: [43, 48]
     });
@@ -3317,7 +3341,7 @@ function adminRiderMapIcon(vehicle, isStale = false) {
 function upsertAdminMarketplaceMarker(key, position, icon, popupContent) {
     let marker = adminMarketplaceMarkers.get(key);
     if (!marker) {
-        marker = L.marker(position, { icon, keyboard: true }).addTo(adminMarketplaceMap);
+        marker = L.marker(position, { icon, keyboard: true }).addTo(adminMarketplaceCluster || adminMarketplaceMap);
         marker.bindPopup(popupContent, { maxWidth: 300 });
         marker.bindTooltip(popupContent, { direction: 'top', sticky: true, opacity: 0.98, className: 'admin-map-hover-tooltip' });
         adminMarketplaceMarkers.set(key, marker);
@@ -3326,6 +3350,7 @@ function upsertAdminMarketplaceMarker(key, position, icon, popupContent) {
         marker.setIcon(icon);
         marker.setPopupContent(popupContent);
         marker.setTooltipContent(popupContent);
+        adminMarketplaceCluster?.refreshClusters(marker);
     }
     return marker;
 }
@@ -3405,6 +3430,10 @@ function initAdminMarketplaceMap() {
     const element = document.getElementById('adminMarketplaceMap');
     if (!element || adminMarketplaceMap) return;
     adminMarketplaceMap = createTrackingMap(element);
+    if (L.markerClusterGroup) {
+        adminMarketplaceCluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 42, showCoverageOnHover: false });
+        adminMarketplaceMap.addLayer(adminMarketplaceCluster);
+    }
     adminMarketplaceMap.setView([1.15, 32.35], 6);
     ensureLiveRiderMapRefresh();
     bindAdminMarketplaceMapControls();
@@ -3469,7 +3498,7 @@ function renderAdminMarketplaceMap() {
     const visibleOffers = marketplaceOffers.filter(offer =>
         ['available', 'requested', 'approved'].includes(offer.status) &&
         (filters.status === 'all' || filters.status === offer.status) &&
-        (filters.category === 'all' || filters.category.toLowerCase() === String(offer.category || '').toLowerCase()) &&
+        (filters.category === 'all' || getMerchantCategoryKey(filters.category) === getMerchantCategoryKey(offer.category)) &&
         (!filters.area || `${offer.vendorName} ${offer.pickupAddress} ${offer.dropoffArea}`.toLowerCase().includes(filters.area))
     );
     visibleOffers.forEach(offer => {
@@ -3493,7 +3522,7 @@ function renderAdminMarketplaceMap() {
                 ? `Road route: ${routeEstimate.distanceKm.toFixed(1)} km · about ${routeEstimate.durationMinutes} min`
                 : `Sample estimate: ~${Number(offer.pickupToDropoffKm).toFixed(1)} km`;
             upsertAdminMarketplaceMarker(itemKey, pickup,
-                adminMapIcon('admin-map-item-icon', `<span aria-hidden="true">${escapeMerchantText(offer.icon || '📦')}</span><b>${formatMerchantCurrency(offer.commissionAmount)}</b>`, [118, 54], [59, 46]),
+                adminMapIcon('admin-map-item-icon', `<span aria-hidden="true">${getMerchantCategoryIcon(offer.category)}</span><b>${formatMerchantCurrency(offer.commissionAmount)}</b>`, [118, 54], [59, 46]),
                 `<strong>${escapeMerchantText(offer.orderNumber || `MAP-${offer.id}`)} · ${escapeMerchantText(offer.title)}</strong><br>${escapeMerchantText(offer.description)}<br>${escapeMerchantText(offer.customerName || 'Sample customer')}<br>${escapeMerchantText(offer.vendorName)}<br>Commission: ${formatMerchantCurrency(offer.commissionAmount)}<br>${escapeMerchantText(estimateText)}<br>Status: ${escapeMerchantText(offer.status)}`);
             const routeKey = `route:${id}`;
             visibleKeys.add(routeKey);
@@ -5560,7 +5589,7 @@ function loadMerchantProfile() {
         }
         return {
             name: typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : fallback.name,
-            category: ['Restaurant', 'Grocery', 'Pharmacy', 'Retail', 'Other'].includes(profile.category) ? profile.category : fallback.category,
+            category: ['Restaurant', 'Pharmacy', 'Bar', 'Grocery', 'Retail', 'Other'].includes(profile.category) ? profile.category : fallback.category,
             phone: typeof profile.phone === 'string' ? profile.phone : '',
             address: typeof profile.address === 'string' ? profile.address : ''
         };
@@ -7376,7 +7405,7 @@ window.addEventListener('storage', event => {
             }
             merchantProfile = {
                 name: typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : 'Al Reef Restaurant',
-                category: ['Restaurant', 'Grocery', 'Pharmacy', 'Retail', 'Other'].includes(profile.category) ? profile.category : 'Restaurant',
+                category: ['Restaurant', 'Pharmacy', 'Bar', 'Grocery', 'Retail', 'Other'].includes(profile.category) ? profile.category : 'Restaurant',
                 phone: typeof profile.phone === 'string' ? profile.phone : '',
                 address: typeof profile.address === 'string' ? profile.address : merchantPickupAddress
             };

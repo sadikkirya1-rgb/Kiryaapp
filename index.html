@@ -7,6 +7,8 @@
 <link rel="icon" type="image/svg+xml" href="assets/Food%20Courier.svg">
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -1213,7 +1215,7 @@
             </div>
             <div class="admin-map-controls">
               <label>Job status<select id="adminMapStatusFilter"><option value="all">All jobs</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option></select></label>
-              <label>Category<select id="adminMapCategoryFilter"><option value="all">All categories</option><option value="Food">Food</option><option value="Groceries">Groceries</option><option value="Pharmacy">Pharmacy</option><option value="Retail">Retail</option></select></label>
+              <label>Category<select id="adminMapCategoryFilter"><option value="all">All categories</option><option value="Restaurant">Restaurant</option><option value="Pharmacy">Pharmacy</option><option value="Bar">Bar</option><option value="Grocery">Grocery</option><option value="Retail">Retail</option></select></label>
               <label>Rider vehicle<select id="adminMapVehicleFilter"><option value="all">All vehicles</option><option value="bike">Bike</option><option value="car">Car</option><option value="walking">Walking</option></select></label>
               <label>Area<input id="adminMapAreaFilter" type="search" placeholder="Search area or vendor" /></label>
               <button class="admin-map-fit" id="adminMapFitVisible" type="button">Fit visible markers</button>
@@ -1231,7 +1233,12 @@
               <span><i class="admin-map-icon">🚗</i> Car rider</span>
               <span><i class="admin-map-icon">🚶</i> Walking rider</span>
               <span><i class="admin-map-icon">🏪</i> Vendor</span>
-              <span><i class="admin-map-icon">🍱</i> Available item + commission</span>
+              <span><i class="admin-map-icon">🍽️</i> Restaurant</span>
+              <span><i class="admin-map-icon">💊</i> Pharmacy</span>
+              <span><i class="admin-map-icon">🍸</i> Bar</span>
+              <span><i class="admin-map-icon">🛒</i> Grocery</span>
+              <span><i class="admin-map-icon">🛍️</i> Retail</span>
+              <span>Commission badge on each available order</span>
               <span><i class="admin-map-icon drop">⌖</i> Customer drop-off</span>
             </div>
             <div class="section-header">
@@ -1406,7 +1413,7 @@
       <p>Keep your business details and pickup pin up to date so riders can find you and estimate their trip.</p>
       <div class="merchant-profile-grid">
         <label>Business name<input id="merchantBusinessName" type="text" maxlength="120" autocomplete="organization" required></label>
-        <label>Business type<select id="merchantBusinessCategory" required><option value="">Select business type</option><option value="Restaurant">Restaurant</option><option value="Grocery">Grocery</option><option value="Pharmacy">Pharmacy</option><option value="Retail">Retail</option><option value="Other">Other</option></select></label>
+        <label>Business type<select id="merchantBusinessCategory" required><option value="">Select business type</option><option value="Restaurant">Restaurant</option><option value="Pharmacy">Pharmacy</option><option value="Bar">Bar</option><option value="Grocery">Grocery</option><option value="Retail">Retail</option><option value="Other">Other</option></select></label>
         <label>Business phone<input id="merchantBusinessPhone" type="tel" maxlength="24" autocomplete="tel" placeholder="Optional contact number"></label>
       </div>
       <div class="merchant-pickup-setting-row">
@@ -1675,6 +1682,7 @@
 <audio id="orderNotificationSound" src="data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAZAAAAn4AA1Z3j9gAADUAAAAAn4AB1Z3j9gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//tAwc/83RgtwAAAAAAD/9dwYwQkAAAQAAAACAAADSAAAA0gAAA1AAAASgAAAEgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFgAAAFg" ></audio>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script type="module" src="script.js"></script>
 </body>

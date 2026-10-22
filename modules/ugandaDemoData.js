@@ -218,3 +218,106 @@ export const ugandaRegionalTransactions = [
   { merchant: 'Masaka Oven House', order: 'UG-MSK-1010', amount: 29000, status: 'Pending', type: 'orders', role: 'merchant', area: 'Masaka' },
   { merchant: 'Lira Family Grocer', order: 'UG-LIR-1011', amount: 41000, status: 'Pending', type: 'orders', role: 'merchant', area: 'Lira' }
 ];
+
+const ugandaCategoryRegions = [
+  { code: 'KLA', area: 'Kampala', address: 'Central Kampala', latitude: 0.3476, longitude: 32.5825 },
+  { code: 'ENT', area: 'Entebbe, Wakiso', address: 'Entebbe town', latitude: 0.0522, longitude: 32.4637 },
+  { code: 'JIN', area: 'Jinja', address: 'Jinja town centre', latitude: 0.4252, longitude: 33.2034 },
+  { code: 'MBR', area: 'Mbarara', address: 'Mbarara town centre', latitude: -0.6072, longitude: 30.6545 },
+  { code: 'GUL', area: 'Gulu', address: 'Gulu town centre', latitude: 2.7747, longitude: 32.2990 }
+];
+
+const ugandaMerchantCategoryGroups = [
+  {
+    category: 'Restaurant',
+    icon: '\ud83c\udf7d\ufe0f',
+    vendors: ['Kampala Garden Kitchen', 'Entebbe Shoreline Meals', 'Jinja Nile Plate', 'Mbarara Town Kitchen', 'Gulu Acholi Bistro'],
+    items: ['Grilled chicken meal', 'Family rice meal box', 'Local lunch combo', 'Beef stew and matooke', 'Chicken and posho lunch'],
+    commission: 8000
+  },
+  {
+    category: 'Pharmacy',
+    icon: '\ud83d\udc8a',
+    vendors: ['Kampala Care Pharmacy', 'Entebbe Health Point', 'Jinja Family Pharmacy', 'Mbarara Wellness Pharmacy', 'Gulu Community Pharmacy'],
+    items: ['Sealed pharmacy parcel', 'First-aid essentials', 'Personal care order', 'Prescription collection', 'Health supplies parcel'],
+    commission: 9000
+  },
+  {
+    category: 'Bar',
+    icon: '\ud83c\udf78',
+    vendors: ['Kampala Rooftop Bar', 'Entebbe Sunset Lounge', 'Jinja River Social', 'Mbarara Night Garden', 'Gulu Central Lounge'],
+    items: ['Sealed soft drink pack', 'Juice and mixer set', 'Non-alcoholic drinks pack', 'Event refreshments box', 'Chilled beverage order'],
+    commission: 8500
+  },
+  {
+    category: 'Grocery',
+    icon: '\ud83d\uded2',
+    vendors: ['Kampala Daily Grocer', 'Entebbe Fresh Basket', 'Jinja Market Select', 'Mbarara Family Foods', 'Gulu Fresh Mart'],
+    items: ['Household grocery bag', 'Fruit and vegetable basket', 'Weekly staples parcel', 'Fresh produce order', 'Market essentials bag'],
+    commission: 7500
+  },
+  {
+    category: 'Retail',
+    icon: '\ud83d\udecd\ufe0f',
+    vendors: ['Kampala Home & More', 'Entebbe Everyday Shop', 'Jinja Town Supplies', 'Mbarara Essentials Store', 'Gulu City Retail'],
+    items: ['Home essentials parcel', 'Phone accessory package', 'Small household item', 'Personal items package', 'Retail pickup parcel'],
+    commission: 8000
+  }
+];
+
+export const ugandaCategoryOffers = ugandaMerchantCategoryGroups.flatMap((group, groupIndex) =>
+  group.vendors.map((vendorName, regionIndex) => {
+    const region = ugandaCategoryRegions[regionIndex];
+    const offerId = 1201 + groupIndex * 5 + regionIndex;
+    const orderNumber = `UG-${region.code}-${String(offerId).slice(-4)}`;
+    const customer = ugandaRegionalCustomers[(groupIndex * 5 + regionIndex) % ugandaRegionalCustomers.length];
+    const latitudeAdjustment = (groupIndex % 3) * 0.0005;
+    const longitudeAdjustment = (regionIndex % 3) * 0.0004;
+    return {
+      id: offerId,
+      orderNumber,
+      customerId: customer.id,
+      customerName: customer.name,
+      title: group.items[regionIndex],
+      description: `Sample ${group.category.toLowerCase()} delivery, packed and ready for pickup.`,
+      category: group.category,
+      icon: group.icon,
+      vendorName,
+      pickupAddress: region.address,
+      pickupCoordinates: { latitude: region.latitude + latitudeAdjustment, longitude: region.longitude + longitudeAdjustment },
+      vendorCoordinates: { latitude: region.latitude + latitudeAdjustment + 0.0004, longitude: region.longitude + longitudeAdjustment + 0.0003 },
+      dropoffAddress: `${region.area} delivery area`,
+      dropoffArea: region.area,
+      dropoffCoordinates: { latitude: region.latitude + 0.006 + latitudeAdjustment, longitude: region.longitude + 0.006 + longitudeAdjustment },
+      pickupToDropoffKm: Number((2.3 + groupIndex * 0.35 + regionIndex * 0.18).toFixed(1)),
+      sampleOrderTotal: `UGX ${(24000 + groupIndex * 5000 + regionIndex * 3000).toLocaleString('en-UG')}`,
+      commissionAmount: group.commission + regionIndex * 250,
+      status: 'available',
+      demoSample: true
+    };
+  })
+);
+
+export const ugandaCategoryMerchants = ugandaCategoryOffers.map(offer => ({
+  id: `UG-${offer.id}`,
+  name: offer.vendorName,
+  category: offer.category,
+  area: offer.dropoffArea,
+  address: offer.pickupAddress,
+  coordinates: offer.vendorCoordinates,
+  status: 'Open',
+  ordersToday: 5 + (offer.id % 18),
+  rating: Number((4.2 + (offer.id % 8) * 0.1).toFixed(1)),
+  sample: true
+}));
+
+export const ugandaCategoryTransactions = ugandaCategoryOffers.map(offer => ({
+  merchant: offer.vendorName,
+  order: offer.orderNumber,
+  amount: Number(offer.sampleOrderTotal.replace(/[^0-9]/g, '')),
+  status: 'Pending',
+  type: 'orders',
+  role: 'merchant',
+  area: offer.dropoffArea,
+  category: offer.category
+}));
