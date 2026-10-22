@@ -1189,6 +1189,9 @@
               <div class="alert-item info"><div class="alert-icon">⏱</div><div><strong>Rider M. Kasozi</strong><p>Average ETA is 11 minutes.</p></div></div>
               <div class="alert-item warning"><div class="alert-icon">⚠</div><div><strong>Rider P. Ndugwa</strong><p>Route delay in downtown zone.</p></div></div>
             </div>
+            <div class="section-header admin-rider-review-heading"><h3>Partner verification &amp; access</h3></div>
+            <p class="admin-rider-review-note">Prototype review only: rider identity and vehicle documents are not uploaded or independently verified.</p>
+            <div id="adminRiderReviewList" class="admin-rider-review-list" aria-live="polite"></div>
           </div>
         </div>
 
@@ -1198,6 +1201,20 @@
               <h3>Delivery marketplace map</h3>
               <span class="tiny-pill">Sample operations</span>
             </div>
+            <div class="admin-map-controls">
+              <label>Job status<select id="adminMapStatusFilter"><option value="all">All jobs</option><option value="available">Available</option><option value="requested">Requested</option><option value="approved">Approved</option></select></label>
+              <label>Category<select id="adminMapCategoryFilter"><option value="all">All categories</option><option value="Food">Food</option><option value="Groceries">Groceries</option><option value="Pharmacy">Pharmacy</option><option value="Retail">Retail</option></select></label>
+              <label>Rider vehicle<select id="adminMapVehicleFilter"><option value="all">All vehicles</option><option value="bike">Bike</option><option value="car">Car</option><option value="walking">Walking</option></select></label>
+              <label>Area<input id="adminMapAreaFilter" type="search" placeholder="Search area or vendor" /></label>
+              <button class="admin-map-fit" id="adminMapFitVisible" type="button">Fit visible markers</button>
+            </div>
+            <div class="admin-map-layer-controls" aria-label="Visible map layers">
+              <label><input id="adminMapShowRiders" type="checkbox" checked /> Riders</label>
+              <label><input id="adminMapShowVendors" type="checkbox" checked /> Vendors</label>
+              <label><input id="adminMapShowItems" type="checkbox" checked /> Items</label>
+              <label><input id="adminMapShowDropoffs" type="checkbox" checked /> Drop-offs</label>
+            </div>
+            <p id="adminMapDataStatus" class="admin-map-data-status" role="status">Sample and live map data are labeled on each rider marker.</p>
             <div id="adminMarketplaceMap" class="admin-marketplace-map" role="region" aria-label="Map of available items, vendors, delivery destinations, and rider partners"></div>
             <div class="admin-marketplace-map-legend" aria-label="Map legend">
               <span><i class="admin-map-icon">🏍️</i> Bike rider</span>
@@ -1213,6 +1230,8 @@
             </div>
             <p class="admin-marketplace-note">Review rider identity and delivery details before assigning a marketplace job.</p>
             <div id="adminMarketplaceRequests" class="admin-marketplace-requests" aria-live="polite"></div>
+            <div class="section-header admin-marketplace-audit-heading"><h3>Dispatch audit trail</h3><span>Requests, confirmations, and notices</span></div>
+            <div id="adminMarketplaceAudit" class="admin-marketplace-audit" aria-live="polite"></div>
           </div>
         </div>
 
@@ -1249,6 +1268,8 @@
                 <div class="stat-trend positive">+8.1% uplift</div>
               </div>
             </div>
+            <div class="section-header admin-marketplace-payout-heading"><h3>Marketplace rider commissions</h3><span class="tiny-pill">Prototype ledger</span></div>
+            <div id="adminMarketplacePayouts" class="admin-marketplace-payouts" aria-live="polite"></div>
           </div>
         </div>
 

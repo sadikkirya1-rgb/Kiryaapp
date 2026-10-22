@@ -2463,6 +2463,9 @@ document.getElementById('customerOrdersBack')?.addEventListener('click', () => {
 function openAdmin() {
     document.getElementById('adminScreen').classList.add('active');
     renderAdminMarketplaceRequests();
+    renderAdminMarketplaceAudit();
+    renderAdminRiderReview();
+    renderAdminMarketplacePayouts();
     if (document.querySelector('.admin-section.active')?.dataset.section === 'approvals') {
         initAdminMarketplaceMap();
         setTimeout(() => adminMarketplaceMap?.invalidateSize(), 100);
@@ -2532,7 +2535,7 @@ function isValidMarketplaceOffer(offer) {
         typeof offer.pickupAddress === 'string' && typeof offer.dropoffArea === 'string' &&
         validCoordinate(offer.pickupCoordinates) && validCoordinate(offer.vendorCoordinates) && validCoordinate(offer.dropoffCoordinates) &&
         Number.isFinite(offer.pickupToDropoffKm) && Number.isFinite(offer.commissionAmount) &&
-        ['available', 'requested', 'approved', 'rejected'].includes(offer.status);
+        ['available', 'requested', 'approved', 'rejected', 'delivered'].includes(offer.status);
 }
 
 function loadMarketplaceOffers() {
@@ -2558,10 +2561,13 @@ function loadMarketplaceOffers() {
 
 let marketplaceOffers = loadMarketplaceOffers();
 let adminMarketplaceMap = null;
+let adminMarketplaceMapControlsInitialized = false;
 const adminMarketplaceMarkers = new Map();
+const adminMarketplaceRouteCache = new Map();
+const adminMarketplaceRouteRequests = new Set();
 const adminMapDemoRiders = [
-    { id: 'sample-car', name: 'Noah K. (sample)', vehicle: 'Car', availability: 'available', latitude: 0.3631, longitude: 32.6010 },
-    { id: 'sample-walk', name: 'Patrick O. (sample)', vehicle: 'Walking', availability: 'available', latitude: 0.3251, longitude: 32.5704 }
+    { id: 'sample-car', name: 'Noah K. (sample)', vehicle: 'Car', availability: 'available', verificationStatus: 'verified demo', area: 'Naguru, Kampala', latitude: 0.3631, longitude: 32.6010 },
+    { id: 'sample-walk', name: 'Patrick O. (sample)', vehicle: 'Walking', availability: 'available', verificationStatus: 'verified demo', area: 'Kampala Central', latitude: 0.3251, longitude: 32.5704 }
 ];
 
 function saveMarketplaceOffers(offers) {
@@ -2762,6 +2768,9 @@ function bindAdminSectionNavigation() {
                 renderAdminTable();
                 renderAdminUsers();
             }
+            if (sectionName === 'riders') renderAdminRiderReview();
+            if (sectionName === 'approvals') renderAdminMarketplaceAudit();
+            if (sectionName === 'payouts') renderAdminMarketplacePayouts();
             if (sectionName === 'approvals') {
                 initAdminMarketplaceMap();
                 renderAdminMarketplaceMap();
@@ -2838,6 +2847,14 @@ document.getElementById('adminMarketplaceRequests')?.addEventListener('click', e
     const button = event.target.closest('[data-marketplace-review]');
     if (button) reviewMarketplaceRequest(button.dataset.marketplaceId, button.dataset.marketplaceReview);
 });
+document.getElementById('adminRiderReviewList')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-admin-rider-action]');
+    if (button) reviewAdminRider(button.dataset.partnerId, button.dataset.adminRiderAction);
+});
+document.getElementById('adminMarketplacePayouts')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-marketplace-payout]');
+    if (button) recordMarketplacePayout(button.dataset.marketplacePayout);
+});
 
 const sideMenuOverlay = document.getElementById('sideMenuOverlay');
 if(sideMenuOverlay) sideMenuOverlay.addEventListener('click', closeProfile);
@@ -2895,8 +2912,8 @@ const riderLocationMaxAgeMs = 120000;
 let customerTrackingOrders = [];
 
 const riderPartnerFallback = [
-    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', availability: 'off-duty' },
-    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', availability: 'off-duty' }
+    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', availability: 'off-duty', verificationStatus: 'verified' },
+    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', availability: 'off-duty', verificationStatus: 'verified' }
 ];
 const riderActiveStatuses = ['accepted', 'assigned', 'picked-up', 'in-transit'];
 
@@ -2906,6 +2923,13 @@ function readRiderCollection(key, fallback = []) {
         if (raw === null) return fallback.map(record => ({ ...record }));
         const records = JSON.parse(raw);
         if (!Array.isArray(records)) throw new Error(`Saved ${key} data is not a list.`);
+        if (key === 'kiryaMerchantPartners') {
+            return records.map(partner => ({
+                ...partner,
+                verificationStatus: ['verified', 'pending', 'rejected'].includes(partner.verificationStatus) ? partner.verificationStatus : 'verified',
+                adminAudit: Array.isArray(partner.adminAudit) ? partner.adminAudit : []
+            }));
+        }
         return records;
     } catch (error) {
         console.error(`Unable to read rider workflow data for ${key}.`, error);
@@ -3120,10 +3144,10 @@ function adminMapIcon(className, markup, iconSize = [40, 42], iconAnchor = [20, 
     return L.divIcon({ className: `admin-map-transparent-icon ${className}`, html: markup, iconSize, iconAnchor });
 }
 
-function adminRiderMapIcon(vehicle) {
+function adminRiderMapIcon(vehicle, isStale = false) {
     const value = String(vehicle || '').toLowerCase();
     const symbol = /car|van|auto/.test(value) ? '🚗' : /walk|foot/.test(value) ? '🚶' : /bicycle|cycle/.test(value) ? '🚲' : '🏍️';
-    return adminMapIcon('admin-map-rider-icon', `<span aria-hidden="true">${symbol}</span>`);
+    return adminMapIcon(`admin-map-rider-icon${isStale ? ' stale' : ''}`, `<span aria-hidden="true">${symbol}</span>`);
 }
 
 function upsertAdminMarketplaceMarker(key, position, icon, popupContent) {
@@ -3142,45 +3166,144 @@ function upsertAdminMarketplaceMarker(key, position, icon, popupContent) {
     return marker;
 }
 
+function readAdminMarketplaceMapFilters() {
+    return {
+        status: document.getElementById('adminMapStatusFilter')?.value || 'all',
+        category: document.getElementById('adminMapCategoryFilter')?.value || 'all',
+        vehicle: document.getElementById('adminMapVehicleFilter')?.value || 'all',
+        area: (document.getElementById('adminMapAreaFilter')?.value || '').trim().toLowerCase(),
+        showRiders: document.getElementById('adminMapShowRiders')?.checked !== false,
+        showVendors: document.getElementById('adminMapShowVendors')?.checked !== false,
+        showItems: document.getElementById('adminMapShowItems')?.checked !== false,
+        showDropoffs: document.getElementById('adminMapShowDropoffs')?.checked !== false
+    };
+}
+
+function fitAdminMarketplaceMapToVisibleMarkers() {
+    if (!adminMarketplaceMap) return;
+    const points = [...adminMarketplaceMarkers.values()]
+        .filter(marker => typeof marker.getLatLng === 'function')
+        .map(marker => marker.getLatLng());
+    if (!points.length) {
+        showToast('No visible map markers match these filters.');
+        return;
+    }
+    adminMarketplaceMap.fitBounds(L.latLngBounds(points), { padding: [36, 36], maxZoom: 15, animate: true });
+}
+
+function formatLocationAge(updatedAt) {
+    const ageSeconds = Math.max(0, Math.floor((Date.now() - Date.parse(updatedAt)) / 1000));
+    if (ageSeconds < 60) return `${ageSeconds}s ago`;
+    if (ageSeconds < 3600) return `${Math.floor(ageSeconds / 60)}m ago`;
+    return `${Math.floor(ageSeconds / 3600)}h ago`;
+}
+
+function requestAdminMarketplaceRoute(offer, routeCoordinates) {
+    const key = String(offer.id);
+    if (adminMarketplaceRouteCache.has(key) || adminMarketplaceRouteRequests.has(key)) return;
+    adminMarketplaceRouteRequests.add(key);
+    const [pickup, dropoff] = routeCoordinates;
+    const routeUrl = `https://router.project-osrm.org/route/v1/driving/${pickup[1]},${pickup[0]};${dropoff[1]},${dropoff[0]}?overview=full&geometries=geojson&steps=false`;
+    fetch(routeUrl).then(response => {
+        if (!response.ok) throw new Error(`Route request failed with status ${response.status}.`);
+        return response.json();
+    }).then(result => {
+        const route = result.code === 'Ok' ? result.routes?.[0] : null;
+        if (!route?.geometry?.coordinates?.length) throw new Error('No road route was returned.');
+        adminMarketplaceRouteCache.set(key, {
+            coordinates: route.geometry.coordinates.map(([longitude, latitude]) => [latitude, longitude]),
+            distanceKm: route.distance / 1000,
+            durationMinutes: Math.max(1, Math.round(route.duration / 60))
+        });
+        renderAdminMarketplaceMap();
+    }).catch(error => {
+        console.warn(`Admin map route estimate unavailable for job ${key}.`, error);
+        adminMarketplaceRouteCache.set(key, { unavailable: true });
+        renderAdminMarketplaceMap();
+    }).finally(() => adminMarketplaceRouteRequests.delete(key));
+}
+
+function bindAdminMarketplaceMapControls() {
+    if (adminMarketplaceMapControlsInitialized) return;
+    adminMarketplaceMapControlsInitialized = true;
+    ['adminMapStatusFilter', 'adminMapCategoryFilter', 'adminMapVehicleFilter'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', renderAdminMarketplaceMap);
+    });
+    document.getElementById('adminMapAreaFilter')?.addEventListener('input', renderAdminMarketplaceMap);
+    ['adminMapShowRiders', 'adminMapShowVendors', 'adminMapShowItems', 'adminMapShowDropoffs'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', renderAdminMarketplaceMap);
+    });
+    document.getElementById('adminMapFitVisible')?.addEventListener('click', fitAdminMarketplaceMapToVisibleMarkers);
+}
+
 function initAdminMarketplaceMap() {
     const element = document.getElementById('adminMarketplaceMap');
     if (!element || adminMarketplaceMap) return;
     adminMarketplaceMap = createTrackingMap(element);
+    ensureLiveRiderMapRefresh();
+    bindAdminMarketplaceMapControls();
     renderAdminMarketplaceMap();
 }
 
 function renderAdminMarketplaceMap() {
     if (!adminMarketplaceMap) return;
+    const filters = readAdminMarketplaceMapFilters();
     const visibleKeys = new Set();
     const riderLocations = readLiveRiderLocations() || [];
+    const status = document.getElementById('adminMapDataStatus');
     const samplePositions = [
         { latitude: 0.3476, longitude: 32.5825 },
         { latitude: 0.3536, longitude: 32.5915 },
         { latitude: 0.3415, longitude: 32.5740 }
     ];
+    const vehicleMatches = (vehicle, selected) => selected === 'all' ||
+        (selected === 'car' ? /car|van|auto/i.test(vehicle) :
+            selected === 'walking' ? /walk|foot/i.test(vehicle) : /bike|motorcycle|bicycle|cycle/i.test(vehicle));
+    const riderSearchMatches = rider => !filters.area || `${rider.name} ${rider.area}`.toLowerCase().includes(filters.area);
     const partners = (merchantPartners || []).filter(partner => partner.status === 'active');
-    const riderRows = partners.map((partner, index) => {
-        const location = partner.availability === 'available' ? getFreshRiderLocation(riderLocations, partner.id) : null;
+    const riderRows = filters.showRiders ? partners.map((partner, index) => {
+        const savedLocation = riderLocations.find(record => String(record.partnerId) === String(partner.id));
+        const freshLocation = partner.availability === 'available' ? getFreshRiderLocation(riderLocations, partner.id) : null;
+        const staleLocation = savedLocation && Date.now() - Date.parse(savedLocation.updatedAt) > riderLocationMaxAgeMs
+            ? savedLocation
+            : null;
+        const location = freshLocation || staleLocation;
         const sample = samplePositions[index % samplePositions.length];
         return {
             id: `partner-${partner.id}`,
             name: partner.name,
             vehicle: partner.vehicle,
             availability: partner.availability || 'available',
+            verificationStatus: partner.verificationStatus || 'pending',
             latitude: location?.latitude ?? sample.latitude,
             longitude: location?.longitude ?? sample.longitude,
-            live: Boolean(location)
+            area: partner.area || '',
+            live: Boolean(freshLocation),
+            stale: Boolean(staleLocation),
+            updatedAt: location?.updatedAt
         };
-    });
-    riderRows.push(...adminMapDemoRiders);
+    }).filter(rider => vehicleMatches(rider.vehicle, filters.vehicle) && riderSearchMatches(rider)) : [];
+    if (filters.showRiders) {
+        riderRows.push(...adminMapDemoRiders.filter(rider =>
+            vehicleMatches(rider.vehicle, filters.vehicle) && riderSearchMatches(rider)
+        ));
+    }
     riderRows.forEach(rider => {
         const key = `rider:${rider.id}`;
         visibleKeys.add(key);
-        upsertAdminMarketplaceMarker(key, [rider.latitude, rider.longitude], adminRiderMapIcon(rider.vehicle),
-            `<strong>${escapeMerchantText(rider.name)}</strong><br>${escapeMerchantText(rider.vehicle)} rider · ${escapeMerchantText(rider.availability)}${rider.live ? '<br>Live GPS' : '<br>Sample position'}`);
+        const locationLabel = rider.live
+            ? `Live GPS · ${formatLocationAge(rider.updatedAt)}`
+            : rider.stale ? `STALE GPS · last update ${formatLocationAge(rider.updatedAt)}` : 'Sample position · not live';
+        upsertAdminMarketplaceMarker(key, [rider.latitude, rider.longitude], adminRiderMapIcon(rider.vehicle, rider.stale),
+            `<strong>${escapeMerchantText(rider.name)}</strong><br>${escapeMerchantText(rider.vehicle)} rider · ${escapeMerchantText(rider.availability)}<br>Verification: ${escapeMerchantText(rider.verificationStatus || 'verified demo')}<br>${escapeMerchantText(rider.area || 'Kampala')}<br>${escapeMerchantText(locationLabel)}`);
     });
 
-    const visibleOffers = marketplaceOffers.filter(offer => ['available', 'requested', 'approved'].includes(offer.status));
+    const visibleOffers = marketplaceOffers.filter(offer =>
+        ['available', 'requested', 'approved'].includes(offer.status) &&
+        (filters.status === 'all' || filters.status === offer.status) &&
+        (filters.category === 'all' || filters.category.toLowerCase() === String(offer.category || '').toLowerCase()) &&
+        (!filters.area || `${offer.vendorName} ${offer.pickupAddress} ${offer.dropoffArea}`.toLowerCase().includes(filters.area))
+    );
     visibleOffers.forEach(offer => {
         const id = String(offer.id);
         const pickup = [offer.pickupCoordinates.latitude, offer.pickupCoordinates.longitude];
@@ -3189,24 +3312,46 @@ function renderAdminMarketplaceMap() {
         const vendorKey = `vendor:${id}`;
         const itemKey = `item:${id}`;
         const dropoffKey = `dropoff:${id}`;
-        visibleKeys.add(vendorKey);
-        visibleKeys.add(itemKey);
-        visibleKeys.add(dropoffKey);
-        upsertAdminMarketplaceMarker(vendorKey, vendor,
-            adminMapIcon('admin-map-vendor-icon', '<span aria-hidden="true">🏪</span>'),
-            `<strong>${escapeMerchantText(offer.vendorName)}</strong><br>${escapeMerchantText(offer.pickupAddress)}<br>Vendor pickup point`);
-        upsertAdminMarketplaceMarker(itemKey, pickup,
-            adminMapIcon('admin-map-item-icon', `<span aria-hidden="true">${escapeMerchantText(offer.icon || '📦')}</span><b>${formatMerchantCurrency(offer.commissionAmount)}</b>`, [118, 54], [59, 46]),
-            `<strong>${escapeMerchantText(offer.title)}</strong><br>${escapeMerchantText(offer.description)}<br>${escapeMerchantText(offer.vendorName)}<br>Commission: ${formatMerchantCurrency(offer.commissionAmount)}<br>Pickup to drop-off: ~${Number(offer.pickupToDropoffKm).toFixed(1)} km<br>Status: ${escapeMerchantText(offer.status)}`);
-        upsertAdminMarketplaceMarker(dropoffKey, dropoff,
-            adminMapIcon('admin-map-dropoff-icon', '<span aria-hidden="true">📍</span>'),
-            `<strong>Customer drop-off</strong><br>${escapeMerchantText(offer.dropoffArea)}<br>Approximate destination`);
-        const routeKey = `route:${id}`;
-        visibleKeys.add(routeKey);
-        const existingRoute = adminMarketplaceMarkers.get(routeKey);
-        if (existingRoute) existingRoute.setLatLngs([pickup, dropoff]);
-        else adminMarketplaceMarkers.set(routeKey, L.polyline([pickup, dropoff], { color: '#147b68', weight: 2, opacity: 0.62, dashArray: '5 7', interactive: false }).addTo(adminMarketplaceMap));
+        if (filters.showVendors) {
+            visibleKeys.add(vendorKey);
+            upsertAdminMarketplaceMarker(vendorKey, vendor,
+                adminMapIcon('admin-map-vendor-icon', '<span aria-hidden="true">🏪</span>'),
+                `<strong>${escapeMerchantText(offer.vendorName)}</strong><br>${escapeMerchantText(offer.pickupAddress)}<br>Vendor pickup point`);
+        }
+        if (filters.showItems) {
+            visibleKeys.add(itemKey);
+            const routeEstimate = adminMarketplaceRouteCache.get(id);
+            const estimateText = routeEstimate && !routeEstimate.unavailable
+                ? `Road route: ${routeEstimate.distanceKm.toFixed(1)} km · about ${routeEstimate.durationMinutes} min`
+                : `Sample estimate: ~${Number(offer.pickupToDropoffKm).toFixed(1)} km`;
+            upsertAdminMarketplaceMarker(itemKey, pickup,
+                adminMapIcon('admin-map-item-icon', `<span aria-hidden="true">${escapeMerchantText(offer.icon || '📦')}</span><b>${formatMerchantCurrency(offer.commissionAmount)}</b>`, [118, 54], [59, 46]),
+                `<strong>${escapeMerchantText(offer.title)}</strong><br>${escapeMerchantText(offer.description)}<br>${escapeMerchantText(offer.vendorName)}<br>Commission: ${formatMerchantCurrency(offer.commissionAmount)}<br>${escapeMerchantText(estimateText)}<br>Status: ${escapeMerchantText(offer.status)}`);
+            const routeKey = `route:${id}`;
+            visibleKeys.add(routeKey);
+            const existingRoute = adminMarketplaceMarkers.get(routeKey);
+            const lineCoordinates = routeEstimate?.coordinates || [pickup, dropoff];
+            if (existingRoute) {
+                existingRoute.setLatLngs(lineCoordinates);
+                existingRoute.setStyle({ dashArray: routeEstimate?.coordinates ? null : '5 7' });
+            }
+            else adminMarketplaceMarkers.set(routeKey, L.polyline(lineCoordinates, { color: '#147b68', weight: 3, opacity: 0.72, dashArray: routeEstimate?.coordinates ? null : '5 7', interactive: false }).addTo(adminMarketplaceMap));
+            requestAdminMarketplaceRoute(offer, [pickup, dropoff]);
+        }
+        if (filters.showDropoffs) {
+            visibleKeys.add(dropoffKey);
+            upsertAdminMarketplaceMarker(dropoffKey, dropoff,
+                adminMapIcon('admin-map-dropoff-icon', '<span aria-hidden="true">📍</span>'),
+                `<strong>Customer drop-off</strong><br>${escapeMerchantText(offer.dropoffArea)}<br>Approximate destination; exact address hidden`);
+        }
     });
+
+    const dataStatus = `${riderRows.filter(rider => rider.live).length} live GPS · ${riderRows.filter(rider => rider.stale).length} stale GPS · ${riderRows.filter(rider => !rider.live && !rider.stale).length} sample rider positions · ${visibleOffers.length} matching jobs`;
+    const routedCount = visibleOffers.filter(offer => {
+        const estimate = adminMarketplaceRouteCache.get(String(offer.id));
+        return estimate && !estimate.unavailable;
+    }).length;
+    if (status) status.textContent = `${dataStatus}. ${routedCount} road routes calculated; remaining routes use labeled sample estimates.`;
 
     for (const [key, marker] of adminMarketplaceMarkers) {
         if (!visibleKeys.has(key)) {
@@ -3281,8 +3426,8 @@ function renderMarketplaceMapOffers() {
 
 function requestMarketplaceDelivery(offerId) {
     const partner = riderCurrentPartner();
-    if (!partner || partner.status !== 'active' || !isRiderOnline || partner.availability !== 'available') {
-        showToast('Go online with an active rider account before requesting a pickup.');
+    if (!partner || partner.status !== 'active' || partner.verificationStatus !== 'verified' || !isRiderOnline || partner.availability !== 'available') {
+        showToast('Go online with an active, verified rider account before requesting a pickup.');
         return;
     }
     const deliveries = readRiderDeliveries();
@@ -3314,6 +3459,7 @@ function requestMarketplaceDelivery(offerId) {
     renderMarketplaceMapOffers();
     renderAdminMarketplaceMap();
     renderAdminMarketplaceRequests();
+    renderAdminMarketplaceAudit();
     renderAdminNav();
     showToast(`Request sent for ${offer.title}. Waiting for admin approval.`);
 }
@@ -3334,6 +3480,156 @@ function renderAdminMarketplaceRequests() {
       </article>`).join('') : '<div class="admin-marketplace-empty">No rider pickup requests are waiting for approval.</div>';
 }
 
+function renderAdminMarketplaceAudit() {
+    const list = document.getElementById('adminMarketplaceAudit');
+    if (!list) return;
+    const offerEvents = marketplaceOffers.flatMap(offer => (offer.statusHistory || []).map(event => ({
+        ...event,
+        itemTitle: offer.title,
+        source: 'Marketplace request'
+    })));
+    const deliveryEvents = merchantDeliveries.filter(delivery => delivery.marketplace).flatMap(delivery => [
+        ...(delivery.statusHistory || []).map(event => ({
+            ...event,
+            itemTitle: delivery.itemTitle || delivery.order,
+            source: 'Delivery assignment'
+        })),
+        ...(delivery.payoutHistory || []).map(event => ({
+            ...event,
+            itemTitle: delivery.itemTitle || delivery.order,
+            source: 'Commission payout'
+        }))
+    ]);
+    const events = [...offerEvents, ...deliveryEvents]
+        .filter(event => Number.isFinite(Date.parse(event.at)))
+        .sort((first, second) => Date.parse(second.at) - Date.parse(first.at))
+        .slice(0, 30);
+    list.innerHTML = events.length ? events.map(event => `
+      <article class="admin-marketplace-audit-entry">
+        <div><strong>${escapeMerchantText(event.itemTitle)}</strong><span>${escapeMerchantText(event.status)} · ${escapeMerchantText(event.source)}</span></div>
+        <small>${escapeMerchantText(event.actor || 'System')} · ${escapeMerchantText(new Date(event.at).toLocaleString())}</small>
+        ${event.reason ? `<p>Reason: ${escapeMerchantText(event.reason)}</p>` : ''}
+        ${event.riderAttestation ? `<p>${escapeMerchantText(event.riderAttestation)}; rider attestation, not independent proof.</p>` : ''}
+      </article>`).join('') : '<div class="admin-marketplace-empty">Marketplace request and delivery events will appear here.</div>';
+}
+
+function renderAdminRiderReview() {
+    const list = document.getElementById('adminRiderReviewList');
+    if (!list) return;
+    list.innerHTML = merchantPartners.length ? merchantPartners.map(partner => {
+        const activeAssignments = merchantDeliveries.filter(delivery =>
+            riderOwnsDelivery(delivery, partner) && riderActiveStatuses.includes(delivery.status)
+        ).length;
+        const latestAudit = partner.adminAudit?.at(-1);
+        const actions = partner.verificationStatus === 'pending'
+            ? `<button type="button" data-admin-rider-action="verify" data-partner-id="${partner.id}">Verify partner</button><button class="reject" type="button" data-admin-rider-action="reject" data-partner-id="${partner.id}">Reject</button>`
+            : partner.verificationStatus === 'rejected'
+                ? `<button type="button" data-admin-rider-action="reopen" data-partner-id="${partner.id}">Reopen review</button>`
+                : partner.status === 'active'
+                    ? `<button class="reject" type="button" data-admin-rider-action="suspend" data-partner-id="${partner.id}" ${activeAssignments ? 'disabled' : ''}>Suspend</button>`
+                    : `<button type="button" data-admin-rider-action="activate" data-partner-id="${partner.id}">Reactivate</button>`;
+        return `<article class="admin-rider-review-card">
+          <div><strong>${escapeMerchantText(partner.name)}</strong><span>${escapeMerchantText(partner.vehicle)} · ${escapeMerchantText(partner.area)}</span>
+            <small>${escapeMerchantText(partner.verificationStatus)} verification · ${escapeMerchantText(partner.status)} account · ${escapeMerchantText(partner.availability || 'off-duty')} · ${activeAssignments} active deliveries</small>
+            ${latestAudit ? `<small>Last admin action: ${escapeMerchantText(latestAudit.action)} · ${escapeMerchantText(new Date(latestAudit.at).toLocaleString())}${latestAudit.reason ? ` · ${escapeMerchantText(latestAudit.reason)}` : ''}</small>` : ''}</div>
+          <div class="admin-marketplace-actions">${actions}</div>
+        </article>`;
+    }).join('') : '<div class="admin-marketplace-empty">No rider partners are registered.</div>';
+}
+
+function renderAdminMarketplacePayouts() {
+    const list = document.getElementById('adminMarketplacePayouts');
+    if (!list) return;
+    const deliveries = merchantDeliveries.filter(delivery => delivery.marketplace)
+        .sort((first, second) => Date.parse(second.updatedAt || '') - Date.parse(first.updatedAt || ''));
+    list.innerHTML = deliveries.length ? deliveries.map(delivery => `
+      <article class="admin-marketplace-payout-row">
+        <div><strong>${escapeMerchantText(delivery.itemTitle || delivery.order)}</strong><span>${escapeMerchantText(delivery.driver)} · ${escapeMerchantText(delivery.status)}</span>
+          <small>${escapeMerchantText(delivery.commissionStatus || 'locked')} commission · ${escapeMerchantText(delivery.payoutStatus || 'not-eligible')}${delivery.payoutRecordedAt ? ` · manually recorded ${escapeMerchantText(new Date(delivery.payoutRecordedAt).toLocaleString())}` : ''}</small></div>
+        <strong>${formatMerchantCurrency(delivery.commissionAmount || 0)}</strong>
+        ${delivery.payoutStatus === 'pending' ? `<button type="button" data-marketplace-payout="${delivery.id}">Record manual payout</button>` : ''}
+      </article>`).join('') : '<div class="admin-marketplace-empty">Marketplace commissions will appear after a rider is approved.</div>';
+}
+
+function recordMarketplacePayout(deliveryId) {
+    const delivery = merchantDeliveries.find(record => String(record.id) === String(deliveryId));
+    if (!delivery?.marketplace || delivery.status !== 'delivered' || delivery.payoutStatus !== 'pending') {
+        showToast('Only completed marketplace commissions can be recorded as paid.');
+        return;
+    }
+    if (!confirm('This only records a manual payout that was completed outside the app. No money will be transferred. Continue?')) return;
+    const now = new Date().toISOString();
+    const nextDeliveries = merchantDeliveries.map(record => String(record.id) === String(delivery.id)
+        ? {
+            ...record,
+            payoutStatus: 'manually-recorded',
+            payoutRecordedAt: now,
+            payoutRecordedBy: 'Platform admin',
+            payoutHistory: [...(record.payoutHistory || []), { status: 'manually-recorded', at: now, actor: 'Platform admin' }]
+        }
+        : record
+    );
+    if (!saveMerchantCollection('kiryaMerchantDeliveries', nextDeliveries)) return;
+    merchantDeliveries = nextDeliveries;
+    renderAdminMarketplacePayouts();
+    renderAdminMarketplaceAudit();
+    renderMerchantMarketplaceNotifications();
+    showToast('Manual payout record saved. This prototype did not transfer funds.');
+}
+
+function reviewAdminRider(partnerId, action) {
+    const partner = merchantPartners.find(record => String(record.id) === String(partnerId));
+    if (!partner) return;
+    const hasActiveAssignments = merchantDeliveries.some(delivery =>
+        riderOwnsDelivery(delivery, partner) && riderActiveStatuses.includes(delivery.status)
+    );
+    if (hasActiveAssignments && ['reject', 'suspend', 'reopen'].includes(action)) {
+        showToast('An active delivery must be resolved before rejecting or suspending this rider.');
+        return;
+    }
+    if (action === 'activate' && partner.verificationStatus !== 'verified') {
+        showToast('Verify this partner before reactivating the account.');
+        return;
+    }
+    const reason = ['reject', 'suspend', 'reopen'].includes(action)
+        ? prompt(`Reason for ${action}ing ${partner.name}:`)?.trim()
+        : '';
+    if (['reject', 'suspend', 'reopen'].includes(action) && !reason) {
+        showToast('A reason is required for this rider review action.');
+        return;
+    }
+    const now = new Date().toISOString();
+    const statusChanges = {
+        verify: { verificationStatus: 'verified', status: 'active', availability: 'off-duty' },
+        reject: { verificationStatus: 'rejected', status: 'inactive', availability: 'off-duty' },
+        reopen: { verificationStatus: 'pending', status: 'inactive', availability: 'off-duty' },
+        suspend: { status: 'inactive', availability: 'off-duty' },
+        activate: { status: 'active', availability: 'off-duty' }
+    }[action];
+    if (!statusChanges) return;
+    const updatedPartners = merchantPartners.map(record => String(record.id) === String(partner.id)
+        ? {
+            ...record,
+            ...statusChanges,
+            updatedAt: now,
+            adminAudit: [...(record.adminAudit || []), { action, at: now, actor: 'Platform admin', ...(reason ? { reason } : {}) }]
+        }
+        : record
+    );
+    if (!saveMerchantCollection('kiryaMerchantPartners', updatedPartners)) return;
+    merchantPartners = updatedPartners;
+    if (riderSelectedPartnerId !== null && String(riderSelectedPartnerId) === String(partner.id) && statusChanges.status === 'inactive') {
+        stopRiderLocationTracking(partner.id);
+    }
+    renderAdminRiderReview();
+    renderMerchantPartners();
+    populateMerchantAssignmentOptions();
+    renderRiderPartnerOptions();
+    refreshRiderWorkflow();
+    renderAdminMarketplaceMap();
+    showToast(`${partner.name}: ${action} recorded in the admin audit.`);
+}
+
 function reviewMarketplaceRequest(offerId, decision) {
     const offer = marketplaceOffers.find(record => String(record.id) === String(offerId));
     if (!offer || offer.status !== 'requested') {
@@ -3343,8 +3639,15 @@ function reviewMarketplaceRequest(offerId, decision) {
     }
     const now = new Date().toISOString();
     const partner = merchantPartners.find(record => String(record.id) === String(offer.requestedPartnerId));
-    if (decision === 'approve' && (!partner || partner.status !== 'active')) {
-        showToast('The requesting rider is no longer active.');
+    const rejectionReason = decision === 'reject'
+        ? prompt(`Why are you rejecting the pickup request from ${offer.requestedPartnerName || 'this rider'}?`)?.trim()
+        : '';
+    if (decision === 'reject' && !rejectionReason) {
+        showToast('A reason is required to reject a pickup request.');
+        return;
+    }
+    if (decision === 'approve' && (!partner || partner.status !== 'active' || partner.verificationStatus !== 'verified' || partner.availability !== 'available')) {
+        showToast('The requesting rider is no longer active, available, and verified.');
         return;
     }
     if (decision === 'approve' && merchantDeliveries.some(delivery =>
@@ -3358,11 +3661,12 @@ function reviewMarketplaceRequest(offerId, decision) {
         status: decision === 'approve' ? 'approved' : 'available',
         reviewedAt: now,
         reviewedBy: 'Platform admin',
-        ...(decision === 'reject' ? { lastRejectedAt: now, lastRejectedBy: 'Platform admin' } : {}),
+        ...(decision === 'reject' ? { lastRejectedAt: now, lastRejectedBy: 'Platform admin', lastRejectedReason: rejectionReason } : {}),
         statusHistory: [...(offer.statusHistory || []), {
             status: decision === 'approve' ? 'approved' : 'rejected',
             at: now,
-            actor: 'Platform admin'
+            actor: 'Platform admin',
+            ...(rejectionReason ? { reason: rejectionReason } : {})
         }]
     };
     const nextOffers = marketplaceOffers.map(record => record.id === offer.id ? nextOffer : record);
@@ -3387,6 +3691,10 @@ function reviewMarketplaceRequest(offerId, decision) {
             itemDescription: offer.description,
             itemCategory: offer.category,
             commissionAmount: offer.commissionAmount,
+            commissionStatus: 'locked',
+            payoutStatus: 'not-eligible',
+            vendorNoticeStatus: 'recorded-in-merchant-console',
+            vendorNotifiedAt: now,
             merchantName: offer.vendorName,
             pickupAddress: offer.pickupAddress,
             pickupCoordinates: offer.pickupCoordinates,
@@ -3397,7 +3705,8 @@ function reviewMarketplaceRequest(offerId, decision) {
             updatedAt: now,
             statusHistory: [
                 { status: 'requested', at: offer.requestedAt || now, actor: offer.requestedPartnerName || partner.name },
-                { status: 'accepted', at: now, actor: 'Platform admin' }
+                { status: 'accepted', at: now, actor: 'Platform admin' },
+                { status: 'vendor-notice-recorded', at: now, actor: 'Platform admin', deliveryMethod: 'merchant-console-record' }
             ]
         }];
         if (!saveMerchantCollections({ kiryaMarketplaceOffers: nextOffers, kiryaMerchantDeliveries: nextDeliveries })) return;
@@ -3412,6 +3721,7 @@ function reviewMarketplaceRequest(offerId, decision) {
         showToast(`Request rejected. ${offer.title} is available for another rider.`);
     }
     renderAdminMarketplaceRequests();
+    renderAdminMarketplaceAudit();
     renderAdminNav();
 }
 
@@ -3792,8 +4102,8 @@ function riderOwnsDelivery(delivery, partner) {
 function setRiderAvailability(isAvailable, forceOffline = false) {
     const partners = readRiderCollection('kiryaMerchantPartners', riderPartnerFallback);
     const partner = riderCurrentPartner(partners);
-    if (!partners || !partner || partner.status !== 'active') {
-        showToast('Select an active rides partner account before changing availability.');
+    if (!partners || !partner || partner.status !== 'active' || partner.verificationStatus !== 'verified') {
+        showToast('Only an active, verified rider partner can go online.');
         return false;
     }
     if (isAvailable && (!navigator.geolocation || !window.isSecureContext)) {
@@ -3827,7 +4137,7 @@ function renderRiderAvailability() {
     const button = document.getElementById('riderStatusToggle');
     const partner = riderCurrentPartner();
     if (!button || !partner) return;
-    const isActive = partner.status === 'active' && partner.availability === 'available';
+    const isActive = partner.status === 'active' && partner.verificationStatus === 'verified' && partner.availability === 'available';
     isRiderOnline = isActive;
     const locationStatus = document.getElementById('riderLocationStatus');
     if (isActive) startRiderLocationTracking(partner);
@@ -3847,7 +4157,9 @@ function renderRiderAvailability() {
     if (idleMessage && document.getElementById('riderDeliveryState').style.display !== 'none') return;
     if (idleMessage) idleMessage.textContent = isActive
         ? 'You are online. Browse nearby map offers and request a pickup.'
-        : partner.status === 'active' ? 'Go online to request nearby pickups. Available jobs remain visible on the map.' : 'This partner account is inactive. Contact the merchant.';
+        : partner.status !== 'active' ? 'This partner account is inactive. Contact the merchant.'
+            : partner.verificationStatus !== 'verified' ? 'Admin verification is required before you can go online.'
+                : 'Go online to request nearby pickups. Available jobs remain visible on the map.';
 }
 
 function refreshMerchantAfterRiderWrite({ partners, deliveries, activeOrders, pastOrders } = {}) {
@@ -3863,6 +4175,8 @@ function refreshMerchantAfterRiderWrite({ partners, deliveries, activeOrders, pa
         renderMerchantActiveOrders();
         if (merchantAssignedRidersScreen?.classList.contains('active')) renderMerchantDeliveries();
         renderMerchantMarketplaceNotifications();
+        renderAdminMarketplacePayouts();
+        renderAdminMarketplaceAudit();
         updateMerchantOrderMetrics();
         renderCustomerOrders();
     }
@@ -3881,7 +4195,7 @@ function renderRiderPartnerOptions() {
     }
     select.disabled = false;
     select.innerHTML = eligiblePartners.map(partner =>
-        `<option value="${escapeMerchantText(partner.id)}">${escapeMerchantText(partner.name)}${partner.status === 'active' ? '' : ' (inactive)'}</option>`
+        `<option value="${escapeMerchantText(partner.id)}">${escapeMerchantText(partner.name)}${partner.status !== 'active' ? ' (inactive)' : partner.verificationStatus !== 'verified' ? ' (verification pending)' : ''}</option>`
     ).join('');
     if (riderSelectedPartnerId === null) {
         try {
@@ -4157,18 +4471,41 @@ function updateRiderDelivery(deliveryId, nextStatus, reason = '') {
         return false;
     }
     const now = new Date().toISOString();
+    const confirmationStep = nextStatus === 'picked-up' ? 'pickup' : nextStatus === 'delivered' ? 'dropoff' : null;
+    const statusEvent = {
+        status: nextStatus,
+        at: now,
+        actor: partner.name,
+        ...(confirmationStep ? { riderAttestation: `${confirmationStep} confirmed by rider` } : {})
+    };
     const updatedDelivery = {
         ...delivery,
         status: nextStatus,
         updatedAt: now,
-        statusHistory: [...(delivery.statusHistory || []), {
-            status: nextStatus,
-            at: now,
-            actor: partner.name
-        }]
+        ...(delivery.marketplace && confirmationStep === 'dropoff' ? { commissionStatus: 'earned', payoutStatus: 'pending' } : {}),
+        ...(confirmationStep ? {
+            riderAttestations: [...(delivery.riderAttestations || []), {
+                step: confirmationStep,
+                method: 'rider-confirmation',
+                actor: partner.name,
+                recordedAt: now
+            }]
+        } : {}),
+        statusHistory: [...(delivery.statusHistory || []), statusEvent]
     };
     const nextDeliveries = deliveries.map(record => record.id === delivery.id ? updatedDelivery : record);
     const collections = { kiryaMerchantDeliveries: nextDeliveries };
+    if (delivery.marketplace && nextStatus === 'delivered') {
+        collections.kiryaMarketplaceOffers = marketplaceOffers.map(offer => String(offer.id) === String(delivery.marketplaceOfferId)
+            ? {
+                ...offer,
+                status: 'delivered',
+                completedAt: now,
+                statusHistory: [...(offer.statusHistory || []), { status: 'delivered', at: now, actor: partner.name }]
+            }
+            : offer
+        );
+    }
     if (nextStatus === 'delivered') {
         const orders = readRiderActiveOrders();
         const pastOrders = readRiderPastOrders();
@@ -4192,6 +4529,10 @@ function updateRiderDelivery(deliveryId, nextStatus, reason = '') {
         }
     }
     if (!saveMerchantCollections(collections)) return false;
+    if (collections.kiryaMarketplaceOffers) {
+        marketplaceOffers = collections.kiryaMarketplaceOffers;
+        renderMarketplaceMapOffers();
+    }
     refreshMerchantAfterRiderWrite({
         deliveries: nextDeliveries,
         ...(collections.kiryaMerchantActiveOrders ? { activeOrders: collections.kiryaMerchantActiveOrders } : {}),
@@ -5228,8 +5569,8 @@ demoActiveOrders = demoActiveOrders.map(order => {
 if (merchantNeedsOrderMigration) saveMerchantCollection('kiryaMerchantActiveOrders', demoActiveOrders);
 
 let merchantPartners = [
-    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active' },
-    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active' }
+    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', verificationStatus: 'verified' },
+    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', verificationStatus: 'verified' }
 ];
 
 merchantPartners = loadMerchantCollection('kiryaMerchantPartners', merchantPartners, partner =>
@@ -5237,7 +5578,12 @@ merchantPartners = loadMerchantCollection('kiryaMerchantPartners', merchantPartn
     typeof partner.phone === 'string' && typeof partner.email === 'string' &&
     typeof partner.vehicle === 'string' && typeof partner.area === 'string' &&
     ['active', 'inactive'].includes(partner.status)
-).map(partner => ({ ...partner, availability: ['available', 'off-duty'].includes(partner.availability) ? partner.availability : 'available' }));
+).map(partner => ({
+    ...partner,
+    availability: ['available', 'off-duty'].includes(partner.availability) ? partner.availability : 'available',
+    verificationStatus: ['verified', 'pending', 'rejected'].includes(partner.verificationStatus) ? partner.verificationStatus : 'verified',
+    adminAudit: Array.isArray(partner.adminAudit) ? partner.adminAudit : []
+}));
 
 let merchantDeliveries = [
     { id: 1, order: '#8911', customer: 'Daniel K.', address: 'Ntinda, Kampala', driver: 'James M.', phone: '+256 700 111222', status: 'in-transit' },
@@ -5387,7 +5733,7 @@ function merchantPartnerCoversAddress(partner, address) {
 }
 
 function merchantPartnerIsEligible(partner, address, excludedDeliveryId = null) {
-    return partner.status === 'active' &&
+    return partner.status === 'active' && partner.verificationStatus === 'verified' &&
         partner.availability === 'available' &&
         merchantPartnerWorkload(partner, excludedDeliveryId) < merchantRiderWorkloadLimit &&
         merchantPartnerCoversAddress(partner, address);
@@ -5600,8 +5946,9 @@ function renderMerchantPartners() {
             const hasPendingOffer = merchantDeliveries.some(delivery =>
                 delivery.partnerId === partner.id && delivery.status === 'offered'
             );
-            const availability = partner.status !== 'active'
-                ? 'Inactive'
+            const availability = partner.verificationStatus !== 'verified'
+                ? 'Verification pending'
+                : partner.status !== 'active' ? 'Inactive'
                 : hasPendingOffer ? 'Offer pending'
                     : workload ? 'On delivery' : partner.availability === 'off-duty' ? 'Off duty' : 'Available';
             return `
@@ -5609,7 +5956,7 @@ function renderMerchantPartners() {
               <td>${escapeMerchantText(partner.name)}</td><td>${escapeMerchantText(partner.phone)}</td>
               <td>${escapeMerchantText(partner.email || '—')}</td><td>${escapeMerchantText(partner.vehicle)}</td>
               <td>${escapeMerchantText(partner.area)}</td>
-              <td><span class="merchant-status-pill ${partner.status === 'active' ? 'delivered' : ''}">${partner.status === 'active' ? 'Active' : 'Inactive'}</span> <span class="merchant-muted">${availability}</span><button class="merchant-record-action" type="button" data-partner-action="availability" data-partner-id="${partner.id}" ${partner.status !== 'active' || workload ? 'disabled' : ''}>${partner.availability === 'off-duty' ? 'Set available' : 'Set off duty'}</button></td>
+              <td><span class="merchant-status-pill ${partner.verificationStatus === 'verified' ? 'delivered' : 'offered'}">${escapeMerchantText(partner.verificationStatus || 'pending')}</span> <span class="merchant-muted">${partner.status === 'active' ? 'Active' : 'Inactive'} · ${escapeMerchantText(availability)}</span><button class="merchant-record-action" type="button" data-partner-action="availability" data-partner-id="${partner.id}" ${partner.status !== 'active' || partner.verificationStatus !== 'verified' || workload ? 'disabled' : ''}>${partner.availability === 'off-duty' ? 'Set available' : 'Set off duty'}</button></td>
               <td>${workload} / ${merchantRiderWorkloadLimit} active; ${merchantPartnerCompletedCount(partner)} completed; ${merchantPartnerCancelledCount(partner)} cancelled (${merchantPartnerCancellationRate(partner)}%)</td>
               <td><div class="merchant-record-actions"><button class="merchant-record-action" type="button" data-partner-action="edit" data-partner-id="${partner.id}">Edit</button><button class="merchant-record-action danger" type="button" data-partner-action="delete" data-partner-id="${partner.id}">Remove</button></div></td>
             </tr>
@@ -5679,12 +6026,15 @@ function renderMerchantMarketplaceNotifications() {
     list.innerHTML = marketplaceDeliveries.length ? marketplaceDeliveries.map(delivery => `
       <article class="merchant-marketplace-notice-card">
         <div><strong>${escapeMerchantText(delivery.itemTitle || 'Marketplace delivery')}</strong><span class="merchant-status-pill ${escapeMerchantText(delivery.status)}">${escapeMerchantText(merchantDeliveryStatusLabels[delivery.status] || delivery.status)}</span></div>
-        <p><strong>${escapeMerchantText(delivery.driver)}</strong> is coming to collect this item. Admin approved ${escapeMerchantText(delivery.assignedAt ? new Date(delivery.assignedAt).toLocaleString() : 'just now')}.</p>
+                <p><strong>${escapeMerchantText(delivery.driver)}</strong> ${delivery.status === 'delivered' ? 'completed this delivery.' : 'is assigned to collect this item.'} Admin approved ${escapeMerchantText(delivery.assignedAt ? new Date(delivery.assignedAt).toLocaleString() : 'just now')}.</p>
+                <p>Vendor notice: recorded in this browser console only; no push message was sent.</p>
         <p>${escapeMerchantText(delivery.itemDescription || '')}</p>
         <dl><div><dt>Pickup</dt><dd>${escapeMerchantText(delivery.pickupAddress || '—')}</dd></div>
           <div><dt>Drop-off area</dt><dd>${escapeMerchantText(delivery.address || '—')}</dd></div>
           <div><dt>Route estimate</dt><dd>~${Number(delivery.pickupToDropoffKm || 0).toFixed(1)} km</dd></div>
-          <div><dt>Rider commission</dt><dd>${formatMerchantCurrency(delivery.commissionAmount || 0)}</dd></div></dl>
+                    <div><dt>Rider commission</dt><dd>${formatMerchantCurrency(delivery.commissionAmount || 0)} · ${escapeMerchantText(delivery.commissionStatus || 'locked')}</dd></div>
+                    <div><dt>Payout record</dt><dd>${escapeMerchantText(delivery.payoutStatus || 'not eligible')}</dd></div></dl>
+                ${(delivery.riderAttestations || []).map(attestation => `<p>Rider ${escapeMerchantText(attestation.step)} confirmation: ${escapeMerchantText(new Date(attestation.recordedAt).toLocaleString())} · rider attestation, not independent proof.</p>`).join('')}
       </article>`).join('') : '<p class="merchant-marketplace-empty">Approved marketplace pickups will appear here.</p>';
 }
 
@@ -6073,7 +6423,9 @@ document.getElementById('merchantPartnerForm').addEventListener('submit', event 
         vehicle: document.getElementById('merchantPartnerVehicle').value.trim(),
         area: document.getElementById('merchantPartnerArea').value.trim(),
         status: document.getElementById('merchantPartnerStatus').value,
-        availability: document.getElementById('merchantPartnerAvailability').value,
+        availability: existingPartner ? document.getElementById('merchantPartnerAvailability').value : 'off-duty',
+        verificationStatus: existingPartner?.verificationStatus || 'pending',
+        adminAudit: existingPartner?.adminAudit || [],
         createdAt: existingPartner?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
     };
@@ -6754,6 +7106,7 @@ window.addEventListener('storage', event => {
             renderMarketplaceMapOffers();
             renderAdminMarketplaceMap();
             renderAdminMarketplaceRequests();
+            renderAdminMarketplaceAudit();
             renderAdminNav();
             renderMerchantMarketplaceNotifications();
         } catch (error) {
@@ -6851,11 +7204,17 @@ window.addEventListener('storage', event => {
     else if (collectionKey === 'kiryaMerchantPartners') {
         merchantPartners = records.map(partner => ({
             ...partner,
-            availability: ['available', 'off-duty'].includes(partner.availability) ? partner.availability : 'off-duty'
+            availability: ['available', 'off-duty'].includes(partner.availability) ? partner.availability : 'off-duty',
+            verificationStatus: ['verified', 'pending', 'rejected'].includes(partner.verificationStatus) ? partner.verificationStatus : 'verified',
+            adminAudit: Array.isArray(partner.adminAudit) ? partner.adminAudit : []
         }));
     } else return;
 
     renderMerchantActiveOrders();
+    renderAdminRiderReview();
+    renderAdminMarketplacePayouts();
+    renderAdminMarketplaceAudit();
+    renderAdminMarketplaceMap();
     if (merchantAssignedRidersScreen?.classList.contains('active')) renderMerchantDeliveries();
     if (merchantDeliveryScreen?.classList.contains('active')) renderMerchantPartners();
     if (merchantCustomersScreen?.classList.contains('active')) renderMerchantCustomers();

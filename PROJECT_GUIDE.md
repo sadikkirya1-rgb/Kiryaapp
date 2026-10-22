@@ -110,6 +110,7 @@ Kiryaapp/
 - Review assigned merchant offers and accept or decline with a required reason
 - Browse sample food, grocery, and pharmacy delivery jobs on the rider map with commission, pickup/drop-off pins, route distance, and live-GPS distance to pickup
 - Request an available marketplace pickup; a platform admin must approve it before the job is assigned and the vendor is notified
+- New rider registrations stay off duty until admin verification; pickup/drop-off confirmations are rider attestations, not independent proof
 - Share current device GPS while online and advance deliveries through pickup, in-transit, and delivered
 - Customer address and tap-to-call contact on accepted deliveries
 - Completed-delivery history and marketplace commission totals (prototype only; no real payout processing)
@@ -133,6 +134,8 @@ Kiryaapp/
 - Platform metrics dashboard
 - User/rider/merchant monitoring
 - Kampala operations map with partner transport icons, vendors, sample pickup items and commissions, route lines, and customer drop-off pins
+- Map filters, layer toggles, fit-visible control, road route/ETA when routing is available, and live/stale/sample GPS labels
+- Rider verification, rejection/suspension audit, and manual commission ledger (recording a payout does not transfer money)
 - Review and approve or reject marketplace rider pickup requests
 - Financial tracking
 - Alert management

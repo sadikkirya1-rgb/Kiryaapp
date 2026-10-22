@@ -1205,6 +1205,9 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
   .admin-marketplace-request { align-items: stretch; flex-direction: column; }
   .admin-marketplace-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .admin-marketplace-actions button { min-width: 0; }
+  .admin-rider-review-card { align-items: stretch; flex-direction: column; }
+  .admin-marketplace-payout-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .admin-marketplace-payout-row button { grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
   #merchantKioskScreen .merchant-kiosk-header { height: 60px; min-height: 60px; gap: 8px; padding: 8px 12px; }
@@ -1326,6 +1329,14 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .admin-marketplace-map { width: 100%; height: 440px; border: 1px solid #dce6e2; border-radius: 6px; background: #edf3ef; }
 .admin-map-hover-tooltip { max-width: 280px; padding: 8px 10px; border: 1px solid #dce6e2; border-radius: 6px; background: #fff; color: #203b33; box-shadow: 0 4px 14px rgba(20, 55, 44, 0.16); font-size: 0.76rem; line-height: 1.45; white-space: normal; }
 .admin-map-hover-tooltip::before { display: none; }
+.admin-map-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); align-items: end; gap: 9px; margin: 0 0 10px; }
+.admin-map-controls label { display: grid; gap: 4px; color: #52645b; font-size: 0.72rem; font-weight: 750; }
+.admin-map-controls select, .admin-map-controls input { width: 100%; min-height: 38px; padding: 7px 9px; border: 1px solid #d7e1dc; border-radius: 5px; background: #fff; color: #203b33; font: inherit; font-size: 0.76rem; }
+.admin-map-fit { min-height: 38px; padding: 7px 10px; border: 0; border-radius: 5px; background: #087a67; color: #fff; font: inherit; font-size: 0.75rem; font-weight: 800; cursor: pointer; }
+.admin-map-layer-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 7px; }
+.admin-map-layer-controls label { display: inline-flex; align-items: center; gap: 6px; color: #52645b; font-size: 0.75rem; }
+.admin-map-layer-controls input { accent-color: #087a67; }
+.admin-map-data-status { margin: 0 0 8px; color: #687570; font-size: 0.73rem; line-height: 1.4; }
 .admin-marketplace-map-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 2px 18px; color: #52645b; font-size: 0.75rem; }
 .admin-marketplace-map-legend > span { display: inline-flex; align-items: center; gap: 5px; }
 .admin-map-icon { display: inline-grid; width: 23px; height: 23px; place-items: center; font-size: 18px; font-style: normal; }
@@ -1364,6 +1375,29 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .admin-marketplace-actions button { min-height: 40px; padding: 8px 11px; border: 0; border-radius: 6px; background: #087a67; color: #fff; font: inherit; font-size: 0.78rem; font-weight: 800; cursor: pointer; }
 .admin-marketplace-actions button.reject { border: 1px solid #d7e0dc; background: #fff; color: #a33c3c; }
 .admin-marketplace-empty, .merchant-marketplace-empty { padding: 14px; color: #687570; font-size: 0.82rem; }
+.admin-rider-review-heading { margin-top: 22px; }
+.admin-rider-review-note { margin: -10px 0 12px; color: #8a682b; font-size: 0.73rem; line-height: 1.4; }
+.admin-rider-review-list { display: grid; gap: 8px; }
+.admin-rider-review-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid #dce6e2; border-radius: 6px; background: #fff; }
+.admin-rider-review-card > div:first-child { display: grid; gap: 4px; min-width: 0; }
+.admin-rider-review-card strong { color: #203b33; font-size: 0.84rem; }
+.admin-rider-review-card span, .admin-rider-review-card small { color: #687570; font-size: 0.73rem; line-height: 1.4; }
+.admin-rider-review-card .admin-marketplace-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.admin-marketplace-payout-heading { margin-top: 18px; }
+.admin-marketplace-payouts { display: grid; gap: 8px; }
+.admin-marketplace-payout-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 12px; border: 1px solid #dce6e2; border-radius: 6px; background: #fff; }
+.admin-marketplace-payout-row > div { display: grid; gap: 4px; min-width: 0; }
+.admin-marketplace-payout-row strong { color: #203b33; font-size: 0.82rem; }
+.admin-marketplace-payout-row span, .admin-marketplace-payout-row small { color: #687570; font-size: 0.72rem; }
+.admin-marketplace-payout-row button { min-height: 36px; padding: 6px 9px; border: 0; border-radius: 5px; background: #087a67; color: #fff; font: inherit; font-size: 0.72rem; font-weight: 800; cursor: pointer; }
+.admin-map-rider-icon.stale span { filter: grayscale(1) opacity(0.62) drop-shadow(0 1px 2px #fff); }
+.admin-marketplace-audit-heading { margin-top: 22px; }
+.admin-marketplace-audit { display: grid; gap: 7px; max-height: 380px; overflow-y: auto; }
+.admin-marketplace-audit-entry { display: grid; gap: 4px; padding: 10px 12px; border-left: 2px solid #b7d7cd; background: #f8fbf9; }
+.admin-marketplace-audit-entry > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 10px; }
+.admin-marketplace-audit-entry strong { color: #203b33; font-size: 0.78rem; }
+.admin-marketplace-audit-entry span, .admin-marketplace-audit-entry small { color: #687570; font-size: 0.7rem; }
+.admin-marketplace-audit-entry p { margin: 2px 0 0; color: #52645b; font-size: 0.72rem; line-height: 1.4; }
 .merchant-marketplace-notice { margin: 16px 0; padding: 14px; border: 1px solid #dce6e2; border-radius: 8px; background: #f9fbfa; }
 .merchant-marketplace-notice .merchant-section-heading { margin-bottom: 10px; }
 .merchant-marketplace-notice .merchant-section-heading h3 { margin: 0; font-size: 0.95rem; }
