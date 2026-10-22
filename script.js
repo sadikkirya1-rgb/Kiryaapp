@@ -2463,6 +2463,10 @@ document.getElementById('customerOrdersBack')?.addEventListener('click', () => {
 function openAdmin() {
     document.getElementById('adminScreen').classList.add('active');
     renderAdminMarketplaceRequests();
+    if (document.querySelector('.admin-section.active')?.dataset.section === 'approvals') {
+        initAdminMarketplaceMap();
+        setTimeout(() => adminMarketplaceMap?.invalidateSize(), 100);
+    }
 }
 
 const marketplaceOfferSeed = [
@@ -2475,6 +2479,7 @@ const marketplaceOfferSeed = [
         vendorName: 'Al Reef Restaurant',
         pickupAddress: 'Kisementi, Kampala',
         pickupCoordinates: { latitude: 0.3371, longitude: 32.5864 },
+        vendorCoordinates: { latitude: 0.3380, longitude: 32.5860 },
         dropoffAddress: 'Kololo, Kampala',
         dropoffArea: 'Kololo, Kampala',
         dropoffCoordinates: { latitude: 0.3219, longitude: 32.5940 },
@@ -2491,6 +2496,7 @@ const marketplaceOfferSeed = [
         vendorName: 'Ntinda Fresh Market',
         pickupAddress: 'Ntinda Shopping Centre, Kampala',
         pickupCoordinates: { latitude: 0.3578, longitude: 32.6131 },
+        vendorCoordinates: { latitude: 0.3585, longitude: 32.6123 },
         dropoffAddress: 'Naguru, Kampala',
         dropoffArea: 'Naguru, Kampala',
         dropoffCoordinates: { latitude: 0.3458, longitude: 32.6075 },
@@ -2507,6 +2513,7 @@ const marketplaceOfferSeed = [
         vendorName: 'Wandegeya Pharmacy',
         pickupAddress: 'Wandegeya, Kampala',
         pickupCoordinates: { latitude: 0.3378, longitude: 32.5682 },
+        vendorCoordinates: { latitude: 0.3385, longitude: 32.5690 },
         dropoffAddress: 'Rubaga, Kampala',
         dropoffArea: 'Rubaga, Kampala',
         dropoffCoordinates: { latitude: 0.3017, longitude: 32.5566 },
@@ -2523,7 +2530,7 @@ function isValidMarketplaceOffer(offer) {
     return offer && Number.isInteger(offer.id) && typeof offer.title === 'string' &&
         typeof offer.description === 'string' && typeof offer.vendorName === 'string' &&
         typeof offer.pickupAddress === 'string' && typeof offer.dropoffArea === 'string' &&
-        validCoordinate(offer.pickupCoordinates) && validCoordinate(offer.dropoffCoordinates) &&
+        validCoordinate(offer.pickupCoordinates) && validCoordinate(offer.vendorCoordinates) && validCoordinate(offer.dropoffCoordinates) &&
         Number.isFinite(offer.pickupToDropoffKm) && Number.isFinite(offer.commissionAmount) &&
         ['available', 'requested', 'approved', 'rejected'].includes(offer.status);
 }
@@ -2535,7 +2542,10 @@ function loadMarketplaceOffers() {
             localStorage.setItem('kiryaMarketplaceOffers', JSON.stringify(marketplaceOfferSeed));
             return marketplaceOfferSeed.map(offer => ({ ...offer }));
         }
-        const offers = JSON.parse(saved);
+        const offers = JSON.parse(saved).map(offer => ({
+            ...offer,
+            vendorCoordinates: offer.vendorCoordinates || offer.pickupCoordinates
+        }));
         if (!Array.isArray(offers) || !offers.every(isValidMarketplaceOffer)) {
             throw new Error('Saved marketplace offers have an invalid format.');
         }
@@ -2547,6 +2557,12 @@ function loadMarketplaceOffers() {
 }
 
 let marketplaceOffers = loadMarketplaceOffers();
+let adminMarketplaceMap = null;
+const adminMarketplaceMarkers = new Map();
+const adminMapDemoRiders = [
+    { id: 'sample-car', name: 'Noah K. (sample)', vehicle: 'Car', availability: 'available', latitude: 0.3631, longitude: 32.6010 },
+    { id: 'sample-walk', name: 'Patrick O. (sample)', vehicle: 'Walking', availability: 'available', latitude: 0.3251, longitude: 32.5704 }
+];
 
 function saveMarketplaceOffers(offers) {
     try {
@@ -2740,10 +2756,16 @@ function bindAdminSectionNavigation() {
                 adminShell.classList.remove('sidebar-open');
                 const backdrop = document.getElementById('adminSidebarBackdrop');
                 if (backdrop) backdrop.classList.remove('active');
+                document.getElementById('adminMobileNavToggle')?.setAttribute('aria-expanded', 'false');
             }
             if (sectionName === 'overview') {
                 renderAdminTable();
                 renderAdminUsers();
+            }
+            if (sectionName === 'approvals') {
+                initAdminMarketplaceMap();
+                renderAdminMarketplaceMap();
+                setTimeout(() => adminMarketplaceMap?.invalidateSize(), 100);
             }
         });
     });
@@ -2759,11 +2781,19 @@ function setupAdminMobileSidebar() {
     toggleButton.addEventListener('click', () => {
         const isOpen = adminShell.classList.toggle('sidebar-open');
         backdrop.classList.toggle('active', isOpen);
+        toggleButton.setAttribute('aria-expanded', String(isOpen));
     });
 
     backdrop.addEventListener('click', () => {
         adminShell.classList.remove('sidebar-open');
         backdrop.classList.remove('active');
+        toggleButton.setAttribute('aria-expanded', 'false');
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        adminShell.classList.remove('sidebar-open');
+        backdrop.classList.remove('active');
+        toggleButton.setAttribute('aria-expanded', 'false');
     });
 }
 
@@ -3086,6 +3116,104 @@ function marketplaceOfferPopup(offer) {
     </article>`;
 }
 
+function adminMapIcon(className, markup, iconSize = [40, 42], iconAnchor = [20, 36]) {
+    return L.divIcon({ className: `admin-map-transparent-icon ${className}`, html: markup, iconSize, iconAnchor });
+}
+
+function adminRiderMapIcon(vehicle) {
+    const value = String(vehicle || '').toLowerCase();
+    const symbol = /car|van|auto/.test(value) ? '🚗' : /walk|foot/.test(value) ? '🚶' : /bicycle|cycle/.test(value) ? '🚲' : '🏍️';
+    return adminMapIcon('admin-map-rider-icon', `<span aria-hidden="true">${symbol}</span>`);
+}
+
+function upsertAdminMarketplaceMarker(key, position, icon, popupContent) {
+    let marker = adminMarketplaceMarkers.get(key);
+    if (!marker) {
+        marker = L.marker(position, { icon, keyboard: true }).addTo(adminMarketplaceMap);
+        marker.bindPopup(popupContent, { maxWidth: 300 });
+        adminMarketplaceMarkers.set(key, marker);
+    } else {
+        marker.setLatLng(position);
+        marker.setIcon(icon);
+        marker.setPopupContent(popupContent);
+    }
+    return marker;
+}
+
+function initAdminMarketplaceMap() {
+    const element = document.getElementById('adminMarketplaceMap');
+    if (!element || adminMarketplaceMap) return;
+    adminMarketplaceMap = createTrackingMap(element);
+    renderAdminMarketplaceMap();
+}
+
+function renderAdminMarketplaceMap() {
+    if (!adminMarketplaceMap) return;
+    const visibleKeys = new Set();
+    const riderLocations = readLiveRiderLocations() || [];
+    const samplePositions = [
+        { latitude: 0.3476, longitude: 32.5825 },
+        { latitude: 0.3536, longitude: 32.5915 },
+        { latitude: 0.3415, longitude: 32.5740 }
+    ];
+    const partners = (merchantPartners || []).filter(partner => partner.status === 'active');
+    const riderRows = partners.map((partner, index) => {
+        const location = partner.availability === 'available' ? getFreshRiderLocation(riderLocations, partner.id) : null;
+        const sample = samplePositions[index % samplePositions.length];
+        return {
+            id: `partner-${partner.id}`,
+            name: partner.name,
+            vehicle: partner.vehicle,
+            availability: partner.availability || 'available',
+            latitude: location?.latitude ?? sample.latitude,
+            longitude: location?.longitude ?? sample.longitude,
+            live: Boolean(location)
+        };
+    });
+    riderRows.push(...adminMapDemoRiders);
+    riderRows.forEach(rider => {
+        const key = `rider:${rider.id}`;
+        visibleKeys.add(key);
+        upsertAdminMarketplaceMarker(key, [rider.latitude, rider.longitude], adminRiderMapIcon(rider.vehicle),
+            `<strong>${escapeMerchantText(rider.name)}</strong><br>${escapeMerchantText(rider.vehicle)} rider · ${escapeMerchantText(rider.availability)}${rider.live ? '<br>Live GPS' : '<br>Sample position'}`);
+    });
+
+    const visibleOffers = marketplaceOffers.filter(offer => ['available', 'requested', 'approved'].includes(offer.status));
+    visibleOffers.forEach(offer => {
+        const id = String(offer.id);
+        const pickup = [offer.pickupCoordinates.latitude, offer.pickupCoordinates.longitude];
+        const vendor = [offer.vendorCoordinates.latitude, offer.vendorCoordinates.longitude];
+        const dropoff = [offer.dropoffCoordinates.latitude, offer.dropoffCoordinates.longitude];
+        const vendorKey = `vendor:${id}`;
+        const itemKey = `item:${id}`;
+        const dropoffKey = `dropoff:${id}`;
+        visibleKeys.add(vendorKey);
+        visibleKeys.add(itemKey);
+        visibleKeys.add(dropoffKey);
+        upsertAdminMarketplaceMarker(vendorKey, vendor,
+            adminMapIcon('admin-map-vendor-icon', '<span aria-hidden="true">🏪</span>'),
+            `<strong>${escapeMerchantText(offer.vendorName)}</strong><br>${escapeMerchantText(offer.pickupAddress)}<br>Vendor pickup point`);
+        upsertAdminMarketplaceMarker(itemKey, pickup,
+            adminMapIcon('admin-map-item-icon', `<span aria-hidden="true">${escapeMerchantText(offer.icon || '📦')}</span><b>${formatMerchantCurrency(offer.commissionAmount)}</b>`, [118, 54], [59, 46]),
+            `<strong>${escapeMerchantText(offer.title)}</strong><br>${escapeMerchantText(offer.description)}<br>${escapeMerchantText(offer.vendorName)}<br>Commission: ${formatMerchantCurrency(offer.commissionAmount)}<br>Pickup to drop-off: ~${Number(offer.pickupToDropoffKm).toFixed(1)} km<br>Status: ${escapeMerchantText(offer.status)}`);
+        upsertAdminMarketplaceMarker(dropoffKey, dropoff,
+            adminMapIcon('admin-map-dropoff-icon', '<span aria-hidden="true">📍</span>'),
+            `<strong>Customer drop-off</strong><br>${escapeMerchantText(offer.dropoffArea)}<br>Approximate destination`);
+        const routeKey = `route:${id}`;
+        visibleKeys.add(routeKey);
+        const existingRoute = adminMarketplaceMarkers.get(routeKey);
+        if (existingRoute) existingRoute.setLatLngs([pickup, dropoff]);
+        else adminMarketplaceMarkers.set(routeKey, L.polyline([pickup, dropoff], { color: '#147b68', weight: 2, opacity: 0.62, dashArray: '5 7', interactive: false }).addTo(adminMarketplaceMap));
+    });
+
+    for (const [key, marker] of adminMarketplaceMarkers) {
+        if (!visibleKeys.has(key)) {
+            marker.remove();
+            adminMarketplaceMarkers.delete(key);
+        }
+    }
+}
+
 function renderMarketplaceMapOffers() {
     const count = document.getElementById('riderMarketplaceCount');
     const offers = marketplaceOffers.filter(offer => offer.status === 'available');
@@ -3182,6 +3310,7 @@ function requestMarketplaceDelivery(offerId) {
     );
     if (!saveMarketplaceOffers(nextOffers)) return;
     renderMarketplaceMapOffers();
+    renderAdminMarketplaceMap();
     renderAdminMarketplaceRequests();
     renderAdminNav();
     showToast(`Request sent for ${offer.title}. Waiting for admin approval.`);
@@ -3277,6 +3406,7 @@ function reviewMarketplaceRequest(offerId, decision) {
         showToast(`${partner.name} is approved. ${offer.vendorName} has been notified to expect pickup.`);
     } else if (saveMarketplaceOffers(nextOffers)) {
         renderMarketplaceMapOffers();
+        renderAdminMarketplaceMap();
         showToast(`Request rejected. ${offer.title} is available for another rider.`);
     }
     renderAdminMarketplaceRequests();
@@ -3567,6 +3697,7 @@ function refreshLiveRiderMaps() {
         : null);
     updateMerchantRiderTrackingMap(locations);
     updateCustomerTrackingMaps(locations);
+    renderAdminMarketplaceMap();
 }
 
 function stopRiderLocationTracking(partnerId) {
@@ -6619,6 +6750,7 @@ window.addEventListener('storage', event => {
             if (!Array.isArray(offers) || !offers.every(isValidMarketplaceOffer)) throw new Error('Saved marketplace offers have an invalid format.');
             marketplaceOffers = offers;
             renderMarketplaceMapOffers();
+            renderAdminMarketplaceMap();
             renderAdminMarketplaceRequests();
             renderAdminNav();
             renderMerchantMarketplaceNotifications();
@@ -6727,6 +6859,7 @@ window.addEventListener('storage', event => {
     if (merchantCustomersScreen?.classList.contains('active')) renderMerchantCustomers();
     renderMerchantAssignmentOptions();
     updateMerchantOrderMetrics();
+    renderAdminMarketplaceMap();
     if (dailySalesChartInstance || topItemsChartInstance || orderStatusChartInstance) updateMerchantAnalytics();
     renderCustomerOrders();
 });

@@ -132,6 +132,8 @@ Kiryaapp/
 ### Admin App 🛡️
 - Platform metrics dashboard
 - User/rider/merchant monitoring
+- Kampala operations map with partner transport icons, vendors, sample pickup items and commissions, route lines, and customer drop-off pins
+- Review and approve or reject marketplace rider pickup requests
 - Financial tracking
 - Alert management
 - System health monitoring
