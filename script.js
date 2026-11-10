@@ -22,6 +22,82 @@ let topItemsChartInstance = appState.topItemsChartInstance;
 let orderStatusChartInstance;
 let menuAvailabilityChartInstance;
 
+const lastScreenStoragePrefix = 'kiryaLastScreen:';
+let suppressLastScreenWrites = false;
+
+function getCurrentAppRole() {
+    const hash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
+    return ['user', 'rider', 'admin', 'merchant'].includes(hash) ? hash : 'main';
+}
+
+function rememberLastScreen(screen, detail = {}) {
+    if (suppressLastScreenWrites) return;
+    try {
+        localStorage.setItem(`${lastScreenStoragePrefix}${getCurrentAppRole()}`, JSON.stringify({ screen, detail }));
+    } catch (error) {
+        console.warn('Unable to save the last screen.', error);
+    }
+}
+
+function restoreLastScreen(role = getCurrentAppRole()) {
+    let savedState;
+    try {
+        savedState = JSON.parse(localStorage.getItem(`${lastScreenStoragePrefix}${role}`) || 'null');
+    } catch (error) {
+        return false;
+    }
+
+    if (!savedState?.screen) return false;
+    const detail = savedState.detail || {};
+
+    switch (savedState.screen) {
+        case 'home':
+            return true;
+        case 'map':
+            document.getElementById('openMapBtn')?.click();
+            return true;
+        case 'newHome':
+            updateSelectedAddressCard();
+            document.getElementById('newHomeScreen')?.classList.add('active');
+            hideMap();
+            return true;
+        case 'contentSearch':
+            openContentSearch();
+            return true;
+        case 'category':
+            if (!detail.title) return false;
+            showDetailScreen(detail.title);
+            return true;
+        case 'restaurant':
+            if (!detail.name) return false;
+            openRestaurant(detail.name);
+            return true;
+        case 'cart':
+            openCart();
+            return true;
+        case 'orders':
+            openCustomerOrders();
+            return true;
+        case 'profile':
+            openProfile();
+            return true;
+        case 'rider':
+            if (role !== 'rider') openRider();
+            return true;
+        case 'admin':
+            if (role !== 'admin') openAdmin();
+            if (detail.section) {
+                Array.from(document.querySelectorAll('.admin-nav-item')).find(item => item.dataset.section === detail.section)?.click();
+            }
+            return true;
+        case 'merchant':
+            if (role !== 'merchant' || detail.view !== 'dashboard') navigateMerchantView(detail.view || 'dashboard');
+            return true;
+        default:
+            return false;
+    }
+}
+
 function hideMap(){ const m=ui.get('map'); if(m) m.style.display='none'; }
 function showMap(){ const m=ui.get('map'); if(m) m.style.display='block'; }
 function updateAddAddressBtn(){
@@ -72,7 +148,13 @@ function openRoleScreenFromHash() {
                 splash.style.display = 'none';
             }, 500);
         }
-        roleScreens[hash]();
+                suppressLastScreenWrites = true;
+                try {
+                    roleScreens[hash]();
+                } finally {
+                    suppressLastScreenWrites = false;
+                }
+        if (!restoreLastScreen(hash)) rememberLastScreen(hash === 'user' ? 'home' : hash);
     }, 1800);
   return true;
 }
@@ -86,6 +168,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     setTimeout(()=>{
       document.getElementById('splash').style.display='none';
       document.getElementById('home').style.display='block';
+            if (!restoreLastScreen('main')) rememberLastScreen('home');
     },500);
   },3000);
 });
@@ -94,6 +177,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 document.getElementById('openMapBtn').addEventListener('click',()=>{
   document.getElementById('home').style.display='none';
   document.getElementById('mapScreen').style.display='block';
+    rememberLastScreen('map');
   setTimeout(()=> document.getElementById('bottomCard').classList.add('show'),200);
 
   if(!map){
@@ -187,18 +271,21 @@ function navigateBack() {
     // From Content Search, go back to New Home Screen
     if (contentSearchScreen && contentSearchScreen.classList.contains('active')) {
         contentSearchScreen.classList.remove('active');
+        rememberLastScreen('newHome');
         return;
     }
 
     // From Restaurant screen, go back to Category screen
     if (restaurantScreen.classList.contains('active')) {
         restaurantScreen.classList.remove('active');
+        rememberLastScreen('category', { title: catTitle.textContent });
         return;
     }
 
     // From Category screen, go back to New Home screen
     if (categoryScreen.classList.contains('active')) {
         categoryScreen.classList.remove('active');
+        rememberLastScreen('newHome');
         updateAddAddressBtn();
         return;
     }
@@ -225,6 +312,7 @@ function navigateBack() {
         document.getElementById('backBtn').style.opacity = '1';
         document.getElementById('currentLocationBtn').style.opacity = '1';
         document.querySelector('.leaflet-control-zoom').style.opacity = '1';
+        rememberLastScreen('map');
         return;
     }
 
@@ -235,6 +323,7 @@ function navigateBack() {
         document.getElementById('bottomCard').classList.remove('show');
         searchCard.classList.remove('show');
         searchCard.classList.remove('expanded');
+        rememberLastScreen('home');
         return;
     }
 }
@@ -358,6 +447,7 @@ document.getElementById('backBtn').addEventListener('click', navigateBack);
 document.getElementById('addAddressBtn').addEventListener('click',()=>{
   const newScreen = document.getElementById('newHomeScreen');
   newScreen.classList.add('active');
+    rememberLastScreen('newHome');
   updateSelectedAddressCard();
   hideMap();
   updateAddAddressBtn();
@@ -438,6 +528,7 @@ draggables.forEach((tile, index)=>{
 function openContentSearch() {
     const screen = document.getElementById('contentSearchScreen');
     screen.classList.add('active');
+    rememberLastScreen('contentSearch');
     
     // Populate if empty
     const grid = document.getElementById('searchCategoriesGrid');
@@ -512,6 +603,7 @@ const csBackBtn = document.getElementById('csBackBtn');
 if(csBackBtn) {
     csBackBtn.addEventListener('click', () => {
         document.getElementById('contentSearchScreen').classList.remove('active');
+        rememberLastScreen('newHome');
     });
 }
 
@@ -871,6 +963,7 @@ function showDetailScreen(title) {
 
   // Add 'active' class to show the screen
   categoryScreen.classList.add('active');
+    rememberLastScreen('category', { title });
 }
 
 document.querySelectorAll('.grid-item').forEach(item => {
@@ -968,6 +1061,7 @@ const resShareBtn = document.getElementById('resShareBtn');
 
 function openRestaurant(name, menuData) {
   document.getElementById('resScreenName').textContent = name;
+    rememberLastScreen('restaurant', { name });
   
   // Default to Food menu if no menuData provided
   const menu = menuData || categoryConfig["Food"].menu;
@@ -1047,12 +1141,14 @@ if (resBackToTopBtn) { resBackToTopBtn.addEventListener('click', () => restauran
 if (resBackBtn) {
   resBackBtn.addEventListener('click', () => {
     restaurantScreen.classList.remove('active');
+        rememberLastScreen('category', { title: catTitle.textContent });
   });
 }
 
 if (resCloseBtn) {
   resCloseBtn.addEventListener('click', () => {
     restaurantScreen.classList.remove('active');
+        rememberLastScreen('category', { title: catTitle.textContent });
   });
 }
 
@@ -1482,6 +1578,7 @@ function openCart() {
         addMoreBtn.addEventListener('click', () => {
             cartScreen.classList.remove('active');
             clearInterval(suggestedScrollInterval);
+            rememberLastScreen('restaurant', { name: document.getElementById('resScreenName').textContent });
         });
         cartContent.appendChild(addMoreBtn);
 
@@ -1536,6 +1633,7 @@ function openCart() {
 
     cartTotalAmount.textContent = grandTotal.toFixed(2);
     cartScreen.classList.add('active');
+    rememberLastScreen('cart');
 }
 
 /* Cart Actions (Delegation) */
@@ -1957,6 +2055,7 @@ if (cartBackBtn) {
     cartBackBtn.addEventListener('click', () => {
         cartScreen.classList.remove('active');
         clearInterval(suggestedScrollInterval);
+        rememberLastScreen('home');
     });
 }
 
@@ -2325,6 +2424,7 @@ const profileBackBtn = document.getElementById('profileBackBtn');
 function closeProfile() {
     document.getElementById('sideMenuOverlay').classList.remove('active');
     document.getElementById('profileScreen').classList.remove('active');
+    rememberLastScreen('home');
 }
 
 function openProfile() {
@@ -2336,11 +2436,13 @@ function openProfile() {
     
     document.getElementById('sideMenuOverlay').classList.add('active');
     profileScreen.classList.add('active');
+    rememberLastScreen('profile');
 }
 
 function openRider() {
     document.getElementById('riderScreen').classList.add('active');
     initializeRiderWorkspace();
+    rememberLastScreen('rider');
 }
 
 function readCustomerWorkflowCollections() {
@@ -2496,14 +2598,17 @@ function openCustomerOrders() {
     }
     renderCustomerOrders();
     document.getElementById('customerOrdersScreen').classList.add('active');
+    rememberLastScreen('orders');
 }
 
 document.getElementById('customerOrdersBack')?.addEventListener('click', () => {
     document.getElementById('customerOrdersScreen').classList.remove('active');
+    rememberLastScreen('home');
 });
 
 function openAdmin() {
     document.getElementById('adminScreen').classList.add('active');
+    rememberLastScreen('admin');
     renderAdminDemoMetrics();
     renderAdminMarketplaceRequests();
     renderAdminMarketplaceAudit();
@@ -2875,6 +2980,7 @@ function bindAdminSectionNavigation() {
     navItems.forEach((item) => {
         item.addEventListener('click', () => {
             const sectionName = item.dataset.section;
+            rememberLastScreen('admin', { section: sectionName });
             navItems.forEach((nav) => nav.classList.toggle('active', nav === item));
             sections.forEach((section) => {
                 section.classList.toggle('active', section.dataset.section === sectionName);
@@ -5671,6 +5777,7 @@ function closeMerchantNavAndReturnFocus() {
 
 function navigateMerchantView(view) {
     setMerchantNavView(view);
+    rememberLastScreen('merchant', { view });
     const merchantScreens = [
         merchantPortalScreen, merchantProfileScreen, merchantActiveOrdersScreen, merchantOrdersScreen,
         merchantMenuScreen, merchantEditItemScreen, merchantKioskScreen,
