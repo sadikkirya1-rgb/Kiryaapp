@@ -5,18 +5,18 @@
 html,body{ width:100%; height:100%; overflow-x:hidden; }
 
 /* Splash */
-#splash{ display:flex; justify-content:center; align-items:center; height:100vh; background:linear-gradient(135deg, #ffb000, #ff8a00); transition:opacity .5s; }
+#splash{ display:flex; justify-content:center; align-items:center; height:100vh; background:linear-gradient(135deg, #ffc247, #ff9f1c); transition:opacity .5s; }
 #splash .splash-brand{ display:flex; justify-content:center; align-items:center; width:min(78vw, 420px); }
 #splash .splash-logo{ display:block; width:100%; height:auto; filter: drop-shadow(0 18px 24px rgba(0,0,0,0.12)); animation: splashFloat 2.2s ease-in-out infinite; }
 @keyframes splashFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
 
 /* Home */
 #home{ display:none; height:100vh; }
-.card{ position:absolute; top:0; left:0; right:0; bottom:0; background:orange; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
-.address-card{ position:absolute; top:20px; left:50%; transform:translateX(-50%); background:#fff; border-radius:30px; padding:12px 24px; display:inline-flex; align-items:center; gap:8px; cursor:pointer; white-space:nowrap; transition:transform .2s, box-shadow .2s; box-shadow: 0 4px 15px rgba(0,0,0,0.1); font-weight: 600; color: #333; }
+.card{ position:absolute; top:0; left:0; right:0; bottom:0; background:linear-gradient(135deg, #ffc247, #ff9f1c); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+.address-card{ position:absolute; top:20px; left:50%; transform:translateX(-50%); background:#ffe08a; border-radius:18px; padding:7px 12px; display:inline-flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap; transition:transform .2s, box-shadow .2s; box-shadow:0 4px 15px rgba(0,0,0,0.12); font-size:0.8rem; font-weight:600; color:#332000; }
 .address-card:hover{ transform:translateX(-50%) translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.15); }
 .map-pin-badge{ display:block; width:18px; height:18px; object-fit:contain; flex-shrink:0; }
-.address-card .map-pin-badge{ width:20px; height:20px; }
+.address-card .map-pin-badge{ width:22px; height:22px; filter:brightness(0) invert(1); }
 .logo{ display:flex; justify-content:center; align-items:center; margin-bottom:15px; }
 .logo .delivery-address-icon{ display:block; width:min(38vw, 210px); height:auto; object-fit:contain; filter: drop-shadow(0 14px 20px rgba(0,0,0,0.08)); }
 #newHomeScreen .home-icon{ display:block; width:28px; height:28px; object-fit:contain; filter: drop-shadow(0 10px 16px rgba(0,0,0,0.08)); }
@@ -25,22 +25,23 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 
 /* Modern Floating Navbar */
 #home > nav {
-  display:flex; justify-content:space-evenly; align-items:center;
-  background:rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
-  position:fixed; bottom:25px; left:20px; right:20px;
+  display:flex; justify-content:space-around; align-items:stretch;
+  background:#fff;
+  position:fixed; bottom:0; left:0; right:0; width:100%;
   z-index:1000;
-  border-radius:35px;
-  box-shadow:0 8px 30px rgba(0,0,0,0.12);
-  padding:12px 5px;
-  border:none;
-  max-width:500px; margin:0 auto;
+  border-top:1px solid #e8e8e8;
+  box-shadow:0 -4px 18px rgba(0,0,0,0.08);
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom));
 }
-.nav-item { flex:1; padding:0; text-align:center; color:#b0b0b0; cursor:pointer; font-size:1.5em; display:flex; flex-direction:column; align-items:center; transition:all .2s; position: relative; }
-.nav-item span { display: none; }
-.nav-item.active { color:#019E81; transform: translateY(-2px); }
-.nav-item.active::after { content:''; width: 5px; height: 5px; background: #019E81; border-radius: 50%; position: absolute; bottom: -5px; }
-.nav-item:hover { color:#019E81; }
-.nav-item:active { transform: scale(0.95); }
+body[data-app-role="user"] #home > nav [data-role-app="admin"] { display:none; }
+body:not([data-app-role="admin"]) #home > nav [data-role-app="admin"] { display:none; }
+body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
+.nav-item { flex:1; min-width:0; min-height:48px; padding:2px 1px; text-align:center; color:#555; cursor:pointer; font-size:1em; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; transition:color .2s, transform .2s; position:relative; }
+.nav-icon { display:block; width:18px; height:18px; flex:none; }
+.nav-item span { display:block; color:inherit; font-size:9px; font-weight:600; line-height:1.1; white-space:nowrap; }
+.nav-item.active { color:#e87500; background:#fff1df; border-radius:12px; transform:none; }
+.nav-item:hover { color:#111; }
+.nav-item:active { transform: scale(0.96); }
 .nav-item #customerActiveOrderCount { position: absolute; top: -7px; left: calc(50% + 2px); min-width: 17px; padding: 2px 4px; border-radius: 10px; background: #d9534f; color: #fff; font-size: 0.62rem; font-weight: 800; line-height: 1.1; }
 
 /* Map */
@@ -148,7 +149,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 #newHomeScreen{ position:fixed; bottom:-100%; left:0; width:100%; height:100%; z-index:1000; display:flex; flex-direction:column; transition:bottom 0.5s ease; pointer-events:none; }
 #newHomeScreen.active{ pointer-events:auto; bottom:0; }
 #newHomeScreen .header{ 
-  min-height: 48%; height: auto; background:orange; display:flex; justify-content:flex-start; align-items:center; flex-direction:column; color:#fff; padding-top: 70px; padding-bottom: 30px; 
+  min-height: 48%; height: auto; background:linear-gradient(135deg, #ffc247, #ff9f1c); display:flex; justify-content:flex-start; align-items:center; flex-direction:column; color:#fff; padding-top: 70px; padding-bottom: 30px;
   border-bottom-left-radius: 30px; border-bottom-right-radius: 30px; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.4); position: relative; z-index: 2; 
 }
 #newHomeScreen .selected-address-card{ 

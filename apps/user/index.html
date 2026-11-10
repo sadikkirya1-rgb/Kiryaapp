@@ -10,6 +10,18 @@
   </style>
 </head>
 <body>
-  <iframe src="../../index.html#user" title="Kirya User App"></iframe>
+  <iframe id="userAppFrame" src="../../index.html#user" title="Kirya User App"></iframe>
+  <script>
+    const userAppFrame = document.getElementById('userAppFrame');
+    userAppFrame.addEventListener('load', () => {
+      const appDocument = userAppFrame.contentDocument;
+      if (!appDocument) return;
+
+      appDocument.body.dataset.appRole = 'user';
+      const userAppStyle = appDocument.createElement('style');
+      userAppStyle.textContent = '#adminScreen, [data-role-app="admin"] { display: none !important; }';
+      appDocument.head.append(userAppStyle);
+    });
+  </script>
 </body>
 </html>

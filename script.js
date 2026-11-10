@@ -54,6 +54,8 @@ function openRoleScreenFromHash() {
 
   if (!roleScreens[hash]) return false;
 
+    document.body.dataset.appRole = hash;
+
   const splash = document.getElementById('splash');
   const home = document.getElementById('home');
 
