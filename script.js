@@ -2866,6 +2866,17 @@ function openAdmin() {
     }
 }
 
+document.getElementById('adminBackBtn')?.addEventListener('click', () => {
+    document.getElementById('adminScreen').classList.remove('active');
+    if (getSavedDeliveryLocation()) {
+        showDeliveryHome();
+        rememberLastScreen('newHome');
+    } else {
+        showDeliveryLanding();
+        rememberLastScreen('home');
+    }
+});
+
 const marketplaceOfferSeed = [
     {
         id: 901,
@@ -6324,6 +6335,29 @@ function navigateMerchantView(view) {
 }
 
 merchantHeaderNavToggles.forEach(toggle => toggle.addEventListener('click', toggleMerchantHeaderNavigation));
+document.querySelectorAll('[data-merchant-back]').forEach(button => button.addEventListener('click', () => {
+    if (button.dataset.merchantBack === 'home') {
+        [
+            merchantPortalScreen, merchantProfileScreen, merchantActiveOrdersScreen, merchantOrdersScreen,
+            merchantMenuScreen, merchantEditItemScreen, merchantKioskScreen, merchantDeliveryScreen,
+            merchantAssignedRidersScreen, merchantCustomersScreen
+        ].forEach(screen => screen?.classList.remove('active'));
+        setMerchantNavOpen(false);
+        if (getSavedDeliveryLocation()) {
+            showDeliveryHome();
+            rememberLastScreen('newHome');
+        } else {
+            showDeliveryLanding();
+            rememberLastScreen('home');
+        }
+        return;
+    }
+    if (button.dataset.merchantBack === 'menu') {
+        navigateMerchantView('menu');
+        return;
+    }
+    navigateMerchantView('dashboard');
+}));
 merchantSidebarBackdrop?.addEventListener('click', closeMerchantNavAndReturnFocus);
 merchantSidebarClose?.addEventListener('click', closeMerchantNavAndReturnFocus);
 merchantSidebarNav?.addEventListener('click', event => {

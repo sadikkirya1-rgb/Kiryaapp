@@ -18,9 +18,6 @@
       if (!appDocument) return;
 
       appDocument.body.dataset.appRole = 'user';
-      const userAppStyle = appDocument.createElement('style');
-      userAppStyle.textContent = '#adminScreen, [data-role-app="admin"] { display: none !important; }';
-      appDocument.head.append(userAppStyle);
     });
   </script>
 </body>
