@@ -1210,6 +1210,21 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .admin-table th, .admin-table td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 0.82rem; }
 .admin-table-area { display: block; margin-top: 3px; color: #64748b; font-size: 0.68rem; }
 .admin-table th { color: #64748b; font-weight: 700; }
+.admin-delivery-location-description { margin: 6px 0 0; color: #64748b; font-size: 0.78rem; }
+.admin-delivery-location-form { padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+.admin-delivery-location-form h4 { margin: 0 0 14px; color: #0f172a; font-size: 0.9rem; }
+.admin-delivery-location-fields { display: grid; grid-template-columns: minmax(100px, 0.4fr) minmax(0, 1fr); align-items: center; gap: 10px 12px; }
+.admin-delivery-location-fields > label { color: #475569; font-size: 0.78rem; font-weight: 700; }
+.admin-delivery-location-fields > input { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid #dfe7ee; border-radius: 8px; background: #fff; color: #0f172a; font: inherit; font-size: 0.82rem; }
+.admin-delivery-location-fields .admin-delivery-location-active { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.admin-delivery-location-active input { width: 16px; height: 16px; accent-color: #059669; }
+.admin-delivery-location-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.admin-delivery-location-form-actions [hidden] { display: none; }
+.admin-delivery-location-table-wrap { width: 100%; }
+.admin-delivery-location-table { min-width: 760px; }
+.admin-delivery-location-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.admin-delivery-location-actions .mini-btn { padding: 6px 8px; font-size: 0.68rem; cursor: pointer; }
+.admin-delivery-location-empty { margin: auto; padding: 18px; color: #64748b; font-size: 0.85rem; text-align: center; }
 .status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 9px; font-weight: 700; font-size: 0.68rem; }
 .status-badge.success { background: rgba(16, 185, 129, 0.12); color: #047857; }
 .status-badge.pending { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }

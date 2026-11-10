@@ -24,9 +24,11 @@ let menuAvailabilityChartInstance;
 
 const lastScreenStoragePrefix = 'kiryaLastScreen:';
 const deliveryLocationStorageKey = 'kiryaDeliveryLocation';
+const adminDeliveryLocationsStorageKey = 'kiryaAdminDeliveryLocations';
 let suppressLastScreenWrites = false;
 let deliveryLocationStep = 0;
 let pendingDeliveryLocation = {};
+let editingAdminDeliveryLocationId = null;
 
 const deliveryLocationSteps = [
     { key: 'region', title: 'Choose your region', hint: 'Select the region where you would like your order delivered.' },
@@ -54,9 +56,73 @@ function setDeliveryLocationAddress(location) {
     updateSelectedAddressCard();
 }
 
+function getDefaultAdminDeliveryLocations() {
+    return ugandaDeliveryLocationOptions.flatMap(region =>
+        region.districts.flatMap(district =>
+            district.towns.flatMap(town =>
+                town.landmarks.map(landmark => ({
+                    id: `sample-${region.name}-${district.name}-${town.name}-${landmark}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                    region: region.name,
+                    district: district.name,
+                    town: town.name,
+                    landmark,
+                    active: true,
+                    sample: true
+                }))
+            )
+        )
+    );
+}
+
+function getAdminDeliveryLocations() {
+    try {
+        const savedLocations = JSON.parse(localStorage.getItem(adminDeliveryLocationsStorageKey) || 'null');
+        if (!Array.isArray(savedLocations)) return getDefaultAdminDeliveryLocations();
+        return savedLocations.filter(location =>
+            location && typeof location.id === 'string' &&
+            ['region', 'district', 'town', 'landmark'].every(key => typeof location[key] === 'string' && location[key].trim())
+        );
+    } catch (error) {
+        console.warn('Unable to read admin delivery locations; using sample locations.', error);
+        return getDefaultAdminDeliveryLocations();
+    }
+}
+
+function saveAdminDeliveryLocations(locations) {
+    try {
+        localStorage.setItem(adminDeliveryLocationsStorageKey, JSON.stringify(locations));
+        return true;
+    } catch (error) {
+        console.error('Unable to save admin delivery locations.', error);
+        showToast('Could not save delivery locations. Check browser storage and try again.');
+        return false;
+    }
+}
+
 function getDeliveryLocationOptions() {
-    if (deliveryLocationStep === 0) return ugandaDeliveryLocationOptions;
-    const region = ugandaDeliveryLocationOptions.find(option => option.name === pendingDeliveryLocation.region);
+    const activeLocations = getAdminDeliveryLocations().filter(location => location.active);
+    const regions = [...new Set(activeLocations.map(location => location.region))].sort();
+    const hierarchy = regions.map(regionName => {
+        const regionLocations = activeLocations.filter(location => location.region === regionName);
+        const districts = [...new Set(regionLocations.map(location => location.district))].sort();
+        return {
+            name: regionName,
+            districts: districts.map(districtName => {
+                const districtLocations = regionLocations.filter(location => location.district === districtName);
+                const towns = [...new Set(districtLocations.map(location => location.town))].sort();
+                return {
+                    name: districtName,
+                    towns: towns.map(townName => ({
+                        name: townName,
+                        landmarks: [...new Set(districtLocations.filter(location => location.town === townName).map(location => location.landmark))].sort()
+                    }))
+                };
+            })
+        };
+    });
+
+    if (deliveryLocationStep === 0) return hierarchy;
+    const region = hierarchy.find(option => option.name === pendingDeliveryLocation.region);
     if (deliveryLocationStep === 1) return region?.districts || [];
     const district = region?.districts.find(option => option.name === pendingDeliveryLocation.district);
     if (deliveryLocationStep === 2) return district?.towns || [];
@@ -117,6 +183,12 @@ function renderDeliveryLocationPicker() {
             button.addEventListener('click', () => selectDeliveryLocationOption(option.name));
             options.appendChild(button);
         });
+    if (!options.childElementCount) {
+        const empty = document.createElement('p');
+        empty.className = 'admin-delivery-location-empty';
+        empty.textContent = query ? 'No matching locations found.' : 'No delivery locations are currently available.';
+        options.appendChild(empty);
+    }
 }
 
 function selectDeliveryLocationOption(name) {
@@ -3014,6 +3086,7 @@ const adminNavConfig = [
     { section: 'riders', icon: '🏍', label: 'Riders', count: () => 86 },
     { section: 'approvals', icon: '✓', label: 'Pickup approvals', count: () => marketplaceOffers.filter(offer => offer.status === 'requested').length },
     { section: 'merchants', icon: '🏪', label: 'Merchants', count: () => 28 },
+    { section: 'deliveryLocations', icon: '⌖', label: 'Delivery locations', count: () => getAdminDeliveryLocations().filter(location => location.active).length },
     { section: 'payouts', icon: '💰', label: 'Payouts', count: () => 18 },
     { section: 'settings', icon: '⚙', label: 'Settings', count: () => 3 }
 ];
@@ -3103,6 +3176,134 @@ function renderAdminRegionalMerchants() {
                 document.getElementById('adminRegionalMerchantSearch')?.addEventListener('input', renderAdminRegionalMerchants);
                 areaSelect.addEventListener('change', renderAdminRegionalMerchants);
         }
+}
+
+function resetAdminDeliveryLocationForm() {
+    const form = document.getElementById('adminDeliveryLocationForm');
+    if (!form) return;
+    form.reset();
+    editingAdminDeliveryLocationId = null;
+    document.getElementById('adminDeliveryLocationFormTitle').textContent = 'Add a delivery location';
+    document.getElementById('adminDeliveryLocationSubmit').textContent = 'Add location';
+    document.getElementById('adminDeliveryLocationCancel').hidden = true;
+}
+
+function renderAdminDeliveryLocations() {
+    const tableBody = document.getElementById('adminDeliveryLocationsTableBody');
+    const count = document.getElementById('adminDeliveryLocationCount');
+    if (!tableBody || !count) return;
+    const locations = getAdminDeliveryLocations().sort((first, second) =>
+        `${first.region} ${first.district} ${first.town} ${first.landmark}`.localeCompare(
+            `${second.region} ${second.district} ${second.town} ${second.landmark}`
+        )
+    );
+    count.textContent = `${locations.filter(location => location.active).length} active · ${locations.length} total`;
+    const navCount = document.querySelector('.admin-nav-item[data-section="deliveryLocations"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(locations.filter(location => location.active).length);
+    tableBody.innerHTML = locations.length ? locations.map(location => `
+        <tr>
+            <td>${escapeHtml(location.region)}</td>
+            <td>${escapeHtml(location.district)}</td>
+            <td>${escapeHtml(location.town)}</td>
+            <td>${escapeHtml(location.landmark)}${location.sample ? '<small class="admin-table-area">Sample location</small>' : ''}</td>
+            <td><span class="status-badge ${location.active ? 'success' : 'danger'}">${location.active ? 'Active' : 'Inactive'}</span></td>
+            <td class="admin-delivery-location-actions">
+                <button class="mini-btn" type="button" data-delivery-location-edit="${escapeHtml(location.id)}">Edit</button>
+                <button class="mini-btn ${location.active ? 'danger' : ''}" type="button" data-delivery-location-toggle="${escapeHtml(location.id)}">${location.active ? 'Deactivate' : 'Activate'}</button>
+                <button class="mini-btn danger" type="button" data-delivery-location-delete="${escapeHtml(location.id)}">Delete</button>
+            </td>
+        </tr>
+    `).join('') : '<tr><td colspan="6" class="empty-state">No delivery locations yet. Add one using the form.</td></tr>';
+}
+
+function bindAdminDeliveryLocationManagement() {
+    const form = document.getElementById('adminDeliveryLocationForm');
+    const tableBody = document.getElementById('adminDeliveryLocationsTableBody');
+    if (!form || !tableBody || form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        const region = document.getElementById('adminDeliveryLocationRegion').value.trim();
+        const district = document.getElementById('adminDeliveryLocationDistrict').value.trim();
+        const town = document.getElementById('adminDeliveryLocationTown').value.trim();
+        const landmark = document.getElementById('adminDeliveryLocationLandmark').value.trim();
+        if (![region, district, town, landmark].every(Boolean)) {
+            form.reportValidity();
+            return;
+        }
+
+        const locations = getAdminDeliveryLocations();
+        const duplicate = locations.some(location =>
+            location.id !== editingAdminDeliveryLocationId &&
+            [location.region, location.district, location.town, location.landmark]
+                .every((value, index) => value.trim().toLocaleLowerCase() === [region, district, town, landmark][index].toLocaleLowerCase())
+        );
+        if (duplicate) {
+            showToast('This delivery location already exists.');
+            return;
+        }
+
+        const existing = locations.find(location => location.id === editingAdminDeliveryLocationId);
+        const updatedLocation = {
+            id: existing?.id || `location-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            region,
+            district,
+            town,
+            landmark,
+            active: document.getElementById('adminDeliveryLocationActive').checked,
+            sample: false
+        };
+        const nextLocations = existing
+            ? locations.map(location => location.id === editingAdminDeliveryLocationId ? updatedLocation : location)
+            : [...locations, updatedLocation];
+        if (!saveAdminDeliveryLocations(nextLocations)) return;
+        resetAdminDeliveryLocationForm();
+        renderAdminDeliveryLocations();
+        showToast(existing ? 'Delivery location updated.' : 'Delivery location added.');
+    });
+
+    document.getElementById('adminDeliveryLocationCancel').addEventListener('click', resetAdminDeliveryLocationForm);
+    tableBody.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const locations = getAdminDeliveryLocations();
+        const editId = button.dataset.deliveryLocationEdit;
+        const toggleId = button.dataset.deliveryLocationToggle;
+        const deleteId = button.dataset.deliveryLocationDelete;
+
+        if (editId) {
+            const location = locations.find(item => item.id === editId);
+            if (!location) return;
+            editingAdminDeliveryLocationId = location.id;
+            document.getElementById('adminDeliveryLocationRegion').value = location.region;
+            document.getElementById('adminDeliveryLocationDistrict').value = location.district;
+            document.getElementById('adminDeliveryLocationTown').value = location.town;
+            document.getElementById('adminDeliveryLocationLandmark').value = location.landmark;
+            document.getElementById('adminDeliveryLocationActive').checked = location.active;
+            document.getElementById('adminDeliveryLocationFormTitle').textContent = 'Edit delivery location';
+            document.getElementById('adminDeliveryLocationSubmit').textContent = 'Save changes';
+            document.getElementById('adminDeliveryLocationCancel').hidden = false;
+            document.getElementById('adminDeliveryLocationRegion').focus();
+            return;
+        }
+
+        if (toggleId) {
+            const updated = locations.map(location => location.id === toggleId ? { ...location, active: !location.active } : location);
+            if (!saveAdminDeliveryLocations(updated)) return;
+            renderAdminDeliveryLocations();
+            return;
+        }
+
+        if (deleteId) {
+            const location = locations.find(item => item.id === deleteId);
+            if (!location || !window.confirm(`Delete ${location.landmark} in ${location.town}?`)) return;
+            if (!saveAdminDeliveryLocations(locations.filter(item => item.id !== deleteId))) return;
+            if (editingAdminDeliveryLocationId === deleteId) resetAdminDeliveryLocationForm();
+            renderAdminDeliveryLocations();
+        }
+    });
+    renderAdminDeliveryLocations();
 }
 
 function renderAdminUsers() {
@@ -3211,6 +3412,7 @@ function bindAdminSectionNavigation() {
             if (sectionName === 'riders') renderAdminRiderReview();
             if (sectionName === 'approvals') renderAdminMarketplaceAudit();
             if (sectionName === 'merchants') renderAdminRegionalMerchants();
+            if (sectionName === 'deliveryLocations') bindAdminDeliveryLocationManagement();
             if (sectionName === 'payouts') renderAdminMarketplacePayouts();
             if (sectionName === 'approvals') {
                 initAdminMarketplaceMap();

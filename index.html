@@ -1327,6 +1327,51 @@
           </div>
         </div>
 
+        <div class="admin-section" data-section="deliveryLocations">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <div>
+                <h3>Delivery locations</h3>
+                <p class="admin-delivery-location-description">Manage the regions, districts, towns and landmarks customers can select for delivery.</p>
+              </div>
+              <span class="tiny-pill" id="adminDeliveryLocationCount">0 active · 0 total</span>
+            </div>
+            <form id="adminDeliveryLocationForm" class="admin-delivery-location-form">
+              <h4 id="adminDeliveryLocationFormTitle">Add a delivery location</h4>
+              <div class="admin-delivery-location-fields">
+                <label for="adminDeliveryLocationRegion">Region</label>
+                <input id="adminDeliveryLocationRegion" type="text" list="adminDeliveryLocationRegions" maxlength="80" required placeholder="e.g. Eastern">
+                <datalist id="adminDeliveryLocationRegions">
+                  <option value="Eastern"></option><option value="Western"></option><option value="Central"></option><option value="Northern"></option>
+                </datalist>
+                <label for="adminDeliveryLocationDistrict">District</label>
+                <input id="adminDeliveryLocationDistrict" type="text" maxlength="100" required placeholder="e.g. Mbale District">
+                <label for="adminDeliveryLocationTown">Town or city</label>
+                <input id="adminDeliveryLocationTown" type="text" maxlength="100" required placeholder="e.g. Mbale City">
+                <label for="adminDeliveryLocationLandmark">Landmark</label>
+                <input id="adminDeliveryLocationLandmark" type="text" maxlength="120" required placeholder="e.g. Mbale SS">
+                <label class="admin-delivery-location-active"><input id="adminDeliveryLocationActive" type="checkbox" checked> Available to customers</label>
+              </div>
+              <div class="admin-delivery-location-form-actions">
+                <button class="ghost-btn" id="adminDeliveryLocationCancel" type="button" hidden>Cancel edit</button>
+                <button class="merchant-button-primary" id="adminDeliveryLocationSubmit" type="submit">Add location</button>
+              </div>
+            </form>
+          </div>
+          <div class="dashboard-card">
+            <div class="section-header">
+              <h3>Location directory</h3>
+              <span class="tiny-pill">Saved in this browser</span>
+            </div>
+            <div class="table-wrap admin-delivery-location-table-wrap">
+              <table class="admin-table admin-delivery-location-table">
+                <thead><tr><th>Region</th><th>District</th><th>Town / city</th><th>Landmark</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="adminDeliveryLocationsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div class="admin-section" data-section="settings">
           <div class="dashboard-card">
             <div class="section-header">
