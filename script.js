@@ -56,6 +56,23 @@ function setDeliveryLocationAddress(location) {
     updateSelectedAddressCard();
 }
 
+function hideDeliveryLocationPicker(focusTarget) {
+    const picker = document.getElementById('deliveryLocationScreen');
+    if (focusTarget instanceof HTMLElement) focusTarget.focus({ preventScroll: true });
+    picker.inert = true;
+    picker.setAttribute('aria-hidden', 'true');
+    picker.classList.remove('active');
+}
+
+function getDemoPhotoForImage(image) {
+    const value = String(image || '').toLocaleLowerCase();
+    if (value.includes('🍕') || value.includes('pizza')) return 'assets/merchant-pizza.jpg';
+    if (value.includes('🍗') || value.includes('🍖') || value.includes('chicken') || value.includes('wing') || value.includes('kfc')) return 'assets/merchant-wings.jpg';
+    if (value.includes('🍟') || value.includes('fries') || value.includes('potato')) return 'assets/merchant-fries.jpg';
+    if (value.includes('🥤') || value.includes('🍊') || value.includes('drink') || value.includes('juice') || value.includes('starbucks')) return 'assets/merchant-drink.jpg';
+    return 'assets/merchant-burger.jpg';
+}
+
 function getDefaultAdminDeliveryLocations() {
     return ugandaDeliveryLocationOptions.flatMap(region =>
         region.districts.flatMap(district =>
@@ -205,9 +222,12 @@ function openDeliveryLocationPicker() {
     document.getElementById('home').style.display = 'none';
     document.getElementById('mapScreen').style.display = 'none';
     document.getElementById('newHomeScreen').classList.remove('active');
-    document.getElementById('deliveryLocationScreen').classList.add('active');
-    document.getElementById('deliveryLocationScreen').setAttribute('aria-hidden', 'false');
+    const picker = document.getElementById('deliveryLocationScreen');
+    picker.inert = false;
+    picker.setAttribute('aria-hidden', 'false');
+    picker.classList.add('active');
     renderDeliveryLocationPicker();
+    document.getElementById('deliveryLocationSearch').focus({ preventScroll: true });
     rememberLastScreen('addressPicker');
 }
 
@@ -218,26 +238,22 @@ function showDeliveryHome() {
         return;
     }
     setDeliveryLocationAddress(savedLocation);
-    document.getElementById('deliveryLocationScreen').classList.remove('active');
-    document.getElementById('deliveryLocationScreen').setAttribute('aria-hidden', 'true');
     document.getElementById('home').style.display = 'none';
     document.getElementById('mapScreen').style.display = 'none';
     document.getElementById('newHomeScreen').classList.add('active');
     document.getElementById('newHomeBackBtn').style.display = 'none';
+    hideDeliveryLocationPicker(document.getElementById('selectedAddressCard'));
 }
 
 function showDeliveryLanding() {
-    document.getElementById('deliveryLocationScreen').classList.remove('active');
-    document.getElementById('deliveryLocationScreen').setAttribute('aria-hidden', 'true');
     document.getElementById('mapScreen').style.display = 'none';
     document.getElementById('newHomeScreen').classList.remove('active');
     document.getElementById('home').style.display = 'block';
+    hideDeliveryLocationPicker(document.getElementById('openDeliveryLocationBtn'));
 }
 
 function closeDeliveryLocationPicker() {
     if (!getSavedDeliveryLocation()) return;
-    document.getElementById('deliveryLocationScreen').classList.remove('active');
-    document.getElementById('deliveryLocationScreen').setAttribute('aria-hidden', 'true');
     showDeliveryHome();
     rememberLastScreen('newHome');
 }
@@ -1136,9 +1152,9 @@ function renderCategoryContent(category) {
       container.className = 'brand-container';
       container.innerHTML = `
           <div class="brand-item">
-            <div class="brand-image"><span>${b.icon}</span></div>
+            <div class="brand-image"><img src="${getDemoPhotoForImage(b.icon)}" alt="${escapeHtml(b.name)}" loading="lazy"></div>
           </div>
-          <div class="brand-name">${b.name}</div>
+          <div class="brand-name">${escapeHtml(b.name)}</div>
           <div class="brand-delivery-info"><span class="bike-icon">🚴‍♂️</span><span>Free delivery</span></div>
       `;
       container.addEventListener('click', () => openRestaurant(b.name, config.menu));
@@ -1149,10 +1165,10 @@ function renderCategoryContent(category) {
   // Render Restaurants / Items
   const generateCardHTML = (item) => `
       <div class="res-image">
-        ${item.image}
+        <img src="${getDemoPhotoForImage(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy">
         <button class="heart-btn">♡</button>
       </div>
-      <div class="res-name">${item.name}</div>
+      <div class="res-name">${escapeHtml(item.name)}</div>
       <div class="pref-info">
         <span class="pref-stat"><span>👍</span>(${item.rating})</span>
         <span class="pref-stat"><span style="display:inline-block; transform:scaleX(-1);">🚴‍♂️</span>${item.delivery}</span>
@@ -1349,6 +1365,17 @@ function openRestaurant(name, menuData) {
   
   // Default to Food menu if no menuData provided
   const menu = menuData || categoryConfig["Food"].menu;
+  const restaurantPhoto = getDemoPhotoForImage(name);
+  const coverImage = document.getElementById('resCoverImage');
+  const profileImage = document.getElementById('resProfileImage');
+  if (coverImage) {
+      coverImage.src = restaurantPhoto;
+      coverImage.alt = `${name} cover`;
+  }
+  if (profileImage) {
+      profileImage.src = restaurantPhoto;
+      profileImage.alt = `${name} profile`;
+  }
   
   // Render Menu Nav and Content
   const navContainer = document.getElementById('resMenuNav');
@@ -1384,7 +1411,7 @@ function openRestaurant(name, menuData) {
                 </div>
             </div>
             <div class="res-item-img-box">
-                ${item.image}
+                <img class="demo-menu-photo" src="${getDemoPhotoForImage(item.image)}" alt="${escapeHtml(item.title)}" loading="lazy">
                 <div class="res-item-add-btn"><span class="initial-plus">+</span><div class="quantity-selector"><span class="quantity-btn minus">-</span><span class="quantity-value">1</span><span class="quantity-btn plus">+</span></div></div>
             </div>
           `;

@@ -395,6 +395,7 @@ body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
 #categoryScreen .brand-item:hover{ box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 #categoryScreen .brand-item:active { transform: scale(0.95); box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
 #categoryScreen .brand-image{ height: 100%; width: 100%; background: transparent; display: flex; align-items: center; justify-content: center; font-size: 2.8em; }
+#categoryScreen .brand-image img{ width:100%; height:100%; object-fit:cover; }
 #categoryScreen .brand-details{ padding: 0; }
 #categoryScreen .brand-name{ font-weight: bold; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; width: 100%; font-size: 0.78em; }
 #categoryScreen .brand-delivery-info{ 
@@ -428,6 +429,7 @@ body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
 #categoryScreen .res-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
 #categoryScreen .res-card:active { transform: translateY(0) scale(0.98); box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 #categoryScreen .res-image { position: relative; width: 100%; height: 138px; border-radius: 16px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 2.5em; color: #ccc; overflow: hidden; }
+#categoryScreen .res-image > img{ width:100%; height:100%; object-fit:cover; }
 /* Heart Button */
 .heart-btn { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; background: rgba(255, 255, 255, 0.95); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1em; color: #888; border: none; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.12); transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); backdrop-filter: blur(4px); z-index: 5; padding: 0; }
 .heart-btn:hover { transform: scale(1.1); color: #ff4757; background: #fff; box-shadow: 0 6px 15px rgba(255, 71, 87, 0.25); }
@@ -477,6 +479,7 @@ body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
   background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 5em; color: #ccc; opacity: 0.9; background-size: cover; background-position: center; 
   will-change: transform; /* Performance hint */
 }
+#restaurantScreen .res-cover-bg img{ width:100%; height:100%; object-fit:cover; }
 #restaurantScreen .res-header-content { padding: 50px 20px 0; margin-top: 0; position: relative; }
 #restaurantScreen .res-screen-name { font-size: 1.8em; font-weight: 800; color: #333; margin-bottom: 8px; }
 #restaurantScreen .res-meta-row { display: flex; align-items: center; gap: 15px; color: #555; font-size: 0.95em; flex-wrap: wrap; }
@@ -495,7 +498,8 @@ body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
 
 #restaurantScreen .res-action-btn { width: 40px; height: 40px; padding: 6px; background: #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.3); font-size: 1em; transition: transform .2s; color: black; }
 #restaurantScreen .res-action-btn:active { transform: scale(0.9); }
-#restaurantScreen .res-profile-pic { position: absolute; top: -40px; left: 15px; width: 80px; height: 80px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; font-size: 3em; z-index: 20; }
+#restaurantScreen .res-profile-pic { position: absolute; top: -40px; left: 15px; width: 80px; height: 80px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; font-size: 3em; z-index: 20; overflow:hidden; }
+#restaurantScreen .res-profile-pic img{ width:100%; height:100%; object-fit:cover; }
 #restaurantScreen .res-badges-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 #restaurantScreen .res-badge-discount { background: #FFF8D0; color: #4A4A20; font-size: 0.75em; font-weight: 700; padding: 4px 8px; border-radius: 6px; display: flex; align-items: center; gap: 4px; }
 #restaurantScreen .res-badge-top { background: #333; color: #fff; font-size: 0.75em; font-weight: 700; padding: 4px 8px; border-radius: 6px; display: flex; align-items: center; gap: 4px; border: 1px solid #FFD700; box-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
@@ -540,6 +544,7 @@ body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
 #restaurantScreen .res-item-old-price { text-decoration: line-through; color: #bbb; font-size: 0.9em; }
 #restaurantScreen .res-item-current-price { font-weight: 700; color: #333; }
 #restaurantScreen .res-item-img-box { width: 110px; height: 110px; border-radius: 12px; background: #f5f5f5; position: relative; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 3em; color: #ddd; }
+#restaurantScreen .res-item-img-box .demo-menu-photo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 #restaurantScreen .res-item-add-btn { position: absolute; bottom: 8px; right: 8px; width: 30px; height: 30px; background: #fff; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease-in-out; overflow: hidden; }
 #restaurantScreen .res-item-add-btn:active { transform: scale(0.95); }
 #restaurantScreen .res-item-add-btn .initial-plus { color: black; font-weight: 600; font-size: 18px; }
