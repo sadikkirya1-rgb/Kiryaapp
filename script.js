@@ -27,10 +27,12 @@ let menuAvailabilityChartInstance;
 const lastScreenStoragePrefix = 'kiryaLastScreen:';
 const deliveryLocationStorageKey = 'kiryaDeliveryLocation';
 const adminDeliveryLocationsStorageKey = 'kiryaAdminDeliveryLocations';
+const adminVendorsStorageKey = 'kiryaAdminVendors';
 let suppressLastScreenWrites = false;
 let deliveryLocationStep = 0;
 let pendingDeliveryLocation = {};
 let editingAdminDeliveryLocationId = null;
+let editingAdminVendorId = null;
 let returnToCheckoutAfterAddressEdit = false;
 
 const deliveryLocationSteps = [
@@ -2859,7 +2861,8 @@ function openAdmin() {
     renderAdminMarketplaceAudit();
     renderAdminRiderReview();
     renderAdminMarketplacePayouts();
-    renderAdminRegionalMerchants();
+    bindAdminVendorManagement();
+    renderAdminVendors();
     if (document.querySelector('.admin-section.active')?.dataset.section === 'approvals') {
         initAdminMarketplaceMap();
         setTimeout(() => adminMarketplaceMap?.invalidateSize(), 100);
@@ -3011,6 +3014,68 @@ const adminDashboardData = [
     ...ugandaCategoryTransactions
 ];
 
+function getDefaultAdminVendors() {
+    const sources = [
+        ...ugandaMbaleDemoVendors,
+        ...ugandaRegionalMerchants,
+        ...ugandaCategoryMerchants,
+        ...marketplaceOfferSeed,
+        ...ugandaRegionalOffers,
+        ...ugandaCategoryOffers,
+        ...adminDashboardData.filter(record => record.role === 'merchant').map(record => ({
+            name: record.merchant,
+            category: record.category || 'General',
+            area: record.area || 'Kampala',
+            address: record.area || 'Kampala'
+        }))
+    ];
+    const seenNames = new Set();
+    return sources.reduce((vendors, source) => {
+        const name = String(source.name || source.vendorName || '').trim();
+        const key = name.toLocaleLowerCase();
+        if (!name || seenNames.has(key)) return vendors;
+        seenNames.add(key);
+        vendors.push({
+            id: `sample-vendor-${vendors.length + 1}`,
+            name,
+            category: String(source.category || 'General'),
+            phone: '',
+            email: '',
+            area: String(source.area || source.dropoffArea || 'Kampala'),
+            address: String(source.address || source.pickupAddress || source.area || source.dropoffArea || 'Kampala'),
+            status: 'Active',
+            sample: true
+        });
+        return vendors;
+    }, []);
+}
+
+function loadAdminVendors() {
+    try {
+        const saved = localStorage.getItem(adminVendorsStorageKey);
+        if (saved === null) {
+            const vendors = getDefaultAdminVendors();
+            localStorage.setItem(adminVendorsStorageKey, JSON.stringify(vendors));
+            return vendors;
+        }
+        const vendors = JSON.parse(saved);
+        if (!Array.isArray(vendors) || !vendors.every(vendor =>
+            vendor && typeof vendor.id === 'string' &&
+            ['name', 'category', 'area', 'address'].every(key => typeof vendor[key] === 'string') &&
+            ['phone', 'email'].every(key => typeof vendor[key] === 'string') &&
+            ['Active', 'Pending', 'Inactive'].includes(vendor.status)
+        )) {
+            throw new Error('Saved vendor records have an invalid format.');
+        }
+        return vendors;
+    } catch (error) {
+        console.warn('Unable to read saved vendors; using sample vendors.', error);
+        return getDefaultAdminVendors();
+    }
+}
+
+let adminVendors = loadAdminVendors();
+
 const adminUserData = [
     { name: 'J. Smith', role: 'Verified rider', group: 'riders', initials: 'JS', tone: 'green', action: 'View' },
     { name: 'A. Muwonge', role: 'Merchant', group: 'merchants', initials: 'AM', tone: 'blue', action: 'View' },
@@ -3057,7 +3122,7 @@ const adminNavConfig = [
     { section: 'users', icon: '👥', label: 'Users', count: () => adminUserData.length },
     { section: 'riders', icon: '🏍', label: 'Riders', count: () => 86 },
     { section: 'approvals', icon: '✓', label: 'Pickup approvals', count: () => marketplaceOffers.filter(offer => offer.status === 'requested').length },
-    { section: 'merchants', icon: '🏪', label: 'Merchants', count: () => 28 },
+    { section: 'merchants', icon: '🏪', label: 'Vendors', count: () => adminVendors.length },
     { section: 'deliveryLocations', icon: '⌖', label: 'Delivery locations', count: () => getAdminDeliveryLocations().filter(location => location.active).length },
     { section: 'payouts', icon: '💰', label: 'Payouts', count: () => 18 },
     { section: 'settings', icon: '⚙', label: 'Settings', count: () => 3 }
@@ -3119,40 +3184,142 @@ function renderAdminTable() {
     `).join('');
 }
 
-let adminRegionalMerchantControlsBound = false;
+function saveAdminVendors(vendors) {
+    try {
+        localStorage.setItem(adminVendorsStorageKey, JSON.stringify(vendors));
+        adminVendors = vendors;
+        const navCount = document.querySelector('.admin-nav-item[data-section="merchants"] .admin-nav-badge');
+        if (navCount) navCount.textContent = String(adminVendors.length);
+        return true;
+    } catch (error) {
+        console.error('Unable to save vendor records.', error);
+        showToast('Vendor changes could not be saved. Check browser storage and try again.');
+        return false;
+    }
+}
 
-function renderAdminRegionalMerchants() {
-        const list = document.getElementById('adminRegionalMerchantList');
-        const areaSelect = document.getElementById('adminRegionalMerchantArea');
-        const count = document.getElementById('adminRegionalMerchantCount');
-        if (!list || !areaSelect || !count) return;
-        const demoMerchantNames = new Set(ugandaMbaleDemoVendors.map(merchant => merchant.name.toLocaleLowerCase()));
-        const demoMerchants = [
-            ...ugandaMbaleDemoVendors,
-            ...ugandaRegionalMerchants.filter(merchant => !demoMerchantNames.has(merchant.name.toLocaleLowerCase())),
-            ...ugandaCategoryMerchants.filter(merchant => !demoMerchantNames.has(merchant.name.toLocaleLowerCase()))
-        ];
-        const selectedArea = areaSelect.value || 'all';
-        const areas = [...new Set(demoMerchants.map(merchant => merchant.area))].sort((first, second) => first.localeCompare(second));
-        areaSelect.innerHTML = `<option value="all">All Uganda regions</option>${areas.map(area => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join('')}`;
-        areaSelect.value = areas.includes(selectedArea) ? selectedArea : 'all';
-        const search = (document.getElementById('adminRegionalMerchantSearch')?.value || '').trim().toLowerCase();
-        const selected = areaSelect.value;
-        const merchants = demoMerchants.filter(merchant =>
-                (selected === 'all' || merchant.area === selected) &&
-                `${merchant.name} ${merchant.category} ${merchant.area} ${merchant.address}`.toLowerCase().includes(search)
+function resetAdminVendorForm() {
+    const form = document.getElementById('adminVendorForm');
+    if (!form) return;
+    form.reset();
+    editingAdminVendorId = null;
+    document.getElementById('adminVendorFormTitle').textContent = 'Register a vendor';
+    document.getElementById('adminVendorSubmit').textContent = 'Register vendor';
+    document.getElementById('adminVendorCancel').hidden = true;
+}
+
+function renderAdminVendors() {
+    const tableBody = document.getElementById('adminVendorTableBody');
+    const count = document.getElementById('adminVendorCount');
+    if (!tableBody || !count) return;
+    const search = (document.getElementById('adminVendorSearch')?.value || '').trim().toLocaleLowerCase();
+    const statusFilter = document.getElementById('adminVendorFilter')?.value || 'all';
+    const vendors = adminVendors.filter(vendor =>
+        (statusFilter === 'all' || vendor.status === statusFilter) &&
+        `${vendor.name} ${vendor.category} ${vendor.phone} ${vendor.email} ${vendor.area} ${vendor.address}`
+            .toLocaleLowerCase().includes(search)
+    );
+    count.textContent = `${vendors.length} ${vendors.length === 1 ? 'vendor' : 'vendors'}`;
+    const navCount = document.querySelector('.admin-nav-item[data-section="merchants"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(adminVendors.length);
+    tableBody.innerHTML = vendors.length ? vendors.map(vendor => `
+        <tr>
+            <td><strong>${escapeHtml(vendor.name)}</strong>${vendor.sample ? '<small class="admin-table-area">Sample vendor</small>' : ''}</td>
+            <td>${escapeHtml(vendor.category)}</td>
+            <td>${vendor.phone ? `<span>${escapeHtml(vendor.phone)}</span>` : ''}${vendor.email ? `<small class="admin-table-area">${escapeHtml(vendor.email)}</small>` : ''}${!vendor.phone && !vendor.email ? '—' : ''}</td>
+            <td>${escapeHtml(vendor.area)}<small class="admin-table-area">${escapeHtml(vendor.address)}</small></td>
+            <td><span class="status-badge ${getStatusClass(vendor.status)}">${escapeHtml(vendor.status)}</span></td>
+            <td class="admin-vendor-actions">
+                <button class="mini-btn" type="button" data-vendor-edit="${escapeHtml(vendor.id)}">Edit</button>
+                <button class="mini-btn" type="button" data-vendor-toggle="${escapeHtml(vendor.id)}">${vendor.status === 'Active' ? 'Deactivate' : 'Activate'}</button>
+                <button class="mini-btn danger" type="button" data-vendor-delete="${escapeHtml(vendor.id)}">Delete</button>
+            </td>
+        </tr>
+    `).join('') : '<tr><td colspan="6" class="empty-state">No vendors match this search. Register a vendor using the form above.</td></tr>';
+}
+
+function bindAdminVendorManagement() {
+    const form = document.getElementById('adminVendorForm');
+    const tableBody = document.getElementById('adminVendorTableBody');
+    if (!form || !tableBody || form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const values = Object.fromEntries(new FormData(form).entries());
+        const name = String(values.name).trim();
+        const category = String(values.category).trim();
+        const area = String(values.area).trim();
+        const address = String(values.address).trim();
+        const duplicate = adminVendors.some(vendor =>
+            vendor.id !== editingAdminVendorId && vendor.name.toLocaleLowerCase() === name.toLocaleLowerCase()
         );
-        count.textContent = String(merchants.length);
-        list.innerHTML = merchants.length ? merchants.map(merchant => `
-            <article class="admin-regional-merchant-card">
-                <div><strong>${escapeHtml(merchant.name)}</strong><span>${escapeHtml(merchant.category)} · ${escapeHtml(merchant.area)}</span><small>${escapeHtml(merchant.address)} · ${merchant.ordersToday} sample orders today · ★ ${merchant.rating}</small>${merchant.products?.length ? `<small>Sample products: ${merchant.products.map(product => `${escapeHtml(product.name)} (UGX ${Number(product.price).toLocaleString('en-UG')})`).join(' · ')}</small>` : ''}</div>
-                <span class="merchant-status-pill delivered">${escapeHtml(merchant.status)} · sample</span>
-            </article>`).join('') : '<p class="admin-marketplace-empty">No sample merchants match this search.</p>';
-        if (!adminRegionalMerchantControlsBound) {
-                adminRegionalMerchantControlsBound = true;
-                document.getElementById('adminRegionalMerchantSearch')?.addEventListener('input', renderAdminRegionalMerchants);
-                areaSelect.addEventListener('change', renderAdminRegionalMerchants);
+        if (duplicate) {
+            showToast('A vendor with this business name is already registered.');
+            return;
         }
+        const existing = adminVendors.find(vendor => vendor.id === editingAdminVendorId);
+        const updatedVendor = {
+            id: existing?.id || `vendor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name,
+            category,
+            phone: String(values.phone).trim(),
+            email: String(values.email).trim(),
+            area,
+            address,
+            status: String(values.status),
+            sample: existing?.sample || false
+        };
+        const nextVendors = existing
+            ? adminVendors.map(vendor => vendor.id === existing.id ? updatedVendor : vendor)
+            : [...adminVendors, updatedVendor];
+        if (!saveAdminVendors(nextVendors)) return;
+        resetAdminVendorForm();
+        renderAdminVendors();
+        showToast(existing ? 'Vendor record updated.' : 'Vendor registered.');
+    });
+
+    document.getElementById('adminVendorCancel').addEventListener('click', resetAdminVendorForm);
+    document.getElementById('adminVendorSearch').addEventListener('input', renderAdminVendors);
+    document.getElementById('adminVendorFilter').addEventListener('change', renderAdminVendors);
+    tableBody.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const vendorId = button.dataset.vendorEdit || button.dataset.vendorToggle || button.dataset.vendorDelete;
+        const vendor = adminVendors.find(record => record.id === vendorId);
+        if (!vendor) return;
+
+        if (button.dataset.vendorEdit) {
+            editingAdminVendorId = vendor.id;
+            document.getElementById('adminVendorName').value = vendor.name;
+            document.getElementById('adminVendorCategory').value = vendor.category;
+            document.getElementById('adminVendorPhone').value = vendor.phone;
+            document.getElementById('adminVendorEmail').value = vendor.email;
+            document.getElementById('adminVendorArea').value = vendor.area;
+            document.getElementById('adminVendorAddress').value = vendor.address;
+            document.getElementById('adminVendorStatus').value = vendor.status;
+            document.getElementById('adminVendorFormTitle').textContent = `Edit ${vendor.name}`;
+            document.getElementById('adminVendorSubmit').textContent = 'Save changes';
+            document.getElementById('adminVendorCancel').hidden = false;
+            document.getElementById('adminVendorName').focus();
+            return;
+        }
+
+        if (button.dataset.vendorToggle) {
+            const status = vendor.status === 'Active' ? 'Inactive' : 'Active';
+            if (!saveAdminVendors(adminVendors.map(record => record.id === vendor.id ? { ...record, status } : record))) return;
+            renderAdminVendors();
+            return;
+        }
+
+        if (button.dataset.vendorDelete && window.confirm(`Delete ${vendor.name} from the vendor register?`)) {
+            if (!saveAdminVendors(adminVendors.filter(record => record.id !== vendor.id))) return;
+            if (editingAdminVendorId === vendor.id) resetAdminVendorForm();
+            renderAdminVendors();
+        }
+    });
+    renderAdminVendors();
 }
 
 function resetAdminDeliveryLocationForm() {
@@ -3388,7 +3555,10 @@ function bindAdminSectionNavigation() {
             }
             if (sectionName === 'riders') renderAdminRiderReview();
             if (sectionName === 'approvals') renderAdminMarketplaceAudit();
-            if (sectionName === 'merchants') renderAdminRegionalMerchants();
+            if (sectionName === 'merchants') {
+                bindAdminVendorManagement();
+                renderAdminVendors();
+            }
             if (sectionName === 'deliveryLocations') bindAdminDeliveryLocationManagement();
             if (sectionName === 'payouts') renderAdminMarketplacePayouts();
             if (sectionName === 'approvals') {

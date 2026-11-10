@@ -1290,21 +1290,43 @@
         <div class="admin-section" data-section="merchants">
           <div class="dashboard-card">
             <div class="section-header">
-              <h3>Merchant performance</h3>
-              <button class="ghost-btn" type="button">Manage</button>
+              <div>
+                <h3>Vendor management</h3>
+                <p class="admin-vendor-description">Register vendors and manage their contact details, locations, and account status.</p>
+              </div>
+              <span class="tiny-pill" id="adminVendorCount">0 vendors</span>
             </div>
-            <div class="region-bars">
-              <div class="region-item"><span>Spice Corner</span><div class="bar-track"><i style="width: 91%"></i></div><strong>91%</strong></div>
-              <div class="region-item"><span>Blue Bowl</span><div class="bar-track"><i style="width: 76%"></i></div><strong>76%</strong></div>
-              <div class="region-item"><span>Pizza Kingdom</span><div class="bar-track"><i style="width: 82%"></i></div><strong>82%</strong></div>
-              <div class="region-item"><span>Fresh Mart</span><div class="bar-track"><i style="width: 68%"></i></div><strong>68%</strong></div>
+            <form class="admin-vendor-form" id="adminVendorForm">
+              <h4 id="adminVendorFormTitle">Register a vendor</h4>
+              <div class="admin-vendor-form-grid">
+                <label>Business name<input id="adminVendorName" name="name" type="text" autocomplete="organization" required /></label>
+                <label>Category<input id="adminVendorCategory" name="category" type="text" placeholder="e.g. Restaurant, Grocery" required /></label>
+                <label>Phone<input id="adminVendorPhone" name="phone" type="tel" autocomplete="tel" /></label>
+                <label>Email<input id="adminVendorEmail" name="email" type="email" autocomplete="email" /></label>
+                <label>City / area<input id="adminVendorArea" name="area" type="text" required /></label>
+                <label>Business address<input id="adminVendorAddress" name="address" type="text" autocomplete="street-address" required /></label>
+                <label>Account status<select id="adminVendorStatus" name="status"><option value="Active">Active</option><option value="Pending">Pending</option><option value="Inactive">Inactive</option></select></label>
+              </div>
+              <div class="admin-vendor-form-actions">
+                <button class="mini-btn" id="adminVendorSubmit" type="submit">Register vendor</button>
+                <button class="ghost-btn" id="adminVendorCancel" type="button" hidden>Cancel edit</button>
+              </div>
+            </form>
+            <div class="section-header admin-vendor-table-heading">
+              <h3>Vendor records</h3>
+              <div class="admin-vendor-controls">
+                <label class="merchant-visually-hidden" for="adminVendorSearch">Search vendors</label>
+                <input id="adminVendorSearch" type="search" placeholder="Search name, category, or location" />
+                <label class="merchant-visually-hidden" for="adminVendorFilter">Filter vendors by status</label>
+                <select id="adminVendorFilter"><option value="all">All statuses</option><option value="Active">Active</option><option value="Pending">Pending</option><option value="Inactive">Inactive</option></select>
+              </div>
             </div>
-            <div class="section-header admin-regional-merchant-heading"><h3>Regional demo merchants</h3><span class="tiny-pill" id="adminRegionalMerchantCount">0</span></div>
-            <div class="admin-regional-merchant-controls">
-              <label>Search<input id="adminRegionalMerchantSearch" type="search" placeholder="Vendor, category, or city" /></label>
-              <label>Region<select id="adminRegionalMerchantArea"><option value="all">All Uganda regions</option></select></label>
+            <div class="table-wrap admin-vendor-table-wrap">
+              <table class="admin-table admin-vendor-table">
+                <thead><tr><th>Vendor</th><th>Category</th><th>Contact</th><th>Location</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="adminVendorTableBody" aria-live="polite"></tbody>
+              </table>
             </div>
-            <div id="adminRegionalMerchantList" class="admin-regional-merchant-list" aria-live="polite"></div>
           </div>
         </div>
 

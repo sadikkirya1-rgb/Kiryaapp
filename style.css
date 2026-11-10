@@ -1647,16 +1647,30 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .admin-marketplace-audit-entry strong { color: #203b33; font-size: 0.78rem; }
 .admin-marketplace-audit-entry span, .admin-marketplace-audit-entry small { color: #687570; font-size: 0.7rem; }
 .admin-marketplace-audit-entry p { margin: 2px 0 0; color: #52645b; font-size: 0.72rem; line-height: 1.4; }
-.admin-regional-merchant-heading { margin-top: 22px; }
-.admin-regional-merchant-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 9px; margin-bottom: 10px; }
-.admin-regional-merchant-controls label { display: grid; gap: 4px; color: #52645b; font-size: 0.72rem; font-weight: 750; }
-.admin-regional-merchant-controls input, .admin-regional-merchant-controls select { min-height: 38px; padding: 7px 9px; border: 1px solid #d7e1dc; border-radius: 5px; background: #fff; color: #203b33; font: inherit; font-size: 0.76rem; }
-.admin-regional-merchant-list { display: grid; gap: 7px; }
-.admin-regional-merchant-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid #dce6e2; border-radius: 6px; background: #fff; }
-.admin-regional-merchant-card > div { display: grid; gap: 4px; min-width: 0; }
-.admin-regional-merchant-card strong { color: #203b33; font-size: 0.8rem; }
-.admin-regional-merchant-card span, .admin-regional-merchant-card small { color: #687570; font-size: 0.7rem; line-height: 1.4; }
-.admin-regional-merchant-card .merchant-status-pill { flex: 0 0 auto; color: #087a67; }
+.admin-vendor-description { margin: 5px 0 0; color: #64748b; font-size: 0.78rem; }
+.admin-vendor-form { margin: 16px 0 22px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+.admin-vendor-form h4 { margin: 0 0 14px; color: #0f172a; font-size: 0.9rem; }
+.admin-vendor-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.admin-vendor-form-grid label { display: grid; gap: 5px; color: #475569; font-size: 0.75rem; font-weight: 700; }
+.admin-vendor-form-grid input, .admin-vendor-form-grid select, .admin-vendor-controls input, .admin-vendor-controls select { width: 100%; min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid #d7e1dc; border-radius: 7px; background: #fff; color: #203b33; font: inherit; font-size: 0.78rem; }
+.admin-vendor-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.admin-vendor-form-actions [hidden] { display: none; }
+.admin-vendor-form-actions .mini-btn { min-height: 38px; padding: 8px 12px; cursor: pointer; }
+.admin-vendor-table-heading { gap: 12px; margin: 0 0 10px; }
+.admin-vendor-controls { display: flex; justify-content: flex-end; gap: 8px; }
+.admin-vendor-controls input { width: min(320px, 42vw); }
+.admin-vendor-controls select { width: auto; }
+.admin-vendor-table-wrap { width: 100%; }
+.admin-vendor-table { min-width: 850px; }
+.admin-vendor-table td { vertical-align: middle; }
+.admin-vendor-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.admin-vendor-actions .mini-btn { padding: 6px 8px; font-size: 0.68rem; cursor: pointer; }
+.admin-vendor-actions .mini-btn:focus-visible, .admin-vendor-form-actions .mini-btn:focus-visible { outline: 2px solid #087a67; outline-offset: 2px; }
+@media (max-width: 820px) {
+  .admin-vendor-table-heading { align-items: flex-start; flex-direction: column; }
+  .admin-vendor-controls { width: 100%; }
+  .admin-vendor-controls input { width: 100%; }
+}
 .merchant-marketplace-notice { margin: 16px 0; padding: 14px; border: 1px solid #dce6e2; border-radius: 8px; background: #f9fbfa; }
 .merchant-marketplace-notice .merchant-section-heading { margin-bottom: 10px; }
 .merchant-marketplace-notice .merchant-section-heading h3 { margin: 0; font-size: 0.95rem; }
