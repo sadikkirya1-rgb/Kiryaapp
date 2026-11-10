@@ -1,7 +1,7 @@
 
 import { appState, ui } from './modules/state.js';
 import { updateAddressSummary } from './modules/mapHelpers.js';
-import { computeCartSummary } from './modules/cartHelpers.js';
+import { computeCartSummary, formatCurrency } from './modules/cartHelpers.js';
 import { ugandaDeliveryLocationOptions, ugandaRegionalOffers, ugandaRegionalCustomers, ugandaRegionalRiders, ugandaRegionalMerchants, ugandaRegionalTransactions, ugandaCategoryOffers, ugandaCategoryMerchants, ugandaCategoryTransactions } from './modules/ugandaDemoData.js';
 
 // --- Shared app state ---
@@ -11,11 +11,13 @@ let marker = appState.marker;
 let cart = appState.cart;
 let suggestedScrollInterval = appState.suggestedScrollInterval;
 let favorites = appState.favorites;
-let isCheckoutAccordionOpen = appState.isCheckoutAccordionOpen;
 let allergyNotes = appState.allergyNotes;
 let recipientDetails = appState.recipientDetails;
 let userPhoneNumber = appState.userPhoneNumber;
 let selectedPaymentMethod = appState.selectedPaymentMethod;
+if (selectedPaymentMethod.value !== 'cod') {
+    selectedPaymentMethod = { value: 'cod', icon: '💵', text: 'Cash on Delivery' };
+}
 let tipPercentage = appState.tipPercentage;
 let dailySalesChartInstance = appState.dailySalesChartInstance;
 let topItemsChartInstance = appState.topItemsChartInstance;
@@ -29,6 +31,7 @@ let suppressLastScreenWrites = false;
 let deliveryLocationStep = 0;
 let pendingDeliveryLocation = {};
 let editingAdminDeliveryLocationId = null;
+let returnToCheckoutAfterAddressEdit = false;
 
 const deliveryLocationSteps = [
     { key: 'region', title: 'Choose your region', hint: 'Select the region where you would like your order delivered.' },
@@ -255,7 +258,11 @@ function showDeliveryLanding() {
 function closeDeliveryLocationPicker() {
     if (!getSavedDeliveryLocation()) return;
     showDeliveryHome();
-    rememberLastScreen('newHome');
+    if (returnToCheckoutAfterAddressEdit) {
+        resumeCheckoutAfterAddressEdit();
+    } else {
+        rememberLastScreen('newHome');
+    }
 }
 
 function saveDeliveryLocation() {
@@ -281,7 +288,22 @@ function saveDeliveryLocation() {
 
     document.getElementById('deliveryAddressDetails').value = '';
     showDeliveryHome();
-    rememberLastScreen('newHome');
+    if (returnToCheckoutAfterAddressEdit) {
+        resumeCheckoutAfterAddressEdit();
+    } else {
+        rememberLastScreen('newHome');
+    }
+}
+
+function resumeCheckoutAfterAddressEdit() {
+    returnToCheckoutAfterAddressEdit = false;
+    const checkoutScreen = document.getElementById('checkoutActionScreen');
+    const addressText = checkoutScreen.querySelector('.address-text');
+    if (addressText) {
+        addressText.textContent = document.getElementById('selectedAddressText').textContent;
+    }
+    checkoutScreen.classList.add('active');
+    rememberLastScreen('cart');
 }
 
 function getCurrentAppRole() {
@@ -1840,6 +1862,7 @@ const cartBackBtn = document.getElementById('cartBackBtn');
 function openCart() {
     const cartContent = document.getElementById('cartContent');
     const cartTotalAmount = document.getElementById('cartTotalAmount');
+    const checkoutButton = document.querySelector('.checkout-btn');
     
     clearInterval(suggestedScrollInterval);
     cartContent.innerHTML = '';
@@ -1876,7 +1899,7 @@ function openCart() {
                     </div>
                 </div>
                 <div style="display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between; gap:10px;">
-                    <div class="cart-item-price">${itemTotal.toFixed(2)}</div>
+                    <div class="cart-item-price">${formatCurrency(itemTotal)}</div>
                     <div class="cart-control-btn delete" data-index="${index}">🗑️</div>
                 </div>
             `;
@@ -1918,7 +1941,7 @@ function openCart() {
                     <div class="suggested-add-btn">+</div>
                 </div>
                 <div class="suggested-name">${sItem.title}</div>
-                <div class="suggested-price">${sItem.price.toFixed(2)}</div>
+                <div class="suggested-price">${formatCurrency(sItem.price)}</div>
             `;
             
             itemEl.querySelector('.suggested-add-btn').addEventListener('click', (e) => {
@@ -1942,7 +1965,8 @@ function openCart() {
         }, 2500);
     }
 
-    cartTotalAmount.textContent = grandTotal.toFixed(2);
+    cartTotalAmount.textContent = formatCurrency(grandTotal);
+    checkoutButton.disabled = cart.length === 0;
     cartScreen.classList.add('active');
     rememberLastScreen('cart');
 }
@@ -1973,77 +1997,79 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
     if (cart.length > 0) {
         const checkoutScreen = document.getElementById('checkoutActionScreen');
         const checkoutContent = checkoutScreen.querySelector('.checkout-content');
-        
-        // Calculate totals
-        let grandTotal = 0;
-        let totalItems = 0;
-        cart.forEach(item => {
-            let itemTotal = item.basePrice;
-            if (item.addons) item.addons.forEach(a => itemTotal += a.price);
-            grandTotal += itemTotal * item.quantity;
-            totalItems += item.quantity;
-        });
+        const cartSummary = computeCartSummary(cart);
+        const grandTotal = cartSummary.subtotal;
+        const totalItems = cartSummary.itemCount;
         const resName = document.getElementById('resScreenName').textContent || 'Restaurant';
 
         checkoutContent.innerHTML = '';
 
-        // 1. "Your Order" Subtitle
-        const yourOrderTitle = document.createElement('h3');
-        yourOrderTitle.textContent = 'Your Order';
-        yourOrderTitle.style.cssText = 'margin: 5px 0 15px 0; font-size: 1.1em; font-weight: 800; color: #333;';
-        checkoutContent.appendChild(yourOrderTitle);
-
-        // 2. Accordion for Items
-        const accordionHeader = document.createElement('div');
-        accordionHeader.className = 'cart-accordion-header';
-        if (isCheckoutAccordionOpen) accordionHeader.classList.add('active');
-        accordionHeader.innerHTML = `
-            <div class="header-text">
-                <div class="header-title">${totalItems} Items from</div>
-                <div class="header-subtitle">${resName}</div>
-            </div>
-            <div class="cart-accordion-icon">v</div>
+        const checkoutIntro = document.createElement('div');
+        checkoutIntro.className = 'checkout-intro';
+        checkoutIntro.innerHTML = `
+            <p class="checkout-step-label">FINAL STEP</p>
+            <p>Confirm your delivery details and review the total before placing your order.</p>
         `;
+        checkoutContent.appendChild(checkoutIntro);
 
-        const accordionBody = document.createElement('div');
-        accordionBody.className = 'cart-accordion-body';
-        if (isCheckoutAccordionOpen) accordionBody.classList.add('open');
-
-        // Populate Accordion Body with simple list
-        cart.forEach((item) => {
-            const div = document.createElement('div');
-            div.style.cssText = 'padding: 10px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; font-size: 0.9em;';
-            div.innerHTML = `<span>${item.quantity}x ${item.title}</span> <span>${(item.basePrice * item.quantity).toFixed(2)}</span>`;
-            accordionBody.appendChild(div);
+        const orderSection = document.createElement('section');
+        orderSection.className = 'checkout-section checkout-order-section';
+        const orderHeader = document.createElement('div');
+        orderHeader.className = 'checkout-section-header';
+        orderHeader.innerHTML = `
+            <div>
+                <h4>Your order</h4>
+                <p class="checkout-section-caption">${totalItems} ${totalItems === 1 ? 'item' : 'items'} · ${escapeHtml(resName)}</p>
+            </div>
+        `;
+        const editCartButton = document.createElement('button');
+        editCartButton.className = 'change-btn';
+        editCartButton.type = 'button';
+        editCartButton.textContent = 'Edit cart';
+        editCartButton.addEventListener('click', () => {
+            checkoutScreen.classList.remove('active');
+            rememberLastScreen('cart');
         });
-
-        accordionHeader.addEventListener('click', () => {
-            isCheckoutAccordionOpen = !isCheckoutAccordionOpen;
-            accordionHeader.classList.toggle('active');
-            if (isCheckoutAccordionOpen) {
-                accordionBody.classList.add('open');
-                accordionBody.style.maxHeight = accordionBody.scrollHeight + "px";
-            } else {
-                accordionBody.classList.remove('open');
-                accordionBody.style.maxHeight = null;
+        orderHeader.appendChild(editCartButton);
+        const orderItems = document.createElement('div');
+        orderItems.className = 'checkout-order-items';
+        cart.forEach(item => {
+            const itemPrice = Number(item.basePrice || 0) + (item.addons || []).reduce((sum, addon) => sum + Number(addon.price || 0), 0);
+            const row = document.createElement('div');
+            row.className = 'checkout-order-item';
+            const itemInfo = document.createElement('div');
+            itemInfo.className = 'checkout-order-item-info';
+            const itemName = document.createElement('strong');
+            itemName.textContent = `${item.quantity} × ${item.title}`;
+            itemInfo.appendChild(itemName);
+            if (item.addons?.length) {
+                const addons = document.createElement('p');
+                addons.className = 'checkout-item-addons';
+                addons.textContent = item.addons.map(addon => addon.name).join(', ');
+                itemInfo.appendChild(addons);
             }
+            const linePrice = document.createElement('span');
+            linePrice.className = 'checkout-order-item-price';
+            linePrice.textContent = formatCurrency(itemPrice * item.quantity);
+            row.append(itemInfo, linePrice);
+            orderItems.appendChild(row);
         });
-
-        checkoutContent.appendChild(accordionHeader);
-        checkoutContent.appendChild(accordionBody);
-        if (isCheckoutAccordionOpen) { setTimeout(() => { accordionBody.style.maxHeight = accordionBody.scrollHeight + "px"; }, 0); }
+        orderSection.append(orderHeader, orderItems);
+        checkoutContent.appendChild(orderSection);
 
         // Allergy Section
-        const allergySection = document.createElement('div');
-        allergySection.style.cssText = 'margin-top: 25px; cursor: pointer; padding: 0 5px;';
+        const allergySection = document.createElement('button');
+        allergySection.className = 'checkout-section checkout-allergy-section';
+        allergySection.type = 'button';
         allergySection.id = 'checkoutAllergySection';
         allergySection.innerHTML = `
             <div class="address-details">
                 <span class="address-icon">⚠️</span>
                 <div style="flex: 1;">
-                    <span style="font-weight: bold;">Any Allergies?</span>
+                    <span style="font-weight: bold;">Allergies or special instructions</span>
                     <div id="allergyNotesDisplay" style="font-size: 0.8em; color: #666; margin-top: 4px; white-space: pre-wrap; word-break: break-word; display: none;"></div>
                 </div>
+                <span class="checkout-edit-hint">Add</span>
             </div>
         `;
         allergySection.addEventListener('click', () => {
@@ -2068,7 +2094,7 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
                 </label>
             </div>
             <div class="cutlery-description" id="cutleryDescription">
-                Help us minimize waste. Only ask for cutley when you need it.
+                Help us reduce waste. Request cutlery only if you need it.
             </div>
         `;
         checkoutContent.appendChild(cutlerySection);
@@ -2079,35 +2105,35 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
             if (cutlerySwitch.checked) {
                 cutleryDescription.textContent = 'Cutlery will be requested from the restaurant for this order.';
             } else {
-                cutleryDescription.textContent = 'Help us minimize waste. Only ask for cutley when you need it.';
+                cutleryDescription.textContent = 'Help us reduce waste. Request cutlery only if you need it.';
             }
         });
 
-        // 3. Delivery Address Section
         const addressSection = document.createElement('div');
         addressSection.className = 'checkout-section';
-        addressSection.style.marginTop = '20px';
-        const currentAddress = document.getElementById('selectedAddressText').textContent || 'No address selected';
+        const currentAddress = document.getElementById('selectedAddressText').textContent || 'Set delivery address';
         addressSection.innerHTML = `
             <div class="checkout-section-header">
                 <h4>Delivery Address</h4>
-                <button class="change-btn">Change</button>
+                <button class="change-btn" type="button">Edit</button>
             </div>
             <div class="address-details">
                 <span class="address-icon">🏠</span>
-                <span class="address-text" style="line-height: 1.4;">${currentAddress}</span>
+                <span class="address-text" style="line-height: 1.4;"></span>
             </div>
-            <div id="checkoutMiniMap" class="checkout-mini-map"></div>
             <div class="recipient-details-section" id="checkoutRecipientSection"></div>
             <div class="user-phone-section" id="checkoutUserPhoneSection"></div>
         `;
+        addressSection.querySelector('.address-text').textContent = currentAddress;
         addressSection.querySelector('.change-btn').addEventListener('click', () => {
-            document.getElementById('checkoutActionScreen').classList.remove('active');
+            returnToCheckoutAfterAddressEdit = true;
+            checkoutScreen.classList.remove('active');
+            openDeliveryLocationPicker();
         });
         checkoutContent.appendChild(addressSection);
 
         const recipientSection = document.getElementById('checkoutRecipientSection');
-        recipientSection.addEventListener('click', () => {
+        const openRecipientDetails = () => {
             const recipientScreen = document.getElementById('recipientScreen');
             document.getElementById('recipientName').value = recipientDetails.name;
             const phoneParts = recipientDetails.phone.split(' ');
@@ -2118,11 +2144,20 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
                 document.getElementById('phoneNumber').value = recipientDetails.phone;
             }
             recipientScreen.classList.add('active');
+        };
+        recipientSection.setAttribute('role', 'button');
+        recipientSection.tabIndex = 0;
+        recipientSection.addEventListener('click', openRecipientDetails);
+        recipientSection.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openRecipientDetails();
+            }
         });
         updateRecipientDisplay();
 
         const userPhoneSection = document.getElementById('checkoutUserPhoneSection');
-        userPhoneSection.addEventListener('click', () => {
+        const openUserPhone = () => {
             const userPhoneScreen = document.getElementById('userPhoneScreen');
             const phoneParts = userPhoneNumber.split(' ');
             if (phoneParts.length > 1) {
@@ -2130,109 +2165,45 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
                 document.getElementById('userPhoneNumberInput').value = phoneParts.slice(1).join(' ');
             } else {
                 document.getElementById('userPhoneNumberInput').value = userPhoneNumber;
-                document.getElementById('userPhonePrefix').value = '+971'; // Default prefix
+                document.getElementById('userPhonePrefix').value = '+256';
             }
             userPhoneScreen.classList.add('active');
+        };
+        userPhoneSection.setAttribute('role', 'button');
+        userPhoneSection.tabIndex = 0;
+        userPhoneSection.addEventListener('click', openUserPhone);
+        userPhoneSection.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openUserPhone();
+            }
         });
         updateUserPhoneDisplay();
 
-        setTimeout(() => {
-            const center = marker ? marker.getLatLng() : [24.4539,54.3773];
-            const miniMap = L.map('checkoutMiniMap', { zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, touchZoom:false, attributionControl:false }).setView(center, 16);
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 19,
-                attribution: ''
-            }).addTo(miniMap);
-            const pinIcon = L.divIcon({ html: '📍', className: 'delivery-pin-icon', iconSize: [30, 30], iconAnchor: [15, 30] });
-            L.marker(center, {icon: pinIcon}).addTo(miniMap);
-        }, 300);
-
-        // Delivery Options Section
         const deliveryOptSection = document.createElement('div');
         deliveryOptSection.className = 'checkout-section';
-        deliveryOptSection.style.marginTop = '20px';
-
-        const deliveryOptHeader = document.createElement('div');
-        deliveryOptHeader.className = 'checkout-section-header';
-        deliveryOptHeader.style.marginBottom = '0';
-        deliveryOptHeader.style.cursor = 'pointer';
-        deliveryOptHeader.innerHTML = `
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span style="font-size:1.5em;">⏰</span>
-                <h4>Delivery Options</h4>
+        deliveryOptSection.innerHTML = `
+            <div class="checkout-section-header">
+                <h4>Delivery timing</h4>
+                <span class="checkout-edit-hint">Standard</span>
             </div>
-            <div class="cart-accordion-icon">v</div>
+            <p class="checkout-section-caption">Delivery timing is not available in this demo. A live checkout should confirm it with the merchant.</p>
         `;
-
-        const deliveryOptBody = document.createElement('div');
-        deliveryOptBody.className = 'cart-accordion-body';
-        deliveryOptBody.innerHTML = `
-            <div style="padding-top: 15px; border-top: 1px solid #eee; margin-top: 10px;">
-                <label style="display:flex; align-items:center; gap:10px; margin-bottom:15px; cursor:pointer;">
-                    <input type="radio" name="deliveryType" value="standard" checked style="accent-color: #019E81; width: 18px; height: 18px;">
-                    <div>
-                        <div style="font-weight:bold; color:#333; font-size: 1em;">Standard Delivery</div>
-                        <div style="font-size:0.85em; color:#666;">20 - 30 mins</div>
-                    </div>
-                </label>
-                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-                    <input type="radio" name="deliveryType" value="schedule" style="accent-color: #019E81; width: 18px; height: 18px;">
-                    <div>
-                        <div style="font-weight:bold; color:#333; font-size: 1em;">Schedule Order</div>
-                        <div style="font-size:0.85em; color:#666;">Choose a specific time</div>
-                    </div>
-                </label>
-                <div id="scheduleTimeContainer" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease; padding-left: 30px;">
-                    <input type="datetime-local" id="scheduleTimeInput" style="margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%; font-family: inherit;">
-                </div>
-            </div>
-        `;
-        
-        let isDeliveryOptOpen = false;
-        deliveryOptHeader.addEventListener('click', () => {
-            isDeliveryOptOpen = !isDeliveryOptOpen;
-            const icon = deliveryOptHeader.querySelector('.cart-accordion-icon');
-            if (isDeliveryOptOpen) {
-                deliveryOptBody.classList.add('open');
-                deliveryOptBody.style.maxHeight = deliveryOptBody.scrollHeight + "px";
-                icon.style.transform = 'rotate(180deg)';
-            } else {
-                deliveryOptBody.classList.remove('open');
-                deliveryOptBody.style.maxHeight = null;
-                icon.style.transform = 'rotate(0deg)';
-            }
-        });
-
-        const radioBtns = deliveryOptBody.querySelectorAll('input[name="deliveryType"]');
-        const timeContainer = deliveryOptBody.querySelector('#scheduleTimeContainer');
-        radioBtns.forEach(btn => {
-            btn.addEventListener('change', (e) => {
-                if (e.target.value === 'schedule') {
-                    timeContainer.style.maxHeight = '100px';
-                    if(isDeliveryOptOpen) deliveryOptBody.style.maxHeight = (deliveryOptBody.scrollHeight + 100) + "px";
-                } else {
-                    timeContainer.style.maxHeight = '0';
-                }
-            });
-        });
-
-        deliveryOptSection.appendChild(deliveryOptHeader);
-        deliveryOptSection.appendChild(deliveryOptBody);
         checkoutContent.appendChild(deliveryOptSection);
 
-        // 4. Payment Method
         const paymentSection = document.createElement('div');
         paymentSection.className = 'checkout-section';
         paymentSection.id = 'paymentSection';
         paymentSection.innerHTML = `
             <div class="checkout-section-header">
                 <h4>Payment Method</h4>
-                <button class="change-btn">Select</button>
+                <button class="change-btn" type="button">Change</button>
             </div>
             <div class="address-details">
                 <span class="address-icon">${selectedPaymentMethod.icon}</span>
                 <span>${selectedPaymentMethod.text}</span>
             </div>
+            <p class="checkout-section-caption">This is a demo selection only. No payment method is currently live.</p>
         `;
         paymentSection.querySelector('.change-btn').addEventListener('click', () => {
             const currentPayment = selectedPaymentMethod.value;
@@ -2243,74 +2214,29 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
             document.getElementById('paymentOverlay').classList.add('show');
             document.getElementById('paymentSheet').classList.add('show');
         });
-        
-        if (selectedPaymentMethod.value === 'mtn' || selectedPaymentMethod.value === 'airtel') {
-             const infoDiv = document.createElement('div');
-             infoDiv.id = 'paymentDepositInfo';
-             infoDiv.style.cssText = 'margin-top: 15px; font-size: 0.9em; color: #555; background-color: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee;';
-             const number = '+971562889428';
-             infoDiv.innerHTML = `<strong>Deposit Number:</strong> ${number}<br><small>After deposit, send screenshot proof to the WhatsApp number you placed the order with.</small>`;
-             paymentSection.appendChild(infoDiv);
-        }
-
         checkoutContent.appendChild(paymentSection);
 
         // Courier Tip Section
         const tipSection = document.createElement('div');
         tipSection.className = 'checkout-section';
-        tipSection.style.marginTop = '20px';
         tipPercentage = 0;
         const summarySection = document.createElement('div');
         summarySection.className = 'checkout-section';
-        summarySection.style.marginTop = '20px';
 
         const updateSummary = () => {
-            const currency = 'UGX';
             const productTotal = grandTotal;
-            const deliveryFee = 0.00; 
-            const promotion = 0.00;
-            const subTotal = productTotal - promotion;
+            const subTotal = productTotal;
             const tipAmount = subTotal * (tipPercentage / 100);
-            const totalToPay = subTotal + deliveryFee + tipAmount;
-
-            let summaryHtml = `<div class="checkout-section-header" style="margin-bottom:15px;"><h4>Delivery Summary</h4></div>`;
-
-            // Product list header
-            summaryHtml += `
-                <div class="summary-row" style="font-weight: bold; color: #333; border-bottom: 1px solid #eee; padding-bottom: 8px;">
-                <span style="flex: 4; text-align: left;">Products</span>
-                    <span style="flex: 1; text-align: center;">Qty</span>
-                <span style="flex: 2; text-align: center;">Unit Price</span>
-                <span style="flex: 2; text-align: center;">Price</span>
-                </div>
+            const demoTotal = subTotal + tipAmount;
+            summarySection.innerHTML = `
+                <div class="checkout-section-header"><h4>Price breakdown</h4></div>
+                <div class="checkout-price-row"><span>Items subtotal</span><span>${formatCurrency(subTotal)}</span></div>
+                <div class="checkout-price-row"><span>Delivery fee</span><span class="checkout-unavailable-price">Not calculated in demo</span></div>
+                <div class="checkout-price-row"><span>Courier tip (${tipPercentage}%)</span><span>${formatCurrency(tipAmount)}</span></div>
+                <div class="checkout-price-row checkout-price-total"><span>Items + tip <small>(demo total)</small></span><strong>${formatCurrency(demoTotal)}</strong></div>
+                <p class="checkout-section-caption">Delivery fee is not included. The final amount must be confirmed before a real order is placed.</p>
             `;
-
-            // List each product
-            cart.forEach(item => {
-                let itemPrice = item.basePrice;
-                if (item.addons) item.addons.forEach(a => itemPrice += a.price);
-                const lineTotal = itemPrice * item.quantity;
-
-                summaryHtml += `
-                    <div class="summary-row">
-                    <span style="flex: 4; text-align: left; white-space: normal; word-break: break-word;">${item.title}</span>
-                        <span style="flex: 1; text-align: center;">${item.quantity}</span>
-                    <span style="flex: 2; text-align: center;">${itemPrice.toFixed(2)}</span>
-                    <span style="flex: 2; text-align: center;">${lineTotal.toFixed(2)}</span>
-                    </div>
-                `;
-            });
-
-            // Rest of the summary
-            summaryHtml += `
-                <div class="summary-row" style="border-top: 1px solid #eee; padding-top: 8px;"><span>Promotions</span><span>-${currency} ${promotion.toFixed(2)}</span></div>
-                <div class="summary-row" style="font-weight: 800; color: #333;"><span>Subtotal</span><span>${currency} ${subTotal.toFixed(2)}</span></div>
-                <div class="summary-row"><span>Delivery Fees</span><span>${currency} ${deliveryFee.toFixed(2)}</span></div>
-                <div class="summary-row"><span>Courier Tip (${tipPercentage}%)</span><span>${currency} ${tipAmount.toFixed(2)}</span></div>
-                <div class="summary-row total"><span>Total to Pay</span><span>${currency} ${totalToPay.toFixed(2)}</span></div>
-            `;
-            
-            summarySection.innerHTML = summaryHtml;
+            document.getElementById('placeOrderBtn').textContent = `Place demo order · ${formatCurrency(demoTotal)}`;
         };
         
         const tipHeader = document.createElement('div');
@@ -2325,36 +2251,39 @@ document.querySelector('.checkout-btn').addEventListener('click', () => {
         
         const tipSubtitle = document.createElement('div');
         tipSubtitle.style.cssText = 'font-size: 0.85em; color: #666; margin-bottom: 15px;';
-        tipSubtitle.textContent = 'The Courier will get the full amount';
+        tipSubtitle.textContent = 'Optional. Your full tip goes to the courier.';
 
         const tipOptionsContainer = document.createElement('div');
-        tipOptionsContainer.style.cssText = 'display: flex; gap: 10px; margin-bottom: 15px;';
+        tipOptionsContainer.className = 'checkout-tip-options';
         
         [0, 5, 10, 15].forEach(amount => {
-            const el = document.createElement('div');
+            const el = document.createElement('button');
             el.className = 'tip-option';
+            el.type = 'button';
             if (amount === 0) el.classList.add('selected');
-            el.textContent = amount + '%';
+            el.textContent = amount === 0 ? 'No tip' : `${amount}%`;
+            el.setAttribute('aria-pressed', amount === 0 ? 'true' : 'false');
             el.addEventListener('click', () => {
-                tipOptionsContainer.querySelectorAll('.tip-option').forEach(opt => opt.classList.remove('selected'));
+                tipOptionsContainer.querySelectorAll('.tip-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                    opt.setAttribute('aria-pressed', 'false');
+                });
                 el.classList.add('selected');
+                el.setAttribute('aria-pressed', 'true');
                 tipPercentage = amount;
                 updateSummary();
             });
             tipOptionsContainer.appendChild(el);
         });
 
-        const saveTipContainer = document.createElement('label');
-        saveTipContainer.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 0.9em; cursor: pointer; user-select: none;';
-        saveTipContainer.innerHTML = `<input type="checkbox" style="accent-color: #019E81; width: 18px; height: 18px;"><span>Save tip for next order</span>`;
-
-        tipSection.append(tipHeader, tipSubtitle, tipOptionsContainer, saveTipContainer);
+        tipSection.append(tipHeader, tipSubtitle, tipOptionsContainer);
         checkoutContent.appendChild(tipSection);
 
         updateSummary();
         checkoutContent.appendChild(summarySection);
 
         checkoutScreen.classList.add('active');
+        rememberLastScreen('cart');
     }
 });
 
@@ -2375,82 +2304,48 @@ if (placeOrderBtn) {
     placeOrderBtn.addEventListener('click', () => {
         if (cart.length > 0) {
             if (!userPhoneNumber && !recipientDetails.phone) {
-                showToast("Please provide a contact number and select payment mode");
+                showToast('Add a phone number so the restaurant can contact you.');
                 const userPhoneSection = document.getElementById('checkoutUserPhoneSection');
                 if (userPhoneSection) userPhoneSection.click();
                 return;
             }
 
-            // WhatsApp Integration
             const resName = document.getElementById('resScreenName').textContent || 'Restaurant';
-            const currency = 'UGX';
-            let message = `*New Order from Kirya App* 🛒\n\n`;
-            message += `*Restaurant:* ${resName}\n\n`;
-            message += `*Items:*\n`;
-
-            let subTotal = 0;
-            cart.forEach(item => {
-                let itemPrice = item.basePrice;
-                let addonsText = '';
-                if (item.addons && item.addons.length > 0) {
-                    item.addons.forEach(addon => {
-                        itemPrice += addon.price;
-                        addonsText += ` + ${addon.name}`;
-                    });
-                }
-                const lineTotal = itemPrice * item.quantity;
-                subTotal += lineTotal;
-                message += `${item.quantity}x ${item.title}${addonsText} - ${lineTotal.toFixed(2)}\n`;
-            });
-
-            const deliveryFee = 0.00;
+            const subTotal = computeCartSummary(cart).subtotal;
+            const deliveryFee = 0;
             const tipAmount = subTotal * (tipPercentage / 100);
-            const totalToPay = subTotal + deliveryFee + tipAmount;
-
-            message += `\n*Subtotal:* ${currency} ${subTotal.toFixed(2)}\n`;
-            message += `*Delivery Fee:* ${currency} ${deliveryFee.toFixed(2)}\n`;
-            message += `*Courier Tip (${tipPercentage}%):* ${currency} ${tipAmount.toFixed(2)}\n`;
-            message += `*Total to Pay:* ${currency} ${totalToPay.toFixed(2)}\n\n`;
-
-            message += `*Payment Method:* ${selectedPaymentMethod.text}\n`;
+            const demoTotal = subTotal + tipAmount;
             const deliveryAddress = document.getElementById('selectedAddressText').textContent || 'Not set';
-            message += `*Delivery Address:* ${deliveryAddress}\n`;
-
-            const customerName = recipientDetails.name || 'Valued Customer';
-            const contactPhone = recipientDetails.phone || userPhoneNumber || 'Not provided';
-            message += `*Customer:* ${customerName}\n`;
-            message += `*Contact:* ${contactPhone}\n`;
-
-            if (allergyNotes) {
-                message += `*Allergies/Notes:* ${allergyNotes}\n`;
-            }
-
-            const cutlery = document.getElementById('cutlerySwitch') && document.getElementById('cutlerySwitch').checked ? 'Yes' : 'No';
-            message += `*Cutlery:* ${cutlery}\n`;
+            const customerName = recipientDetails.name || 'Customer';
+            const customerPhone = userPhoneNumber || recipientDetails.phone;
+            const needsCutlery = Boolean(document.getElementById('cutlerySwitch')?.checked);
 
             const order = createCustomerMarketplaceOrder({
                 restaurant: resName,
-                items: cart.map(item => `${item.quantity}x ${item.title}`),
+                items: cart.map(item => {
+                    const addons = item.addons?.length ? ` (${item.addons.map(addon => addon.name).join(', ')})` : '';
+                    return `${item.quantity}x ${item.title}${addons}`;
+                }),
                 subtotal: subTotal,
                 deliveryFee,
                 tipAmount,
-                total: totalToPay,
+                total: demoTotal,
                 customerName,
-                customerPhone: contactPhone,
+                customerPhone,
+                recipientName: recipientDetails.name,
+                recipientPhone: recipientDetails.phone,
                 deliveryAddress,
                 paymentMethod: selectedPaymentMethod.text,
-                notes: allergyNotes
+                notes: allergyNotes,
+                needsCutlery
             });
             if (!order) return;
 
-            const whatsappNumber = '971562889428'; // Business WhatsApp Number
-            const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
-            window.open(whatsappUrl, '_blank');
-
-            showToast(`Order ${order.id} placed. Track merchant and rider updates in Orders.`);
+            showToast(`Demo order ${order.id} saved on this device. It has not been sent to the restaurant.`);
             cart = [];
             updateCartView();
             document.getElementById('checkoutActionScreen').classList.remove('active');
+            rememberLastScreen('home');
             setTimeout(() => {
                 cartScreen.classList.remove('active');
                 clearInterval(suggestedScrollInterval);
@@ -2475,7 +2370,7 @@ function updateAllergyDisplay() {
             if(mainTextSpan) mainTextSpan.textContent = 'Allergies / Notes';
         } else {
             displayEl.style.display = 'none';
-            if(mainTextSpan) mainTextSpan.textContent = 'Any Allergies?';
+            if(mainTextSpan) mainTextSpan.textContent = 'Allergies or special instructions';
         }
     }
 }
@@ -2519,8 +2414,8 @@ function updateUserPhoneDisplay() {
         section.innerHTML = `
             <span class="address-icon">📱</span>
             <div>
-                <h4>Add Your Phone Number</h4>
-                <p>We will send you massage to validate it</p>
+                <h4>Add your phone number</h4>
+                <p>Used for order updates and to contact you about delivery.</p>
             </div>
         `;
     }
@@ -2601,6 +2496,7 @@ const checkoutBackBtn = document.getElementById('checkoutBackBtn');
 if (checkoutBackBtn) {
     checkoutBackBtn.addEventListener('click', () => {
         document.getElementById('checkoutActionScreen').classList.remove('active');
+        rememberLastScreen('cart');
     });
 }
 
@@ -2620,6 +2516,7 @@ if (paymentSheet) {
     paymentSheet.addEventListener('change', (e) => {
         if (e.target.name === 'paymentMethod') {
             const radio = e.target;
+            if (radio.disabled) return;
             selectedPaymentMethod = {
                 value: radio.value,
                 icon: radio.dataset.icon,
@@ -2631,25 +2528,6 @@ if (paymentSheet) {
                 paymentSection.querySelector('.address-icon').innerHTML = selectedPaymentMethod.icon;
                 const textSpan = paymentSection.querySelector('.address-details span:last-of-type');
                 if (textSpan) textSpan.textContent = selectedPaymentMethod.text;
-
-                // Handle Deposit Info display update
-                let infoDiv = document.getElementById('paymentDepositInfo');
-                if (!infoDiv) {
-                    infoDiv = document.createElement('div');
-                    infoDiv.id = 'paymentDepositInfo';
-                    infoDiv.style.cssText = 'margin-top: 15px; font-size: 0.9em; color: #555; background-color: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px solid #eee;';
-                    paymentSection.appendChild(infoDiv);
-                }
-
-                if (selectedPaymentMethod.value === 'mtn') {
-                    infoDiv.innerHTML = `<strong>Deposit Number:</strong> +971562889428<br><small>After deposit, send screenshot proof to the WhatsApp number you placed the order with.</small>`;
-                    infoDiv.style.display = 'block';
-                } else if (selectedPaymentMethod.value === 'airtel') {
-                    infoDiv.innerHTML = `<strong>Deposit Number:</strong> +971562889428<br><small>After deposit, send screenshot proof to the WhatsApp number you placed the order with.</small>`;
-                    infoDiv.style.display = 'block';
-                } else {
-                    infoDiv.style.display = 'none';
-                }
             }
             
             setTimeout(closePaymentSheet, 200);
@@ -5782,9 +5660,9 @@ function merchantPhoneKey(phone) {
     return String(phone || '').replace(/\D/g, '');
 }
 
-function createCustomerMarketplaceOrder({ restaurant, items, subtotal, deliveryFee, tipAmount, total, customerName, customerPhone, deliveryAddress, paymentMethod, notes }) {
+function createCustomerMarketplaceOrder({ restaurant, items, subtotal, deliveryFee, tipAmount, total, customerName, customerPhone, recipientName, recipientPhone, deliveryAddress, paymentMethod, notes, needsCutlery }) {
     const normalizedAddress = String(deliveryAddress || '').trim();
-    if (!normalizedAddress || ['Not set', 'Set delivery address'].includes(normalizedAddress)) {
+    if (!normalizedAddress || /^(not set|set delivery address|selected address not set)$/i.test(normalizedAddress)) {
         showToast('Set a delivery address before placing your order.');
         return false;
     }
@@ -5801,6 +5679,8 @@ function createCustomerMarketplaceOrder({ restaurant, items, subtotal, deliveryF
         id: `#C${Date.now().toString(36).toUpperCase()}`,
         customer: name || 'Customer',
         phone,
+        recipientName: String(recipientName || '').trim(),
+        recipientPhone: String(recipientPhone || '').trim(),
         customerId,
         merchant: String(restaurant || 'Kirya merchant').trim(),
         createdAt,
@@ -5815,6 +5695,7 @@ function createCustomerMarketplaceOrder({ restaurant, items, subtotal, deliveryF
         total: formatMerchantCurrency(total),
         paymentMethod,
         customerNotes: notes || '',
+        needsCutlery: Boolean(needsCutlery),
         status: 'new',
         statusHistory: [{ status: 'new', at: createdAt, actor: 'Customer (prototype)' }]
     };

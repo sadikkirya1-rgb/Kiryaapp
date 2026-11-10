@@ -653,8 +653,8 @@
 
 <div id="cartScreen">
   <div class="cart-header">
-    <div class="cart-back-btn" id="cartBackBtn">⬅️</div>
-    <div class="cart-title">Checkout</div>
+    <button class="cart-back-btn" id="cartBackBtn" type="button" aria-label="Back to browsing">←</button>
+    <div class="cart-title">Your cart</div>
   </div>
   <div class="cart-content" id="cartContent">
     <!-- Cart items populated by JS -->
@@ -664,19 +664,22 @@
       <span>Total</span>
       <span id="cartTotalAmount">0.00</span>
     </div>
-    <button class="checkout-btn">Checkout</button>
+    <button class="checkout-btn" type="button">Continue to checkout</button>
   </div>
 </div>
 
 <div id="checkoutActionScreen">
   <div class="checkout-header">
-    <div class="checkout-back-btn" id="checkoutBackBtn">⬅️</div>
-    <div class="checkout-title">Checkout</div>
+    <button class="checkout-back-btn" id="checkoutBackBtn" type="button" aria-label="Back to your cart">←</button>
+    <div class="checkout-title">Review your order</div>
   </div>
   <div class="checkout-content">
     <!-- Content populated by JS -->
   </div>
-  <div class="checkout-footer"><button class="place-order-btn" id="placeOrderBtn">Place Order</button></div>
+  <div class="checkout-footer">
+    <p class="checkout-demo-note">Demo only · Your order will not be sent and no payment will be collected</p>
+    <button class="place-order-btn" id="placeOrderBtn" type="button">Place demo order</button>
+  </div>
 </div>
 
 <div id="allergyScreen">
@@ -704,7 +707,7 @@
     
     <label>Phone Number</label>
     <div class="phone-input-group">
-      <input type="text" id="phonePrefix" placeholder="+971" value="+971">
+      <input type="text" id="phonePrefix" placeholder="+256" value="+256">
       <input type="tel" id="phoneNumber" placeholder="50 123 4567">
     </div>
   </div>
@@ -719,10 +722,10 @@
     <div id="userPhoneCloseBtn" class="user-phone-close-btn">✖</div>
   </div>
   <div class="user-phone-content">
-    <p>We will send you a message to validate your number.</p>
+    <p>Used for order contact in this demo. Phone verification is not connected yet.</p>
     <label>Phone Number</label>
     <div class="phone-input-group">
-      <input type="text" id="userPhonePrefix" placeholder="+971" value="+971">
+      <input type="text" id="userPhonePrefix" placeholder="+256" value="+256">
       <input type="tel" id="userPhoneNumberInput" placeholder="50 123 4567">
     </div>
   </div>
@@ -810,16 +813,16 @@
     <label class="payment-option-item">
       <div class="payment-option-info">
         <span class="payment-icon" style="color: #ffcb00;">●</span>
-        <span>MTN Mobile Money</span>
+        <span>MTN Mobile Money <small>Coming soon</small></span>
       </div>
-      <input type="radio" name="paymentMethod" value="mtn" data-icon="📱" data-text="MTN Mobile Money">
+      <input type="radio" name="paymentMethod" value="mtn" data-icon="📱" data-text="MTN Mobile Money" disabled>
     </label>
     <label class="payment-option-item">
       <div class="payment-option-info">
         <span class="payment-icon" style="color: #ed1c24;">●</span>
-        <span>Airtel Money</span>
+        <span>Airtel Money <small>Coming soon</small></span>
       </div>
-      <input type="radio" name="paymentMethod" value="airtel" data-icon="📱" data-text="Airtel Money">
+      <input type="radio" name="paymentMethod" value="airtel" data-icon="📱" data-text="Airtel Money" disabled>
     </label>
   </div>
 </div>

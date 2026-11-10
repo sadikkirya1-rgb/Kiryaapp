@@ -4,7 +4,6 @@ export const appState = {
   cart: [],
   suggestedScrollInterval: null,
   favorites: new Set(),
-  isCheckoutAccordionOpen: false,
   allergyNotes: '',
   recipientDetails: { name: '', phone: '' },
   userPhoneNumber: '',
