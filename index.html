@@ -1488,18 +1488,42 @@
   </div>
   <div class="generic-content">
     <section class="merchant-record-panel merchant-pickup-settings" aria-labelledby="merchantPickupAddressHeading">
-      <div class="merchant-section-heading"><h2 id="merchantPickupAddressHeading">Business details &amp; pickup location</h2></div>
-      <p>Keep your business details and pickup pin up to date so riders can find you and estimate their trip.</p>
+      <div class="merchant-section-heading"><h2 id="merchantPickupAddressHeading">Vendor registration &amp; delivery areas</h2></div>
+      <p>Register your store location and select every town or city you deliver to. Customers will only see your store when their selected delivery town is covered.</p>
+      <p class="merchant-vendor-prototype-note">Prototype: this vendor profile is saved in this browser. Production registration, multiple vendor accounts and approval will be connected to the backend later.</p>
       <div class="merchant-profile-grid">
         <label>Business name<input id="merchantBusinessName" type="text" maxlength="120" autocomplete="organization" required></label>
         <label>Business type<select id="merchantBusinessCategory" required><option value="">Select business type</option><option value="Restaurant">Restaurant</option><option value="Pharmacy">Pharmacy</option><option value="Bar">Bar</option><option value="Grocery">Grocery</option><option value="Retail">Retail</option><option value="Other">Other</option></select></label>
         <label>Business phone<input id="merchantBusinessPhone" type="tel" maxlength="24" autocomplete="tel" placeholder="Optional contact number"></label>
       </div>
+      <fieldset class="merchant-location-registration">
+        <legend>Store location</legend>
+        <p>The shared Uganda location directory uses region, district, town/city and landmark. It does not currently have a separate subregion level.</p>
+        <div class="merchant-location-select-grid">
+          <label for="merchantLocationRegion">Region</label>
+          <select id="merchantLocationRegion" required><option value="">Choose region</option></select>
+          <label for="merchantLocationDistrict">District</label>
+          <select id="merchantLocationDistrict" required disabled><option value="">Choose district</option></select>
+          <label for="merchantLocationTown">Town or city</label>
+          <select id="merchantLocationTown" required disabled><option value="">Choose town or city</option></select>
+          <label for="merchantLocationLandmark">Nearby landmark</label>
+          <select id="merchantLocationLandmark" required disabled><option value="">Choose landmark</option></select>
+        </div>
+        <div class="merchant-service-area">
+          <div class="merchant-service-area-heading">
+            <strong>Delivery coverage</strong>
+            <span>Select one or more towns/cities</span>
+          </div>
+          <div id="merchantServiceAreaOptions" class="merchant-service-area-options"></div>
+        </div>
+      </fieldset>
       <div class="merchant-pickup-setting-row">
         <label class="merchant-visually-hidden" for="merchantPickupAddress">Business pickup address</label>
         <input id="merchantPickupAddress" type="text" maxlength="180" autocomplete="street-address" placeholder="Enter the full store pickup address">
         <button class="merchant-button-primary" id="merchantPickupAddressSave" type="button">Save business profile</button>
       </div>
+      <label class="merchant-store-directions-label" for="merchantStoreDirections">Store directions or unit (optional)</label>
+      <textarea id="merchantStoreDirections" rows="2" maxlength="180" placeholder="Building, floor, shop number, or directions for the rider"></textarea>
       <p class="merchant-pickup-map-hint">Select the store entrance on the map. The pin is saved with the address.</p>
       <div id="merchantPickupMap" class="merchant-pickup-map" role="region" aria-label="Select the merchant pickup location on a map"></div>
       <small id="merchantPickupAddressStatus" role="status"></small>

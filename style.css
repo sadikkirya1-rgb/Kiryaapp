@@ -193,19 +193,19 @@ body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
   border-bottom-left-radius: 30px; border-bottom-right-radius: 30px; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.4); position: relative; z-index: 2; 
 }
 #newHomeScreen .selected-address-card{ 
-  position: absolute; top: 15px; left: 50%; transform: translateX(-50%); display:inline-flex; align-items:center; justify-content:center; gap: 6px; width:min(420px, calc(100% - 32px)); padding:10px 20px; border-radius:30px; background:#fff; border:none; color:#333; box-shadow:0 4px 10px rgba(0,0,0,0.1); font-weight:700; font-size:0.9em; cursor:pointer; transition: transform .2s, box-shadow .2s; white-space:nowrap;
+  position: absolute; top: 15px; left: 50%; transform: translateX(-50%); display:inline-flex; align-items:center; justify-content:center; gap: 8px; width:min(440px, calc(100% - 32px)); padding:12px 22px; border-radius:30px; background:#fff; border:none; color:#333; box-shadow:0 4px 10px rgba(0,0,0,0.1); font-weight:700; font-size:0.96em; cursor:pointer; transition: transform .2s, box-shadow .2s; white-space:nowrap;
 }
-#newHomeScreen .selected-address-card #selectedAddressText { flex:1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 0.78em; text-align:center; }
+#newHomeScreen .selected-address-card #selectedAddressText { flex:1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 0.82em; text-align:center; }
 #newHomeScreen .selected-address-card:hover{ transform:translateX(-50%) scale(1.05); box-shadow:0 6px 15px rgba(0,0,0,0.15); }
-#newHomeScreen .selected-address-card .home-icon{ width:24px; height:24px; object-fit:contain; flex-shrink:0; }
-#newHomeScreen .top-grid, #contentSearchScreen .top-grid { width:100%; max-width:1000px; padding:20px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:25px; }
+#newHomeScreen .selected-address-card .home-icon{ width:26px; height:26px; object-fit:contain; flex-shrink:0; }
+#newHomeScreen .top-grid, #contentSearchScreen .top-grid { width:100%; max-width:1000px; padding:32px 20px 20px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:25px; }
 #newHomeScreen .grid-item, #contentSearchScreen .grid-item { display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:10px; cursor:pointer; transition:transform .2s; }
 #newHomeScreen .grid-item:hover, #contentSearchScreen .grid-item:hover { transform:translateY(-5px); }
 #newHomeScreen .grid-item:active, #contentSearchScreen .grid-item:active { transform: translateY(-2px) scale(0.98); }
 
 /* Modern Bubble Circles */
 #newHomeScreen .circle {
-  width:85px; height:85px; border-radius:50%;
+  width:98px; height:98px; border-radius:50%;
   background: #fff;
   display:flex; align-items:center; justify-content:center; color:#333; font-weight:700; font-size:3.2em; font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiSymbols', sans-serif;
   box-shadow: 0 5px 15px rgba(0,0,0,0.15);
@@ -237,14 +237,14 @@ body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
 #newHomeScreen .grid-item, #contentSearchScreen .grid-item { touch-action: manipulation; }
 #newHomeScreen .content{ flex:1; background:#fff; padding: 30px 0 20px; overflow-y:auto; margin-top: -20px; z-index: 1; padding-top: 40px; }
 #newHomeScreen .for-you-text {
-  font-size: 1.2em;
+  font-size: 1.34em;
   font-weight: bold;
   color: #333;
   margin-bottom: 15px;
   padding: 0 20px;
 }
 #newHomeScreen .shop-scroll, #contentSearchScreen .shop-scroll { display:flex; align-items:center; gap:15px; overflow-x:auto; padding: 5px 20px 25px; touch-action: pan-x; scroll-snap-type:x mandatory; }
-#newHomeScreen .shop-item, #contentSearchScreen .shop-item { width:75px; height:75px; min-width:75px; border:none; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; font-size:2.5em; color:#333; flex:0 0 auto; cursor:pointer; transition:transform .2s, box-shadow .2s; scroll-snap-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+#newHomeScreen .shop-item, #contentSearchScreen .shop-item { width:88px; height:88px; min-width:88px; border:none; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; font-size:2.8em; color:#333; flex:0 0 auto; cursor:pointer; transition:transform .2s, box-shadow .2s; scroll-snap-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
 #newHomeScreen .shop-item:hover, #contentSearchScreen .shop-item:hover { transform:scale(1.05); box-shadow:0 8px 15px rgba(0,0,0,.12); }
 #newHomeScreen .shop-item:active, #contentSearchScreen .shop-item:active { transform:scale(0.95); box-shadow:0 4px 10px rgba(0,0,0,0.08); }
 #newHomeScreen .shop-item.is-active, #contentSearchScreen .shop-item.is-active {
@@ -430,6 +430,7 @@ body:not([data-app-role="admin"]) #adminScreen { display:none !important; }
 #categoryScreen .res-card:active { transform: translateY(0) scale(0.98); box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 #categoryScreen .res-image { position: relative; width: 100%; height: 138px; border-radius: 16px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 2.5em; color: #ccc; overflow: hidden; }
 #categoryScreen .res-image > img{ width:100%; height:100%; object-fit:cover; }
+#categoryScreen .vendor-category-icon { font-size: 1em; line-height: 1; }
 /* Heart Button */
 .heart-btn { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; background: rgba(255, 255, 255, 0.95); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1em; color: #888; border: none; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.12); transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); backdrop-filter: blur(4px); z-index: 5; padding: 0; }
 .heart-btn:hover { transform: scale(1.1); color: #ff4757; background: #fff; box-shadow: 0 6px 15px rgba(255, 71, 87, 0.25); }
@@ -1718,6 +1719,26 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .merchant-profile-grid label { display: grid; gap: 5px; color: #41534a; font-size: 0.78rem; font-weight: 700; }
 .merchant-profile-grid input, .merchant-profile-grid select { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #d6e1db; border-radius: 8px; background: #fff; color: #203b33; font: inherit; font-size: 0.9rem; box-sizing: border-box; }
 .merchant-profile-grid label:last-child { grid-column: 1 / -1; }
+.merchant-location-registration { margin: 16px 0; padding: 14px; border: 1px solid #dfe8e3; border-radius: 12px; }
+.merchant-location-registration legend { padding: 0 6px; color: #243c33; font-size: 0.95rem; font-weight: 800; }
+.merchant-location-registration > p { margin: 0 0 12px; }
+.merchant-location-select-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.merchant-location-select-grid label { align-self: end; color: #41534a; font-size: 0.76rem; font-weight: 700; }
+.merchant-location-select-grid select { width: 100%; min-width: 0; min-height: 42px; padding: 9px 10px; border: 1px solid #d6e1db; border-radius: 8px; background: #fff; color: #203b33; font: inherit; font-size: 0.85rem; }
+.merchant-location-select-grid select:disabled { background: #f2f5f3; color: #88938e; }
+.merchant-service-area { margin-top: 16px; }
+.merchant-service-area-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin-bottom: 8px; color: #30463d; font-size: 0.82rem; }
+.merchant-service-area-heading span { color: #687570; font-size: 0.75rem; font-weight: 400; }
+.merchant-service-area-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; max-height: 270px; overflow-y: auto; padding: 2px; }
+.merchant-service-area-group { min-width: 0; padding: 8px; border: 1px solid #e8eeea; border-radius: 9px; }
+.merchant-service-area-group legend { padding: 0 4px; color: #687570; font-size: 0.7rem; font-weight: 700; }
+.merchant-service-area-option { display: flex; align-items: center; gap: 8px; min-height: 32px; color: #30463d; font-size: 0.78rem; cursor: pointer; }
+.merchant-service-area-option input { width: 16px; height: 16px; accent-color: #019e81; }
+.merchant-store-directions-label { display: block; margin: 10px 0 5px; color: #41534a; font-size: 0.78rem; font-weight: 700; }
+#merchantStoreDirections { width: 100%; min-height: 64px; padding: 10px 12px; border: 1px solid #d6e1db; border-radius: 8px; font: inherit; resize: vertical; }
+#merchantServiceAreaOptions:focus-within { outline: 2px solid rgba(1, 158, 129, 0.25); outline-offset: 2px; }
+.vendor-location-empty { padding: 18px; border: 1px dashed #d4dfda; border-radius: 12px; background: #fff; color: #687570; font-size: 0.88rem; line-height: 1.5; text-align: center; }
+#categoryScreen [hidden] { display: none !important; }
 .merchant-pickup-map { width: 100%; height: 250px; border: 1px solid #d6e1db; border-radius: 8px; background: #eef3f0; }
 .merchant-store-marker { display: grid; place-items: center; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 27px; filter: drop-shadow(0 1px 2px #fff); }
 .merchant-store-marker span { line-height: 1; }
@@ -1780,17 +1801,18 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
   .merchant-pickup-setting-row { flex-direction: column; }
   .merchant-profile-grid { grid-template-columns: 1fr; }
   .merchant-profile-grid label:last-child { grid-column: auto; }
+  .merchant-location-select-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {
   #newHomeScreen .header{ min-height:41%; padding-top:56px; padding-bottom:18px; border-bottom-left-radius:24px; border-bottom-right-radius:24px; }
-  #newHomeScreen .top-grid{ padding:12px 16px; gap:10px 8px; }
+  #newHomeScreen .top-grid{ padding:24px 16px 12px; gap:10px 8px; }
   #newHomeScreen .grid-item{ gap:4px; margin-bottom:4px; }
-  #newHomeScreen .circle{ width:58px; height:58px; font-size:1.3em; }
-  #newHomeScreen .grid-label{ padding:2px 6px; border-radius:8px; font-size:.68em; }
+  #newHomeScreen .circle{ width:70px; height:70px; font-size:1.55em; }
+  #newHomeScreen .grid-label{ padding:3px 8px; border-radius:8px; font-size:.74em; }
   #newHomeScreen .content{ padding:34px 0 16px; }
-  #newHomeScreen .for-you-text{ margin-bottom:10px; padding:0 16px; font-size:1.05em; }
-  #newHomeScreen .shop-scroll{ gap:10px; padding:4px 16px 16px; }
-  #newHomeScreen .shop-item{ width:54px; height:54px; min-width:54px; font-size:1.45em; }
+  #newHomeScreen .for-you-text{ margin-bottom:12px; padding:0 16px; font-size:1.18em; }
+  #newHomeScreen .shop-scroll{ gap:12px; padding:4px 16px 16px; }
+  #newHomeScreen .shop-item{ width:68px; height:68px; min-width:68px; font-size:1.7em; }
   #newHomeScreen .shop-item.is-active{ transform:scale(1.06); }
 }

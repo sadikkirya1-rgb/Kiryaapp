@@ -119,10 +119,10 @@ function saveAdminDeliveryLocations(locations) {
     }
 }
 
-function getDeliveryLocationOptions() {
+function getDeliveryLocationHierarchy() {
     const activeLocations = getAdminDeliveryLocations().filter(location => location.active);
     const regions = [...new Set(activeLocations.map(location => location.region))].sort();
-    const hierarchy = regions.map(regionName => {
+    return regions.map(regionName => {
         const regionLocations = activeLocations.filter(location => location.region === regionName);
         const districts = [...new Set(regionLocations.map(location => location.district))].sort();
         return {
@@ -140,7 +140,10 @@ function getDeliveryLocationOptions() {
             })
         };
     });
+}
 
+function getDeliveryLocationOptions() {
+    const hierarchy = getDeliveryLocationHierarchy();
     if (deliveryLocationStep === 0) return hierarchy;
     const region = hierarchy.find(option => option.name === pendingDeliveryLocation.region);
     if (deliveryLocationStep === 1) return region?.districts || [];
@@ -1147,8 +1150,53 @@ const categoryConfig = {
   }
 };
 
+function getVendorLocationId(region, district, town) {
+  const slug = value => String(value || '').normalize('NFKD').toLocaleLowerCase().replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return [region, district, town].map(slug).join(':');
+}
+
+function getCustomerVendorListings(category) {
+  const location = getSavedDeliveryLocation();
+  if (!location || !merchantProfile?.location || !merchantPickupAddress || !merchantPickupCoordinates || !Array.isArray(merchantProfile.serviceAreas)) return [];
+  if (!getVendorLocationNode(location)) return [];
+  const eligibleCategories = {
+    Food: ['Restaurant'],
+    Groceries: ['Grocery'],
+    Shops: ['Retail', 'Other'],
+    Pharmacies: ['Pharmacy'],
+    Drinks: ['Bar']
+  };
+  if (!eligibleCategories[category]?.includes(merchantProfile.category)) return [];
+  const deliveryAreaId = getVendorLocationId(location.region, location.district, location.town);
+  if (!merchantProfile.serviceAreas.includes(deliveryAreaId)) return [];
+  const { region, district, town, landmark } = merchantProfile.location;
+  if (![region, district, town, landmark].every(value => typeof value === 'string' && value.trim())) return [];
+  return [{ ...merchantProfile, deliveryAreaLabel: town }];
+}
+
+function getRegisteredVendorMenu() {
+  const activeItems = merchantMenuItems.filter(item => item.active);
+  const groups = new Map();
+  activeItems.forEach(item => {
+    const category = item.category || 'Menu';
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push({
+      title: item.name,
+      desc: item.description || '',
+      price: String(item.price),
+      image: item.img || item.image || '🍽️'
+    });
+  });
+  return [...groups].map(([name, items]) => ({ name, items }));
+}
+
 function renderCategoryContent(category) {
-  const config = categoryConfig[category] || categoryConfig["Food"]; 
+  const isBrowseCategory = Object.hasOwn(categoryConfig, category);
+  if (isBrowseCategory) window.currentBrowseCategory = category;
+  const browseCategory = isBrowseCategory ? category : window.currentBrowseCategory || 'Food';
+  const config = categoryConfig[category] || categoryConfig["Food"];
+  const vendors = getCustomerVendorListings(browseCategory);
+  const customerLocation = getSavedDeliveryLocation();
   // Store current category for use in opening restaurants
   window.currentCategoryConfig = config;
 
@@ -1169,6 +1217,8 @@ function renderCategoryContent(category) {
   const brandsScroll = document.getElementById('brandsScroll');
   if(brandsScroll) {
     brandsScroll.innerHTML = '';
+    brandsScroll.closest('.brands-section').hidden = true;
+    document.getElementById('brandsPagination')?.setAttribute('hidden', '');
     config.brands.forEach(b => {
       const container = document.createElement('div');
       container.className = 'brand-container';
@@ -1187,7 +1237,7 @@ function renderCategoryContent(category) {
   // Render Restaurants / Items
   const generateCardHTML = (item) => `
       <div class="res-image">
-        <img src="${getDemoPhotoForImage(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy">
+        <span class="vendor-category-icon" aria-hidden="true">${escapeHtml(item.image)}</span>
         <button class="heart-btn">♡</button>
       </div>
       <div class="res-name">${escapeHtml(item.name)}</div>
@@ -1201,67 +1251,49 @@ function renderCategoryContent(category) {
   const restaurantList = document.getElementById('restaurantList');
   if(restaurantList) {
     restaurantList.innerHTML = '';
-    for(let i=0; i<10; i++) {
-        const item = config.items[i % config.items.length];
+    const restaurantHeading = restaurantList.closest('.restaurant-list-section')?.querySelector('h3');
+    if (restaurantHeading) restaurantHeading.textContent = `Vendors delivering to ${customerLocation?.town || 'your area'}`;
+    if (!vendors.length) {
+        const emptyState = document.createElement('p');
+        emptyState.className = 'vendor-location-empty';
+        emptyState.textContent = customerLocation
+          ? `No registered vendors currently deliver to ${customerLocation.town}. Try another category or update your delivery address.`
+          : 'Choose a delivery address to see vendors serving your area.';
+        restaurantList.appendChild(emptyState);
+    }
+    vendors.forEach((vendor, index) => {
+        const item = {
+          name: vendor.name,
+          image: getMerchantCategoryIcon(vendor.category),
+          rating: 'New',
+          delivery: 'Local delivery',
+          time: `Serves ${vendor.deliveryAreaLabel}`
+        };
         const card = document.createElement('div');
         card.className = 'res-card animate-entry';
-        card.style.animationDelay = `${i * 0.05}s`;
-        card.innerHTML = generateCardHTML({...item, name: item.name + " " + (i+1)});
+        card.style.animationDelay = `${index * 0.05}s`;
+        card.innerHTML = generateCardHTML(item);
         
         card.querySelector('.heart-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            toggleFavorite(card.querySelector('.res-name').textContent, e.target);
+            toggleFavorite(vendor.name, e.target);
         });
         card.addEventListener('click', (e) => {
              if(e.target.classList.contains('heart-btn')) return;
-             openRestaurant(card.querySelector('.res-name').textContent);
+             openRestaurant(vendor.name, getRegisteredVendorMenu());
         });
         restaurantList.appendChild(card);
-    }
+    });
   }
 
-  // Render "For You" Section
+  // Hide unlocated sample vendor rows until they have structured service areas.
   const prefScroll = document.getElementById('prefScroll');
   if(prefScroll) {
     prefScroll.innerHTML = '';
-    for(let i=0; i<5; i++) {
-        const item = config.items[i % config.items.length];
-        const card = document.createElement('div');
-        card.className = 'pref-card';
-        card.innerHTML = generateCardHTML({...item, name: item.name + (i>0 ? " " + (i+1) : "")}); 
-        
-        card.addEventListener('click', (e) => {
-             if(e.target.classList.contains('heart-btn')) return;
-             openRestaurant(card.querySelector('.res-name').textContent, config.menu);
-        });
-        prefScroll.appendChild(card);
-    }
-    // Re-init pagination dots
+    prefScroll.previousElementSibling?.setAttribute('hidden', '');
+    prefScroll.setAttribute('hidden', '');
     const prefPagination = document.getElementById('prefPagination');
-    if(prefPagination) {
-        prefPagination.innerHTML = '';
-        for(let i=0; i<5; i++) {
-            const dot = document.createElement('div');
-            dot.className = 'pref-dot';
-            if(i===0) dot.classList.add('active');
-            prefPagination.appendChild(dot);
-        }
-    }
-    // Re-bind intersection observer if necessary, but simplicity suggests CSS scroll snap works mostly.
-    // We'll re-add a simple observer logic here
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if(entry.isIntersecting){
-          const index = Array.from(prefScroll.children).indexOf(entry.target);
-          Array.from(prefScroll.children).forEach(c => c.classList.remove('in-focus'));
-          entry.target.classList.add('in-focus');
-          const dots = document.getElementById('prefPagination').querySelectorAll('.pref-dot');
-          dots.forEach(d => d.classList.remove('active'));
-          if(dots[index]) dots[index].classList.add('active');
-        }
-      });
-    }, { root: prefScroll, threshold: 0.6 });
-    Array.from(prefScroll.children).forEach(card => observer.observe(card));
+    if(prefPagination) prefPagination.setAttribute('hidden', '');
   }
   
   // Re-init auto scroll if applicable
@@ -6009,7 +6041,7 @@ function loadMerchantPickupAddress() {
 }
 
 function loadMerchantProfile() {
-    const fallback = { name: 'Al Reef Restaurant', category: 'Restaurant', phone: '' };
+    const fallback = { name: 'Al Reef Restaurant', category: 'Restaurant', phone: '', serviceAreas: [] };
     try {
         const saved = localStorage.getItem('kiryaMerchantProfile');
         if (saved === null) return fallback;
@@ -6021,13 +6053,92 @@ function loadMerchantProfile() {
             name: typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : fallback.name,
             category: ['Restaurant', 'Pharmacy', 'Bar', 'Grocery', 'Retail', 'Other'].includes(profile.category) ? profile.category : fallback.category,
             phone: typeof profile.phone === 'string' ? profile.phone : '',
-            address: typeof profile.address === 'string' ? profile.address : ''
+            address: typeof profile.address === 'string' ? profile.address : '',
+            location: getVendorLocationNode(profile.location)
+                ? {
+                    region: profile.location.region,
+                    district: profile.location.district,
+                    town: profile.location.town,
+                    landmark: profile.location.landmark,
+                    directions: typeof profile.location.directions === 'string' ? profile.location.directions : ''
+                }
+                : null,
+            serviceAreas: Array.isArray(profile.serviceAreas)
+                ? profile.serviceAreas.filter(area => getAllVendorServiceAreaIds().includes(area))
+                : []
         };
     } catch (error) {
         console.error('Unable to load the merchant profile.', error);
         showToast('Saved business profile could not be loaded.');
         return fallback;
     }
+}
+
+function getVendorLocationNode(location) {
+    if (!location) return null;
+    const region = getDeliveryLocationHierarchy().find(option => option.name === location.region);
+    const district = region?.districts.find(option => option.name === location.district);
+    const town = district?.towns.find(option => option.name === location.town);
+    if (!town?.landmarks.includes(location.landmark)) return null;
+    return { region, district, town };
+}
+
+function getAllVendorServiceAreaIds() {
+    return getDeliveryLocationHierarchy().flatMap(region =>
+        region.districts.flatMap(district =>
+            district.towns.map(town => getVendorLocationId(region.name, district.name, town.name))
+        )
+    );
+}
+
+function setVendorLocationSelect(select, placeholder, options, selectedValue = '') {
+    select.replaceChildren(new Option(placeholder, ''));
+    options.forEach(option => select.add(new Option(option.name, option.name)));
+    select.disabled = options.length === 0;
+    select.value = options.some(option => option.name === selectedValue) ? selectedValue : '';
+}
+
+function populateVendorLocationFields(location = {}) {
+    const regionSelect = document.getElementById('merchantLocationRegion');
+    const districtSelect = document.getElementById('merchantLocationDistrict');
+    const townSelect = document.getElementById('merchantLocationTown');
+    const landmarkSelect = document.getElementById('merchantLocationLandmark');
+    const hierarchy = getDeliveryLocationHierarchy();
+    setVendorLocationSelect(regionSelect, 'Choose region', hierarchy, location.region);
+    const region = hierarchy.find(option => option.name === regionSelect.value);
+    setVendorLocationSelect(districtSelect, 'Choose district', region?.districts || [], location.district);
+    const district = region?.districts.find(option => option.name === districtSelect.value);
+    setVendorLocationSelect(townSelect, 'Choose town or city', district?.towns || [], location.town);
+    const town = district?.towns.find(option => option.name === townSelect.value);
+    setVendorLocationSelect(landmarkSelect, 'Choose landmark', (town?.landmarks || []).map(name => ({ name })), location.landmark);
+}
+
+function renderVendorServiceAreaOptions(selectedAreas = []) {
+    const container = document.getElementById('merchantServiceAreaOptions');
+    container.replaceChildren();
+    getDeliveryLocationHierarchy().forEach(region => {
+        region.districts.forEach(district => {
+            const group = document.createElement('fieldset');
+            group.className = 'merchant-service-area-group';
+            const legend = document.createElement('legend');
+            legend.textContent = `${region.name} · ${district.name}`;
+            group.appendChild(legend);
+            district.towns.forEach(town => {
+                const id = getVendorLocationId(region.name, district.name, town.name);
+                const label = document.createElement('label');
+                label.className = 'merchant-service-area-option';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = id;
+                checkbox.checked = selectedAreas.includes(id);
+                const text = document.createElement('span');
+                text.textContent = town.name;
+                label.append(checkbox, text);
+                group.appendChild(label);
+            });
+            container.appendChild(group);
+        });
+    });
 }
 
 function loadMerchantPickupCoordinates() {
@@ -6055,9 +6166,29 @@ document.getElementById('merchantBusinessName').value = merchantProfile.name;
 document.getElementById('merchantBusinessCategory').value = merchantProfile.category;
 document.getElementById('merchantBusinessPhone').value = merchantProfile.phone;
 document.getElementById('merchantPickupAddress').value = merchantPickupAddress;
+document.getElementById('merchantStoreDirections').value = merchantProfile.location?.directions || '';
+populateVendorLocationFields(merchantProfile.location || {});
+renderVendorServiceAreaOptions(merchantProfile.serviceAreas || []);
 document.getElementById('merchantPickupAddressStatus').textContent = merchantPickupAddress
     ? merchantPickupCoordinates ? 'Pickup address and map pin are saved for new rider offers.' : 'Pickup location is saved and will be included in new delivery orders.'
     : 'Add the store address before sending rider offers.';
+
+document.getElementById('merchantLocationRegion').addEventListener('change', event => {
+    populateVendorLocationFields({ region: event.target.value });
+});
+document.getElementById('merchantLocationDistrict').addEventListener('change', event => {
+    populateVendorLocationFields({
+        region: document.getElementById('merchantLocationRegion').value,
+        district: event.target.value
+    });
+});
+document.getElementById('merchantLocationTown').addEventListener('change', event => {
+    populateVendorLocationFields({
+        region: document.getElementById('merchantLocationRegion').value,
+        district: document.getElementById('merchantLocationDistrict').value,
+        town: event.target.value
+    });
+});
 
 document.getElementById('merchantPickupAddress').addEventListener('input', () => {
     if (!merchantPickupCoordinates) return;
@@ -6383,6 +6514,14 @@ document.getElementById('merchantPickupAddressSave').addEventListener('click', (
     const category = document.getElementById('merchantBusinessCategory').value;
     const phone = document.getElementById('merchantBusinessPhone').value.trim();
     const address = input.value.trim();
+    const location = {
+        region: document.getElementById('merchantLocationRegion').value,
+        district: document.getElementById('merchantLocationDistrict').value,
+        town: document.getElementById('merchantLocationTown').value,
+        landmark: document.getElementById('merchantLocationLandmark').value,
+        directions: document.getElementById('merchantStoreDirections').value.trim()
+    };
+    const selectedServiceAreas = [...document.querySelectorAll('#merchantServiceAreaOptions input:checked')].map(input => input.value);
     if (!name || !category) {
         const field = !name ? document.getElementById('merchantBusinessName') : document.getElementById('merchantBusinessCategory');
         field.focus();
@@ -6399,8 +6538,24 @@ document.getElementById('merchantPickupAddressSave').addEventListener('click', (
         showToast('Enter the business pickup address.');
         return;
     }
+    if (!getVendorLocationNode(location)) {
+        document.getElementById('merchantLocationRegion').focus();
+        showToast('Select the store region, district, town/city and landmark.');
+        return;
+    }
+    if (!selectedServiceAreas.length) {
+        document.getElementById('merchantServiceAreaOptions').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showToast('Select at least one town or city where your store delivers.');
+        return;
+    }
+    if (!merchantPickupCoordinates) {
+        document.getElementById('merchantPickupAddressStatus').textContent = 'Select your exact store entrance on the map before saving.';
+        document.getElementById('merchantPickupMap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showToast('Select the store pickup pin on the map.');
+        return;
+    }
     const now = new Date().toISOString();
-    const profile = { name, category, phone, address };
+    const profile = { name, category, phone, address, location, serviceAreas: selectedServiceAreas };
     const nextOrders = demoActiveOrders.map(order => ({
         ...order,
         pickupAddress: order.fulfillment === 'delivery' ? address : order.pickupAddress
@@ -7838,13 +7993,28 @@ window.addEventListener('storage', event => {
                 name: typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : 'Al Reef Restaurant',
                 category: ['Restaurant', 'Pharmacy', 'Bar', 'Grocery', 'Retail', 'Other'].includes(profile.category) ? profile.category : 'Restaurant',
                 phone: typeof profile.phone === 'string' ? profile.phone : '',
-                address: typeof profile.address === 'string' ? profile.address : merchantPickupAddress
+                address: typeof profile.address === 'string' ? profile.address : merchantPickupAddress,
+                location: getVendorLocationNode(profile.location)
+                    ? {
+                        region: profile.location.region,
+                        district: profile.location.district,
+                        town: profile.location.town,
+                        landmark: profile.location.landmark,
+                        directions: typeof profile.location.directions === 'string' ? profile.location.directions : ''
+                    }
+                    : null,
+                serviceAreas: Array.isArray(profile.serviceAreas)
+                    ? profile.serviceAreas.filter(area => getAllVendorServiceAreaIds().includes(area))
+                    : []
             };
             if (merchantProfile.address) merchantPickupAddress = merchantProfile.address;
             document.getElementById('merchantBusinessName').value = merchantProfile.name;
             document.getElementById('merchantBusinessCategory').value = merchantProfile.category;
             document.getElementById('merchantBusinessPhone').value = merchantProfile.phone;
             document.getElementById('merchantPickupAddress').value = merchantPickupAddress;
+            document.getElementById('merchantStoreDirections').value = merchantProfile.location?.directions || '';
+            populateVendorLocationFields(merchantProfile.location || {});
+            renderVendorServiceAreaOptions(merchantProfile.serviceAreas);
             updateMerchantPickupMarkers();
             updateRiderPickupDestination();
             updateRiderPickupRoute(riderLocationMarker?.getLatLng() || null);
