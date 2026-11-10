@@ -303,6 +303,81 @@ export const ugandaRegionalMerchants = [
   { id: 'UG-LIR-V011', name: 'Lira Family Grocer', category: 'Groceries', area: 'Lira', address: 'Lira Main Market', coordinates: { latitude: 2.2499, longitude: 32.8998 }, status: 'Open', ordersToday: 8, rating: 4.3, sample: true }
 ];
 
+export const ugandaMbaleDemoVendors = [
+  {
+    id: 'UG-MBL-V008',
+    name: 'Elgon Home Supplies',
+    category: 'Retail',
+    area: 'Mbale',
+    address: 'Mbale Central Market, Mbale City',
+    coordinates: { latitude: 1.0784, longitude: 34.1810 },
+    status: 'Open',
+    ordersToday: 7,
+    rating: 4.4,
+    sample: true,
+    location: { region: 'Eastern', district: 'Mbale District', town: 'Mbale City', landmark: 'Mbale Central Market' },
+    products: [
+      { name: 'Rechargeable LED Lamp', category: 'Home essentials', description: 'Rechargeable lamp for home and study use.', price: 45000, image: '🔦' },
+      { name: 'USB-C Charging Cable', category: 'Electronics', description: 'Durable 1 metre USB-C charging cable.', price: 15000, image: '🔌' },
+      { name: 'Cooking Oil (5L)', category: 'Groceries', description: 'Five-litre bottle of cooking oil.', price: 28000, image: '🫗' }
+    ]
+  },
+  {
+    id: 'UG-MBL-V012',
+    name: 'Mbale Fresh Basket',
+    category: 'Grocery',
+    area: 'Mbale',
+    address: 'Mbale Central Market, Mbale City',
+    coordinates: { latitude: 1.0788, longitude: 34.1804 },
+    status: 'Open',
+    ordersToday: 12,
+    rating: 4.6,
+    sample: true,
+    location: { region: 'Eastern', district: 'Mbale District', town: 'Mbale City', landmark: 'Mbale Central Market' },
+    products: [
+      { name: 'Matooke Bunch', category: 'Fresh produce', description: 'Fresh local matooke, market selected.', price: 10000, image: '🍌' },
+      { name: 'Farm Eggs (Tray)', category: 'Dairy & eggs', description: 'Tray of fresh farm eggs.', price: 18000, image: '🥚' },
+      { name: 'Fresh Tomatoes (1kg)', category: 'Fresh produce', description: 'Ripe tomatoes for everyday cooking.', price: 6000, image: '🍅' }
+    ]
+  },
+  {
+    id: 'UG-MBL-V013',
+    name: 'Mbale Kitchen',
+    category: 'Restaurant',
+    area: 'Mbale',
+    address: 'Mbale Central Market, Mbale City',
+    coordinates: { latitude: 1.0779, longitude: 34.1816 },
+    status: 'Open',
+    ordersToday: 16,
+    rating: 4.7,
+    sample: true,
+    location: { region: 'Eastern', district: 'Mbale District', town: 'Mbale City', landmark: 'Mbale Central Market' },
+    products: [
+      { name: 'Beef Pilau', category: 'Local meals', description: 'Spiced rice served with tender beef.', price: 18000, image: '🍛' },
+      { name: 'Grilled Chicken Meal', category: 'Chicken', description: 'Grilled chicken served with a choice of sides.', price: 25000, image: '🍗' },
+      { name: 'Egg Rolex', category: 'Quick bites', description: 'Chapati rolled with egg and fresh vegetables.', price: 5000, image: '🌯' }
+    ]
+  },
+  {
+    id: 'UG-MBL-V014',
+    name: 'Mbale Care Pharmacy',
+    category: 'Pharmacy',
+    area: 'Mbale',
+    address: 'Mbale Regional Referral Hospital, Mbale City',
+    coordinates: { latitude: 1.0820, longitude: 34.1768 },
+    status: 'Open',
+    ordersToday: 8,
+    rating: 4.8,
+    sample: true,
+    location: { region: 'Eastern', district: 'Mbale District', town: 'Mbale City', landmark: 'Mbale Regional Referral Hospital' },
+    products: [
+      { name: 'First Aid Kit', category: 'First aid', description: 'Basic home first aid supplies.', price: 30000, image: '🩹' },
+      { name: 'Hand Sanitizer (500ml)', category: 'Hygiene', description: 'Alcohol-based hand sanitizer.', price: 12000, image: '🧴' },
+      { name: 'Vitamin C Tablets', category: 'Vitamins', description: 'Vitamin C supplement pack.', price: 18000, image: '🍊' }
+    ]
+  }
+];
+
 export const ugandaRegionalTransactions = [
   { merchant: 'Lake View Kitchen', order: 'UG-ENT-1004', amount: 38000, status: 'Pending', type: 'orders', role: 'merchant', area: 'Entebbe, Wakiso' },
   { merchant: 'Source Market Grocers', order: 'UG-JIN-1005', amount: 52000, status: 'Pending', type: 'orders', role: 'merchant', area: 'Jinja' },

@@ -2,7 +2,7 @@
 import { appState, ui } from './modules/state.js';
 import { updateAddressSummary } from './modules/mapHelpers.js';
 import { computeCartSummary, formatCurrency } from './modules/cartHelpers.js';
-import { ugandaDeliveryLocationOptions, ugandaRegionalOffers, ugandaRegionalCustomers, ugandaRegionalRiders, ugandaRegionalMerchants, ugandaRegionalTransactions, ugandaCategoryOffers, ugandaCategoryMerchants, ugandaCategoryTransactions } from './modules/ugandaDemoData.js';
+import { ugandaDeliveryLocationOptions, ugandaRegionalOffers, ugandaRegionalCustomers, ugandaRegionalRiders, ugandaRegionalMerchants, ugandaMbaleDemoVendors, ugandaRegionalTransactions, ugandaCategoryOffers, ugandaCategoryMerchants, ugandaCategoryTransactions } from './modules/ugandaDemoData.js';
 
 // --- Shared app state ---
 
@@ -1157,21 +1157,31 @@ function getVendorLocationId(region, district, town) {
 
 function getCustomerVendorListings(category) {
   const location = getSavedDeliveryLocation();
-  if (!location || !merchantProfile?.location || !merchantPickupAddress || !merchantPickupCoordinates || !Array.isArray(merchantProfile.serviceAreas)) return [];
-  if (!getVendorLocationNode(location)) return [];
+  if (!location || !getVendorLocationNode(location)) return [];
   const eligibleCategories = {
     Food: ['Restaurant'],
-    Groceries: ['Grocery'],
+    Groceries: ['Grocery', 'Groceries'],
     Shops: ['Retail', 'Other'],
     Pharmacies: ['Pharmacy'],
     Drinks: ['Bar']
   };
-  if (!eligibleCategories[category]?.includes(merchantProfile.category)) return [];
   const deliveryAreaId = getVendorLocationId(location.region, location.district, location.town);
-  if (!merchantProfile.serviceAreas.includes(deliveryAreaId)) return [];
-  const { region, district, town, landmark } = merchantProfile.location;
-  if (![region, district, town, landmark].every(value => typeof value === 'string' && value.trim())) return [];
-  return [{ ...merchantProfile, deliveryAreaLabel: town }];
+  const vendors = ugandaMbaleDemoVendors
+    .filter(vendor =>
+      eligibleCategories[category]?.includes(vendor.category) &&
+      getVendorLocationId(vendor.location.region, vendor.location.district, vendor.location.town) === deliveryAreaId
+    )
+    .map(vendor => ({ ...vendor, deliveryAreaLabel: vendor.location.town, demoSample: true }));
+  const liveVendor = merchantProfile?.location && merchantPickupAddress && merchantPickupCoordinates &&
+    Array.isArray(merchantProfile.serviceAreas) &&
+    eligibleCategories[category]?.includes(merchantProfile.category) &&
+    merchantProfile.serviceAreas.includes(deliveryAreaId) &&
+    [merchantProfile.location.region, merchantProfile.location.district, merchantProfile.location.town, merchantProfile.location.landmark]
+      .every(value => typeof value === 'string' && value.trim())
+      ? [{ ...merchantProfile, deliveryAreaLabel: merchantProfile.location.town }]
+      : [];
+  const names = new Set(liveVendor.map(vendor => vendor.name.toLocaleLowerCase()));
+  return [...liveVendor, ...vendors.filter(vendor => !names.has(vendor.name.toLocaleLowerCase()))];
 }
 
 function getRegisteredVendorMenu() {
@@ -1185,6 +1195,20 @@ function getRegisteredVendorMenu() {
       desc: item.description || '',
       price: String(item.price),
       image: item.img || item.image || '🍽️'
+    });
+  });
+  return [...groups].map(([name, items]) => ({ name, items }));
+}
+
+function getDemoVendorMenu(vendor) {
+  const groups = new Map();
+  vendor.products.forEach(product => {
+    if (!groups.has(product.category)) groups.set(product.category, []);
+    groups.get(product.category).push({
+      title: product.name,
+      desc: product.description,
+      price: `UGX ${Number(product.price).toLocaleString('en-UG')}`,
+      image: product.image
     });
   });
   return [...groups].map(([name, items]) => ({ name, items }));
@@ -1280,7 +1304,7 @@ function renderCategoryContent(category) {
         });
         card.addEventListener('click', (e) => {
              if(e.target.classList.contains('heart-btn')) return;
-             openRestaurant(vendor.name, getRegisteredVendorMenu());
+             openRestaurant(vendor.name, vendor.demoSample ? getDemoVendorMenu(vendor) : getRegisteredVendorMenu());
         });
         restaurantList.appendChild(card);
     });
@@ -3091,7 +3115,12 @@ function renderAdminRegionalMerchants() {
         const areaSelect = document.getElementById('adminRegionalMerchantArea');
         const count = document.getElementById('adminRegionalMerchantCount');
         if (!list || !areaSelect || !count) return;
-        const demoMerchants = [...ugandaRegionalMerchants, ...ugandaCategoryMerchants];
+        const demoMerchantNames = new Set(ugandaMbaleDemoVendors.map(merchant => merchant.name.toLocaleLowerCase()));
+        const demoMerchants = [
+            ...ugandaMbaleDemoVendors,
+            ...ugandaRegionalMerchants.filter(merchant => !demoMerchantNames.has(merchant.name.toLocaleLowerCase())),
+            ...ugandaCategoryMerchants.filter(merchant => !demoMerchantNames.has(merchant.name.toLocaleLowerCase()))
+        ];
         const selectedArea = areaSelect.value || 'all';
         const areas = [...new Set(demoMerchants.map(merchant => merchant.area))].sort((first, second) => first.localeCompare(second));
         areaSelect.innerHTML = `<option value="all">All Uganda regions</option>${areas.map(area => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join('')}`;
@@ -3105,7 +3134,7 @@ function renderAdminRegionalMerchants() {
         count.textContent = String(merchants.length);
         list.innerHTML = merchants.length ? merchants.map(merchant => `
             <article class="admin-regional-merchant-card">
-                <div><strong>${escapeHtml(merchant.name)}</strong><span>${escapeHtml(merchant.category)} · ${escapeHtml(merchant.area)}</span><small>${escapeHtml(merchant.address)} · ${merchant.ordersToday} sample orders today · ★ ${merchant.rating}</small></div>
+                <div><strong>${escapeHtml(merchant.name)}</strong><span>${escapeHtml(merchant.category)} · ${escapeHtml(merchant.area)}</span><small>${escapeHtml(merchant.address)} · ${merchant.ordersToday} sample orders today · ★ ${merchant.rating}</small>${merchant.products?.length ? `<small>Sample products: ${merchant.products.map(product => `${escapeHtml(product.name)} (UGX ${Number(product.price).toLocaleString('en-UG')})`).join(' · ')}</small>` : ''}</div>
                 <span class="merchant-status-pill delivered">${escapeHtml(merchant.status)} · sample</span>
             </article>`).join('') : '<p class="admin-marketplace-empty">No sample merchants match this search.</p>';
         if (!adminRegionalMerchantControlsBound) {
@@ -5842,6 +5871,28 @@ function renderMerchantMenuItems() {
     });
 }
 
+function renderMerchantDemoVendors() {
+    const list = document.getElementById('merchantDemoVendorList');
+    if (!list) return;
+    list.innerHTML = ugandaMbaleDemoVendors.map(vendor => `
+        <article class="merchant-demo-vendor">
+            <div class="merchant-demo-vendor-heading">
+                <strong>${escapeMerchantText(vendor.name)}</strong>
+                <span>${escapeMerchantText(vendor.category)} · ${escapeMerchantText(vendor.address)}</span>
+            </div>
+            <div class="merchant-demo-products">
+                ${vendor.products.map(product => `
+                    <div class="merchant-demo-product">
+                        <span class="merchant-demo-product-icon" aria-hidden="true">${escapeMerchantText(product.image)}</span>
+                        <div><strong>${escapeMerchantText(product.name)}</strong><small>${escapeMerchantText(product.category)} · ${escapeMerchantText(product.description)}</small></div>
+                        <b>${formatMerchantCurrency(product.price)}</b>
+                    </div>
+                `).join('')}
+            </div>
+        </article>
+    `).join('');
+}
+
 function openEditItemScreen(itemId) {
     const titleEl = document.getElementById('editItemTitle');
     const nameInput = document.getElementById('editItemName');
@@ -5929,6 +5980,7 @@ function openMerchantMenu() {
     setMerchantNavView('menu');
     merchantMenuScreen.classList.add('active');
     renderMerchantMenuItems();
+    renderMerchantDemoVendors();
 }
 
 function openMerchantNewItem() {

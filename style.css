@@ -1170,6 +1170,20 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .merchant-record-search { flex: 1 1 240px; min-width: 0; }
 .merchant-record-filter { flex: 0 1 200px; }
 .merchant-record-search:focus-visible, .merchant-record-filter:focus-visible { outline: 2px solid #15966f; outline-offset: 1px; }
+.merchant-demo-vendors { margin-top: 24px; padding: 18px; border: 1px solid #dce7e2; border-radius: 10px; background: #f8fbf9; }
+.merchant-demo-vendors > p { margin: 0 0 14px; color: #687570; font-size: 0.78rem; line-height: 1.5; }
+.merchant-demo-vendor-list { display: grid; gap: 12px; }
+.merchant-demo-vendor { padding: 13px; border: 1px solid #e1e9e5; border-radius: 8px; background: #fff; }
+.merchant-demo-vendor-heading { display: grid; gap: 4px; margin-bottom: 10px; }
+.merchant-demo-vendor-heading strong { color: #203b33; font-size: 0.86rem; }
+.merchant-demo-vendor-heading span { color: #687570; font-size: 0.72rem; }
+.merchant-demo-products { display: grid; gap: 7px; }
+.merchant-demo-product { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px; border-radius: 6px; background: #f8fbf9; }
+.merchant-demo-product-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; background: #e8f3ee; font-size: 1rem; }
+.merchant-demo-product > div { display: grid; gap: 3px; min-width: 0; }
+.merchant-demo-product > div strong { color: #34473f; font-size: 0.74rem; }
+.merchant-demo-product small { color: #687570; font-size: 0.67rem; line-height: 1.4; }
+.merchant-demo-product b { color: #087a67; font-size: 0.72rem; white-space: nowrap; }
 .merchant-record-panel { margin-bottom: 22px; padding: 18px; border: 1px solid #e8eeeb; border-radius: 10px; background: #fff; }
 .merchant-record-panel .merchant-section-heading { justify-content: space-between; }
 .merchant-record-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -1495,6 +1509,10 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 }
 @media (max-width: 520px) {
   .merchant-record-panel { padding: 13px; }
+  .merchant-demo-vendors { padding: 13px; }
+  .merchant-demo-product { grid-template-columns: 27px minmax(0, 1fr); gap: 7px; }
+  .merchant-demo-product-icon { width: 27px; height: 27px; }
+  .merchant-demo-product b { grid-column: 2; }
   .merchant-record-form { grid-template-columns: minmax(0, 1fr); }
   .merchant-form-actions { grid-column: 1; }
   .merchant-record-filter { flex: 1 1 100%; }
