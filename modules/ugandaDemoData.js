@@ -1,3 +1,98 @@
+export const ugandaDeliveryLocationOptions = [
+  {
+    name: 'Eastern',
+    districts: [
+      {
+        name: 'Mbale District',
+        towns: [
+          { name: 'Mbale City', landmarks: ['Mbale SS', 'Mbale Central Market', 'Mbale Regional Referral Hospital'] }
+        ]
+      },
+      {
+        name: 'Jinja District',
+        towns: [
+          { name: 'Jinja City', landmarks: ['Jinja Central Market', 'Jinja Hospital', 'Source of the Nile'] }
+        ]
+      },
+      {
+        name: 'Soroti District',
+        towns: [
+          { name: 'Soroti City', landmarks: ['Soroti Main Market', 'Soroti Regional Referral Hospital'] }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'Western',
+    districts: [
+      {
+        name: 'Mbarara District',
+        towns: [
+          { name: 'Mbarara City', landmarks: ['Mbarara town centre', 'Mbarara Regional Referral Hospital', 'Kakoba'] }
+        ]
+      },
+      {
+        name: 'Kabarole District',
+        towns: [
+          { name: 'Fort Portal City', landmarks: ['Fort Portal town centre', 'Fort Portal Regional Referral Hospital'] }
+        ]
+      },
+      {
+        name: 'Kasese District',
+        towns: [
+          { name: 'Kasese Town', landmarks: ['Kasese Main Market', 'Kasese Municipal Stadium'] }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'Central',
+    districts: [
+      {
+        name: 'Kampala District',
+        towns: [
+          { name: 'Kampala Central', landmarks: ['Nakasero Market', 'Old Taxi Park', 'Mulago Hospital'] }
+        ]
+      },
+      {
+        name: 'Wakiso District',
+        towns: [
+          { name: 'Entebbe', landmarks: ['Entebbe town', 'Kitoro Market', 'Entebbe Regional Referral Hospital'] }
+        ]
+      },
+      {
+        name: 'Masaka District',
+        towns: [
+          { name: 'Masaka City', landmarks: ['Masaka town centre', 'Nyendo Market', 'Masaka Regional Referral Hospital'] }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'Northern',
+    districts: [
+      {
+        name: 'Gulu District',
+        towns: [
+          { name: 'Gulu City', landmarks: ['Gulu Main Market', 'Gulu Regional Referral Hospital', 'Layibi'] }
+        ]
+      },
+      {
+        name: 'Lira District',
+        towns: [
+          { name: 'Lira City', landmarks: ['Lira Main Market', 'Lira Regional Referral Hospital', 'Senior Quarters'] }
+        ]
+      },
+      {
+        name: 'Arua District',
+        towns: [
+          { name: 'Arua City', landmarks: ['Arua Main Market', 'Arua Regional Referral Hospital'] }
+        ]
+      }
+    ]
+  }
+];
+
 export const ugandaRegionalOffers = [
   {
     id: 904,

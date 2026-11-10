@@ -2,7 +2,7 @@
 import { appState, ui } from './modules/state.js';
 import { updateAddressSummary } from './modules/mapHelpers.js';
 import { computeCartSummary } from './modules/cartHelpers.js';
-import { ugandaRegionalOffers, ugandaRegionalCustomers, ugandaRegionalRiders, ugandaRegionalMerchants, ugandaRegionalTransactions, ugandaCategoryOffers, ugandaCategoryMerchants, ugandaCategoryTransactions } from './modules/ugandaDemoData.js';
+import { ugandaDeliveryLocationOptions, ugandaRegionalOffers, ugandaRegionalCustomers, ugandaRegionalRiders, ugandaRegionalMerchants, ugandaRegionalTransactions, ugandaCategoryOffers, ugandaCategoryMerchants, ugandaCategoryTransactions } from './modules/ugandaDemoData.js';
 
 // --- Shared app state ---
 
@@ -23,7 +23,178 @@ let orderStatusChartInstance;
 let menuAvailabilityChartInstance;
 
 const lastScreenStoragePrefix = 'kiryaLastScreen:';
+const deliveryLocationStorageKey = 'kiryaDeliveryLocation';
 let suppressLastScreenWrites = false;
+let deliveryLocationStep = 0;
+let pendingDeliveryLocation = {};
+
+const deliveryLocationSteps = [
+    { key: 'region', title: 'Choose your region', hint: 'Select the region where you would like your order delivered.' },
+    { key: 'district', title: 'Choose your district', hint: 'Choose a district in your selected region.' },
+    { key: 'town', title: 'Choose your town or city', hint: 'Select the town or city closest to your delivery address.' },
+    { key: 'landmark', title: 'Choose a nearby landmark', hint: 'Pick a familiar place near your delivery address.' },
+    { key: 'details', title: 'Add delivery directions', hint: 'Give the rider a more exact place to deliver your order.' }
+];
+
+function getSavedDeliveryLocation() {
+    try {
+        const savedLocation = JSON.parse(localStorage.getItem(deliveryLocationStorageKey) || 'null');
+        return savedLocation?.fullAddress ? savedLocation : null;
+    } catch (error) {
+        console.warn('Unable to read the saved delivery address.', error);
+        return null;
+    }
+}
+
+function setDeliveryLocationAddress(location) {
+    const selectedAddress = document.getElementById('selectedAddress');
+    if (selectedAddress) selectedAddress.textContent = location?.fullAddress || 'Select a location on the map';
+    const entryLabel = document.getElementById('deliveryEntryLabel');
+    if (entryLabel) entryLabel.textContent = location?.shortAddress || 'Enter delivery address';
+    updateSelectedAddressCard();
+}
+
+function getDeliveryLocationOptions() {
+    if (deliveryLocationStep === 0) return ugandaDeliveryLocationOptions;
+    const region = ugandaDeliveryLocationOptions.find(option => option.name === pendingDeliveryLocation.region);
+    if (deliveryLocationStep === 1) return region?.districts || [];
+    const district = region?.districts.find(option => option.name === pendingDeliveryLocation.district);
+    if (deliveryLocationStep === 2) return district?.towns || [];
+    const town = district?.towns.find(option => option.name === pendingDeliveryLocation.town);
+    if (deliveryLocationStep === 3) return (town?.landmarks || []).map(name => ({ name }));
+    return [];
+}
+
+function renderDeliveryLocationPicker() {
+    const step = deliveryLocationSteps[deliveryLocationStep];
+    const isDetailsStep = step.key === 'details';
+    const panel = document.querySelector('.delivery-location-panel');
+    const title = document.getElementById('deliveryLocationTitle');
+    const hint = document.getElementById('deliveryLocationHint');
+    const options = document.getElementById('deliveryLocationOptions');
+    const details = document.getElementById('deliveryLocationDetails');
+    const searchInput = document.getElementById('deliveryLocationSearch');
+    const search = document.querySelector('.delivery-location-search');
+    const backButton = document.getElementById('deliveryLocationBackBtn');
+    const closeButton = document.getElementById('deliveryLocationCloseBtn');
+    const progress = document.getElementById('deliveryLocationProgress');
+    const breadcrumb = document.getElementById('deliveryLocationBreadcrumb');
+
+    title.textContent = step.title;
+    hint.textContent = step.hint;
+    panel.classList.toggle('is-details-step', isDetailsStep);
+    options.hidden = isDetailsStep;
+    details.hidden = !isDetailsStep;
+    search.hidden = isDetailsStep;
+    backButton.hidden = deliveryLocationStep === 0 && !getSavedDeliveryLocation();
+    closeButton.hidden = !getSavedDeliveryLocation() && deliveryLocationStep === 0;
+    progress.style.width = `${((deliveryLocationStep + 1) / deliveryLocationSteps.length) * 100}%`;
+    breadcrumb.textContent = [
+        pendingDeliveryLocation.region,
+        pendingDeliveryLocation.district,
+        pendingDeliveryLocation.town,
+        pendingDeliveryLocation.landmark
+    ].filter(Boolean).join('  ·  ');
+
+    if (isDetailsStep) {
+        title.textContent = 'Confirm delivery location';
+        document.getElementById('deliveryLocationLandmark').textContent =
+            `${pendingDeliveryLocation.landmark}, ${pendingDeliveryLocation.town}`;
+        return;
+    }
+
+    searchInput.placeholder = `Search ${step.key === 'town' ? 'towns or cities' : `${step.key}s`}`;
+    const query = searchInput.value.trim().toLocaleLowerCase();
+    options.replaceChildren();
+    getDeliveryLocationOptions()
+        .filter(option => option.name.toLocaleLowerCase().includes(query))
+        .forEach(option => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'delivery-location-option';
+            button.setAttribute('role', 'option');
+            button.textContent = option.name;
+            button.addEventListener('click', () => selectDeliveryLocationOption(option.name));
+            options.appendChild(button);
+        });
+}
+
+function selectDeliveryLocationOption(name) {
+    const key = deliveryLocationSteps[deliveryLocationStep].key;
+    pendingDeliveryLocation[key] = name;
+    deliveryLocationStep += 1;
+    document.getElementById('deliveryLocationSearch').value = '';
+    renderDeliveryLocationPicker();
+}
+
+function openDeliveryLocationPicker() {
+    pendingDeliveryLocation = {};
+    deliveryLocationStep = 0;
+    document.getElementById('home').style.display = 'none';
+    document.getElementById('mapScreen').style.display = 'none';
+    document.getElementById('newHomeScreen').classList.remove('active');
+    document.getElementById('deliveryLocationScreen').classList.add('active');
+    document.getElementById('deliveryLocationScreen').setAttribute('aria-hidden', 'false');
+    renderDeliveryLocationPicker();
+    rememberLastScreen('addressPicker');
+}
+
+function showDeliveryHome() {
+    const savedLocation = getSavedDeliveryLocation();
+    if (!savedLocation) {
+        openDeliveryLocationPicker();
+        return;
+    }
+    setDeliveryLocationAddress(savedLocation);
+    document.getElementById('deliveryLocationScreen').classList.remove('active');
+    document.getElementById('deliveryLocationScreen').setAttribute('aria-hidden', 'true');
+    document.getElementById('home').style.display = 'none';
+    document.getElementById('mapScreen').style.display = 'none';
+    document.getElementById('newHomeScreen').classList.add('active');
+    document.getElementById('newHomeBackBtn').style.display = 'none';
+}
+
+function showDeliveryLanding() {
+    document.getElementById('deliveryLocationScreen').classList.remove('active');
+    document.getElementById('deliveryLocationScreen').setAttribute('aria-hidden', 'true');
+    document.getElementById('mapScreen').style.display = 'none';
+    document.getElementById('newHomeScreen').classList.remove('active');
+    document.getElementById('home').style.display = 'block';
+}
+
+function closeDeliveryLocationPicker() {
+    if (!getSavedDeliveryLocation()) return;
+    document.getElementById('deliveryLocationScreen').classList.remove('active');
+    document.getElementById('deliveryLocationScreen').setAttribute('aria-hidden', 'true');
+    showDeliveryHome();
+    rememberLastScreen('newHome');
+}
+
+function saveDeliveryLocation() {
+    const details = document.getElementById('deliveryAddressDetails').value.trim();
+    const shortAddress = `${pendingDeliveryLocation.landmark}, ${pendingDeliveryLocation.town}`;
+    const savedLocation = {
+        ...pendingDeliveryLocation,
+        details,
+        shortAddress,
+        fullAddress: [details, shortAddress, pendingDeliveryLocation.district, pendingDeliveryLocation.region, 'Uganda']
+            .filter(Boolean)
+            .join(', '),
+        savedAt: new Date().toISOString()
+    };
+
+    try {
+        localStorage.setItem(deliveryLocationStorageKey, JSON.stringify(savedLocation));
+    } catch (error) {
+        console.error('Unable to save the delivery address.', error);
+        showToast('We could not save this address. Please check your browser storage and try again.');
+        return;
+    }
+
+    document.getElementById('deliveryAddressDetails').value = '';
+    showDeliveryHome();
+    rememberLastScreen('newHome');
+}
 
 function getCurrentAppRole() {
     const hash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
@@ -52,14 +223,23 @@ function restoreLastScreen(role = getCurrentAppRole()) {
 
     switch (savedState.screen) {
         case 'home':
+            if (getSavedDeliveryLocation()) showDeliveryHome();
+            else showDeliveryLanding();
+            return true;
+        case 'addressPicker':
+            if (getSavedDeliveryLocation()) showDeliveryHome();
+            else showDeliveryLanding();
             return true;
         case 'map':
-            document.getElementById('openMapBtn')?.click();
+            if (getSavedDeliveryLocation()) showDeliveryHome();
+            else showDeliveryLanding();
             return true;
         case 'newHome':
-            updateSelectedAddressCard();
-            document.getElementById('newHomeScreen')?.classList.add('active');
-            hideMap();
+            if (getSavedDeliveryLocation()) {
+                showDeliveryHome();
+            } else {
+                showDeliveryLanding();
+            }
             return true;
         case 'contentSearch':
             openContentSearch();
@@ -154,7 +334,13 @@ function openRoleScreenFromHash() {
                 } finally {
                     suppressLastScreenWrites = false;
                 }
-        if (!restoreLastScreen(hash)) rememberLastScreen(hash === 'user' ? 'home' : hash);
+        if (hash === 'user' && !getSavedDeliveryLocation()) {
+            showDeliveryLanding();
+            rememberLastScreen('home');
+        } else if (!restoreLastScreen(hash)) {
+            if (hash === 'user') showDeliveryHome();
+            rememberLastScreen(hash === 'user' ? 'newHome' : hash);
+        }
     }, 1800);
   return true;
 }
@@ -168,13 +354,19 @@ document.addEventListener('DOMContentLoaded',()=>{
     setTimeout(()=>{
       document.getElementById('splash').style.display='none';
       document.getElementById('home').style.display='block';
-            if (!restoreLastScreen('main')) rememberLastScreen('home');
+            if (!getSavedDeliveryLocation()) {
+                showDeliveryLanding();
+                rememberLastScreen('home');
+            } else if (!restoreLastScreen('main')) {
+                showDeliveryHome();
+                rememberLastScreen('newHome');
+            }
     },500);
   },3000);
 });
 
 /* Open Map */
-document.getElementById('openMapBtn').addEventListener('click',()=>{
+document.getElementById('openMapBtn')?.addEventListener('click',()=>{
   document.getElementById('home').style.display='none';
   document.getElementById('mapScreen').style.display='block';
     rememberLastScreen('map');
@@ -222,6 +414,23 @@ document.getElementById('openMapBtn').addEventListener('click',()=>{
   }
   setTimeout(()=>map.invalidateSize(),300);
 });
+
+document.getElementById('openDeliveryLocationBtn').addEventListener('click', openDeliveryLocationPicker);
+document.getElementById('deliveryLocationBackBtn').addEventListener('click', () => {
+    if (deliveryLocationStep === 0) {
+        closeDeliveryLocationPicker();
+        return;
+    }
+    deliveryLocationStep -= 1;
+    const key = deliveryLocationSteps[deliveryLocationStep].key;
+    delete pendingDeliveryLocation[key];
+    document.getElementById('deliveryLocationSearch').value = '';
+    renderDeliveryLocationPicker();
+});
+document.getElementById('deliveryLocationCloseBtn').addEventListener('click', closeDeliveryLocationPicker);
+document.getElementById('deliveryLocationSearch').addEventListener('input', renderDeliveryLocationPicker);
+document.getElementById('confirmDeliveryLocationBtn').addEventListener('click', saveDeliveryLocation);
+document.getElementById('selectedAddressCard').addEventListener('click', openDeliveryLocationPicker);
 
 /* Reverse geocoding */
 function reverseGeocode(latlng){
@@ -311,7 +520,8 @@ function navigateBack() {
         updateAddAddressBtn();
         document.getElementById('backBtn').style.opacity = '1';
         document.getElementById('currentLocationBtn').style.opacity = '1';
-        document.querySelector('.leaflet-control-zoom').style.opacity = '1';
+        const zoomControl = document.querySelector('.leaflet-control-zoom');
+        if (zoomControl) zoomControl.style.opacity = '1';
         rememberLastScreen('map');
         return;
     }
@@ -329,7 +539,7 @@ function navigateBack() {
 }
 
 /* Search Error on Home */
-document.querySelector('#home nav .nav-item:nth-child(2)').addEventListener('click', () => {
+document.querySelector('#home nav .nav-item:nth-child(2)')?.addEventListener('click', () => {
   showSearchErrorState();
 });
 
@@ -402,7 +612,8 @@ function closeSearchUI() {
 
     document.getElementById('backBtn').style.opacity = '1';
     document.getElementById('currentLocationBtn').style.opacity = '1';
-    document.querySelector('.leaflet-control-zoom').style.opacity = '1';
+    const zoomControl = document.querySelector('.leaflet-control-zoom');
+    if (zoomControl) zoomControl.style.opacity = '1';
 }
 
 /* Expand search card when input focused */
@@ -412,7 +623,8 @@ searchInput.addEventListener('focus',()=>{
   searchCard.classList.add('expanded');
   document.getElementById('backBtn').style.opacity='0';
   document.getElementById('currentLocationBtn').style.opacity='0';
-  document.querySelector('.leaflet-control-zoom').style.opacity='0';
+  const zoomControl = document.querySelector('.leaflet-control-zoom');
+  if (zoomControl) zoomControl.style.opacity='0';
 });
 
 /* Collapse search card */

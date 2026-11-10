@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Delivery Map Selection</title>
+<title>Kirya Delivery</title>
 <link rel="icon" type="image/svg+xml" href="assets/Food%20Courier.svg">
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
@@ -25,10 +25,10 @@
 
 <div id="home">
   <div class="card">
-    <div class="address-card" id="openMapBtn">
-      <span>Enter delivery Address</span>
+    <button class="address-card" id="openDeliveryLocationBtn" type="button">
+      <span id="deliveryEntryLabel">Enter delivery address</span>
       <img src="assets/Location%20Pin.svg" alt="Location pin" class="map-pin-badge">
-    </div>
+    </button>
     <div class="logo">
       <img src="assets/Delivery%20Address.svg" alt="Delivery address" class="delivery-address-icon">
     </div>
@@ -47,6 +47,37 @@
     <div class="nav-item" data-role-app="admin"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.3-8 10-4.6-1.7-8-5-8-10V6l8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span>Admin</span></div>
   </nav>
 </div>
+
+<section id="deliveryLocationScreen" aria-labelledby="deliveryLocationTitle" aria-hidden="true">
+  <div class="delivery-location-panel" role="dialog" aria-modal="true" aria-labelledby="deliveryLocationTitle">
+    <header class="delivery-location-header">
+      <button id="deliveryLocationBackBtn" class="delivery-location-nav-btn" type="button" aria-label="Go to previous step">←</button>
+      <div>
+        <p class="delivery-location-eyebrow">DELIVERY ADDRESS</p>
+        <h1 id="deliveryLocationTitle">Choose your region</h1>
+      </div>
+      <button id="deliveryLocationCloseBtn" class="delivery-location-nav-btn" type="button" aria-label="Close address selection">×</button>
+    </header>
+    <div class="delivery-location-progress" aria-hidden="true"><span id="deliveryLocationProgress"></span></div>
+    <p id="deliveryLocationHint" class="delivery-location-hint">Select where you would like your order delivered.</p>
+    <div id="deliveryLocationBreadcrumb" class="delivery-location-breadcrumb" aria-live="polite"></div>
+    <label class="delivery-location-search">
+      <span aria-hidden="true">⌕</span>
+      <input id="deliveryLocationSearch" type="search" placeholder="Search regions" autocomplete="off">
+    </label>
+    <div id="deliveryLocationOptions" class="delivery-location-options" role="listbox" aria-label="Delivery location options"></div>
+    <section id="deliveryLocationDetails" class="delivery-location-details" hidden>
+      <div class="delivery-location-landmark">
+        <span aria-hidden="true">📍</span>
+        <div><small>Nearby landmark</small><strong id="deliveryLocationLandmark"></strong></div>
+      </div>
+      <label for="deliveryAddressDetails">House, building, street or directions <span>Optional</span></label>
+      <textarea id="deliveryAddressDetails" rows="3" maxlength="180" placeholder="For example: Blue gate opposite the school, near the main road"></textarea>
+      <p class="delivery-location-note">The landmark identifies the area. Extra directions can help the rider find your exact drop-off point.</p>
+      <button id="confirmDeliveryLocationBtn" type="button">Confirm location and continue</button>
+    </section>
+  </div>
+</section>
 
 <div id="mapScreen">
   <div id="backBtn" title="Go back">⬅️</div>
@@ -88,10 +119,10 @@
 <div id="newHomeScreen">
   <div class="header">
     <div id="newHomeBackBtn" title="Go back">⬅️</div>
-    <div class="selected-address-card" id="selectedAddressCard">
+    <button class="selected-address-card" id="selectedAddressCard" type="button" aria-label="Change delivery address">
       <img src="assets/Delivery%20Address.svg" alt="Delivery address" class="home-icon">
       <span id="selectedAddressText">Selected address not set</span>
-    </div>
+    </button>
     <div class="top-grid">
       <div class="grid-item"><div class="circle">🍕</div><div class="grid-label">Food</div></div>
       <div class="grid-item"><div class="circle">🛒</div><div class="grid-label">Groceries</div></div>
