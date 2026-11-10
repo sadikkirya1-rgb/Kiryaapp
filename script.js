@@ -28,11 +28,14 @@ const lastScreenStoragePrefix = 'kiryaLastScreen:';
 const deliveryLocationStorageKey = 'kiryaDeliveryLocation';
 const adminDeliveryLocationsStorageKey = 'kiryaAdminDeliveryLocations';
 const adminVendorsStorageKey = 'kiryaAdminVendors';
+const adminUsersStorageKey = 'kiryaAdminUsers';
 let suppressLastScreenWrites = false;
 let deliveryLocationStep = 0;
 let pendingDeliveryLocation = {};
 let editingAdminDeliveryLocationId = null;
 let editingAdminVendorId = null;
+let editingAdminUserId = null;
+let editingAdminRiderId = null;
 let returnToCheckoutAfterAddressEdit = false;
 
 const deliveryLocationSteps = [
@@ -2859,10 +2862,10 @@ function openAdmin() {
     renderAdminDemoMetrics();
     renderAdminMarketplaceRequests();
     renderAdminMarketplaceAudit();
-    renderAdminRiderReview();
     renderAdminMarketplacePayouts();
+    bindAdminUserManagement();
+    bindAdminRiderManagement();
     bindAdminVendorManagement();
-    renderAdminVendors();
     if (document.querySelector('.admin-section.active')?.dataset.section === 'approvals') {
         initAdminMarketplaceMap();
         setTimeout(() => adminMarketplaceMap?.invalidateSize(), 100);
@@ -3099,6 +3102,56 @@ const adminUserData = [
     }))
 ];
 
+function getDefaultAdminUsers() {
+    return adminUserData.map((user, index) => {
+        const rider = ugandaRegionalRiders.find(record => record.name === user.name);
+        const customer = ugandaRegionalCustomers.find(record => record.name === user.name);
+        const role = user.name === 'Grace Admin'
+            ? 'Admin'
+            : user.group === 'riders' ? 'Rider'
+                : user.group === 'merchants' ? 'Vendor'
+                    : 'Customer';
+        return {
+            id: `sample-user-${index + 1}`,
+            name: user.name,
+            email: rider?.email || customer?.email || '',
+            phone: rider?.phone || customer?.phone || '',
+            role,
+            area: rider?.area || customer?.address || '',
+            status: user.role === 'Suspended' ? 'Suspended' : 'Active',
+            sample: true
+        };
+    });
+}
+
+function loadAdminUsers() {
+    try {
+        const saved = localStorage.getItem(adminUsersStorageKey);
+        if (saved === null) {
+            const users = getDefaultAdminUsers();
+            localStorage.setItem(adminUsersStorageKey, JSON.stringify(users));
+            return users;
+        }
+        const users = JSON.parse(saved);
+        if (!Array.isArray(users) || !users.every(user =>
+            user && typeof user.id === 'string' &&
+            ['name', 'email', 'phone', 'area'].every(key => typeof user[key] === 'string') &&
+            ['Customer', 'Rider', 'Vendor', 'Admin'].includes(user.role) &&
+            ['Active', 'Inactive', 'Suspended'].includes(user.status)
+        )) {
+            throw new Error('Saved user records have an invalid format.');
+        }
+        const mergedUsers = mergeDemoRecords(users, getDefaultAdminUsers());
+        if (mergedUsers.length !== users.length) localStorage.setItem(adminUsersStorageKey, JSON.stringify(mergedUsers));
+        return mergedUsers;
+    } catch (error) {
+        console.warn('Unable to read saved users; using sample users.', error);
+        return getDefaultAdminUsers();
+    }
+}
+
+let adminUsers = loadAdminUsers();
+
 function renderAdminDemoMetrics() {
     const sampleOrderValue = adminDashboardData
         .filter(record => ['orders', 'revenue'].includes(record.type))
@@ -3119,8 +3172,8 @@ function renderAdminDemoMetrics() {
 
 const adminNavConfig = [
     { section: 'overview', icon: '◉', label: 'Overview', count: () => adminDashboardData.length + adminUserData.length },
-    { section: 'users', icon: '👥', label: 'Users', count: () => adminUserData.length },
-    { section: 'riders', icon: '🏍', label: 'Riders', count: () => 86 },
+    { section: 'users', icon: '👥', label: 'Users', count: () => adminUsers.length },
+    { section: 'riders', icon: '🏍', label: 'Riders', count: () => 2 + ugandaRegionalRiders.length },
     { section: 'approvals', icon: '✓', label: 'Pickup approvals', count: () => marketplaceOffers.filter(offer => offer.status === 'requested').length },
     { section: 'merchants', icon: '🏪', label: 'Vendors', count: () => adminVendors.length },
     { section: 'deliveryLocations', icon: '⌖', label: 'Delivery locations', count: () => getAdminDeliveryLocations().filter(location => location.active).length },
@@ -3450,37 +3503,157 @@ function bindAdminDeliveryLocationManagement() {
     renderAdminDeliveryLocations();
 }
 
+function saveAdminUsers(users) {
+    try {
+        localStorage.setItem(adminUsersStorageKey, JSON.stringify(users));
+        adminUsers = users;
+        const navCount = document.querySelector('.admin-nav-item[data-section="users"] .admin-nav-badge');
+        if (navCount) navCount.textContent = String(adminUsers.length);
+        return true;
+    } catch (error) {
+        console.error('Unable to save user records.', error);
+        showToast('User changes could not be saved. Check browser storage and try again.');
+        return false;
+    }
+}
+
+function resetAdminUserForm() {
+    const form = document.getElementById('adminUserForm');
+    if (!form) return;
+    form.reset();
+    editingAdminUserId = null;
+    document.getElementById('adminUserFormTitle').textContent = 'Register a user';
+    document.getElementById('adminUserSubmit').textContent = 'Register user';
+    document.getElementById('adminUserCancel').hidden = true;
+}
+
 function renderAdminUsers() {
-    const list = document.getElementById('adminUserList');
-    if (!list) return;
-
-    const search = (document.getElementById('adminSearchInput')?.value || '').trim().toLowerCase();
-    const selectedFilter = document.querySelector('.admin-chip.active')?.dataset.filter || 'all';
-
-    let users = [...adminUserData].filter((user) => {
-        const haystack = `${user.name} ${user.role} ${user.group}`.toLowerCase();
-        const matchesSearch = !search || haystack.includes(search);
-        const matchesFilter = selectedFilter === 'all' || user.group === selectedFilter || user.role.toLowerCase().includes(selectedFilter);
-        return matchesSearch && matchesFilter;
+    const preview = document.getElementById('adminUserList');
+    const dashboardSearch = (document.getElementById('adminSearchInput')?.value || '').trim().toLocaleLowerCase();
+    const dashboardFilter = document.querySelector('.admin-chip.active')?.dataset.filter || 'all';
+    const previewUsers = adminUsers.filter(user => {
+        const group = user.role === 'Rider' ? 'riders' : user.role === 'Vendor' ? 'merchants' :
+            user.role === 'Admin' ? 'users' : user.status === 'Suspended' ? 'compliance' : 'users';
+        return (!dashboardSearch || `${user.name} ${user.role} ${user.area}`.toLocaleLowerCase().includes(dashboardSearch)) &&
+            (dashboardFilter === 'all' || group === dashboardFilter || user.role.toLocaleLowerCase().includes(dashboardFilter));
     });
-
-    if (!users.length) {
-        list.innerHTML = '<div class="empty-state">No matching users found.</div>';
-        return;
+    if (preview) {
+        preview.innerHTML = previewUsers.length ? previewUsers.slice(0, 5).map(user => {
+            const tone = user.role === 'Rider' ? 'green' : user.role === 'Vendor' ? 'blue' :
+                user.status === 'Suspended' ? 'red' : 'amber';
+            const initials = user.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+            return `<div class="user-row"><div class="user-meta"><span class="user-avatar ${tone}">${escapeHtml(initials)}</span><div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.role)} · ${escapeHtml(user.status)}</small></div></div></div>`;
+        }).join('') : '<div class="empty-state">No matching users found.</div>';
     }
 
-    list.innerHTML = users.map((user) => `
-        <div class="user-row">
-            <div class="user-meta">
-                <span class="user-avatar ${user.tone}">${escapeHtml(user.initials)}</span>
-                <div>
-                    <strong>${escapeHtml(user.name)}</strong>
-                    <small>${escapeHtml(user.role)}</small>
-                </div>
-            </div>
-            <button class="mini-btn ${user.action === 'Review' ? 'danger' : ''}" type="button">${escapeHtml(user.action)}</button>
-        </div>
-    `).join('');
+    const tableBody = document.getElementById('adminUserTableBody');
+    const count = document.getElementById('adminUserCount');
+    if (!tableBody || !count) return;
+    const search = (document.getElementById('adminUserSearch')?.value || '').trim().toLocaleLowerCase();
+    const statusFilter = document.getElementById('adminUserFilter')?.value || 'all';
+    const users = adminUsers.filter(user =>
+        (statusFilter === 'all' || user.status === statusFilter) &&
+        `${user.name} ${user.role} ${user.email} ${user.phone} ${user.area}`.toLocaleLowerCase().includes(search)
+    );
+    count.textContent = `${users.length} ${users.length === 1 ? 'user' : 'users'}`;
+    const navCount = document.querySelector('.admin-nav-item[data-section="users"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(adminUsers.length);
+    tableBody.innerHTML = users.length ? users.map(user => `
+        <tr>
+            <td><strong>${escapeHtml(user.name)}</strong>${user.sample ? '<small class="admin-table-area">Sample user</small>' : ''}</td>
+            <td>${escapeHtml(user.role)}</td>
+            <td>${user.phone ? `<span>${escapeHtml(user.phone)}</span>` : ''}${user.email ? `<small class="admin-table-area">${escapeHtml(user.email)}</small>` : ''}${!user.phone && !user.email ? '—' : ''}</td>
+            <td>${escapeHtml(user.area || '—')}</td>
+            <td><span class="status-badge ${getStatusClass(user.status)}">${escapeHtml(user.status)}</span></td>
+            <td class="admin-vendor-actions">
+                <button class="mini-btn" type="button" data-user-edit="${escapeHtml(user.id)}">Edit</button>
+                <button class="mini-btn" type="button" data-user-toggle="${escapeHtml(user.id)}">${user.status === 'Active' ? 'Deactivate' : 'Activate'}</button>
+                <button class="mini-btn danger" type="button" data-user-delete="${escapeHtml(user.id)}">Delete</button>
+            </td>
+        </tr>
+    `).join('') : '<tr><td colspan="6" class="empty-state">No users match this search. Register a user using the form above.</td></tr>';
+}
+
+function bindAdminUserManagement() {
+    const form = document.getElementById('adminUserForm');
+    const tableBody = document.getElementById('adminUserTableBody');
+    if (!form || !tableBody || form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const values = Object.fromEntries(new FormData(form).entries());
+        const name = String(values.name).trim();
+        const email = String(values.email).trim();
+        const phone = String(values.phone).trim();
+        const duplicateContact = adminUsers.some(user =>
+            user.id !== editingAdminUserId &&
+            ((email && user.email.toLocaleLowerCase() === email.toLocaleLowerCase()) ||
+                (phone && user.phone.replace(/\s+/g, '') === phone.replace(/\s+/g, '')))
+        );
+        if (duplicateContact) {
+            showToast('A user with this email address or phone number is already registered.');
+            return;
+        }
+        const existing = adminUsers.find(user => user.id === editingAdminUserId);
+        const updatedUser = {
+            id: existing?.id || `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name,
+            email,
+            phone,
+            role: String(values.role),
+            area: String(values.area).trim(),
+            status: String(values.status),
+            sample: existing?.sample || false
+        };
+        const nextUsers = existing
+            ? adminUsers.map(user => user.id === existing.id ? updatedUser : user)
+            : [...adminUsers, updatedUser];
+        if (!saveAdminUsers(nextUsers)) return;
+        resetAdminUserForm();
+        renderAdminUsers();
+        showToast(existing ? 'User record updated.' : 'User registered.');
+    });
+
+    document.getElementById('adminUserCancel').addEventListener('click', resetAdminUserForm);
+    document.getElementById('adminUserSearch').addEventListener('input', renderAdminUsers);
+    document.getElementById('adminUserFilter').addEventListener('change', renderAdminUsers);
+    tableBody.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const userId = button.dataset.userEdit || button.dataset.userToggle || button.dataset.userDelete;
+        const user = adminUsers.find(record => record.id === userId);
+        if (!user) return;
+
+        if (button.dataset.userEdit) {
+            editingAdminUserId = user.id;
+            document.getElementById('adminUserName').value = user.name;
+            document.getElementById('adminUserEmail').value = user.email;
+            document.getElementById('adminUserPhone').value = user.phone;
+            document.getElementById('adminUserRole').value = user.role;
+            document.getElementById('adminUserArea').value = user.area;
+            document.getElementById('adminUserStatus').value = user.status;
+            document.getElementById('adminUserFormTitle').textContent = `Edit ${user.name}`;
+            document.getElementById('adminUserSubmit').textContent = 'Save changes';
+            document.getElementById('adminUserCancel').hidden = false;
+            document.getElementById('adminUserName').focus();
+            return;
+        }
+
+        if (button.dataset.userToggle) {
+            const status = user.status === 'Active' ? 'Inactive' : 'Active';
+            if (!saveAdminUsers(adminUsers.map(record => record.id === user.id ? { ...record, status } : record))) return;
+            renderAdminUsers();
+            return;
+        }
+
+        if (button.dataset.userDelete && window.confirm(`Delete ${user.name} from the user register?`)) {
+            if (!saveAdminUsers(adminUsers.filter(record => record.id !== user.id))) return;
+            if (editingAdminUserId === user.id) resetAdminUserForm();
+            renderAdminUsers();
+        }
+    });
+    renderAdminUsers();
 }
 
 function bindAdminDashboard() {
@@ -3553,7 +3726,14 @@ function bindAdminSectionNavigation() {
                 renderAdminTable();
                 renderAdminUsers();
             }
-            if (sectionName === 'riders') renderAdminRiderReview();
+            if (sectionName === 'users') {
+                bindAdminUserManagement();
+                renderAdminUsers();
+            }
+            if (sectionName === 'riders') {
+                bindAdminRiderManagement();
+                renderAdminRiderReview();
+            }
             if (sectionName === 'approvals') renderAdminMarketplaceAudit();
             if (sectionName === 'merchants') {
                 bindAdminVendorManagement();
@@ -3636,10 +3816,6 @@ bindAdminDashboard();
 document.getElementById('adminMarketplaceRequests')?.addEventListener('click', event => {
     const button = event.target.closest('[data-marketplace-review]');
     if (button) reviewMarketplaceRequest(button.dataset.marketplaceId, button.dataset.marketplaceReview);
-});
-document.getElementById('adminRiderReviewList')?.addEventListener('click', event => {
-    const button = event.target.closest('[data-admin-rider-action]');
-    if (button) reviewAdminRider(button.dataset.partnerId, button.dataset.adminRiderAction);
 });
 document.getElementById('adminMarketplacePayouts')?.addEventListener('click', event => {
     const button = event.target.closest('[data-marketplace-payout]');
@@ -4386,28 +4562,165 @@ function renderAdminMarketplaceAudit() {
       </article>`).join('') : '<div class="admin-marketplace-empty">Marketplace request and delivery events will appear here.</div>';
 }
 
+function resetAdminRiderForm() {
+    const form = document.getElementById('adminRiderForm');
+    if (!form) return;
+    form.reset();
+    editingAdminRiderId = null;
+    document.getElementById('adminRiderFormTitle').textContent = 'Register a rider';
+    document.getElementById('adminRiderSubmit').textContent = 'Register rider';
+    document.getElementById('adminRiderCancel').hidden = true;
+}
+
 function renderAdminRiderReview() {
-    const list = document.getElementById('adminRiderReviewList');
-    if (!list) return;
-    list.innerHTML = merchantPartners.length ? merchantPartners.map(partner => {
+    const tableBody = document.getElementById('adminRiderTableBody');
+    const count = document.getElementById('adminRiderCount');
+    if (!tableBody || !count) return;
+    const search = (document.getElementById('adminRiderSearch')?.value || '').trim().toLocaleLowerCase();
+    const statusFilter = document.getElementById('adminRiderFilter')?.value || 'all';
+    const riders = merchantPartners.filter(partner =>
+        (statusFilter === 'all' || partner.status === statusFilter) &&
+        `${partner.name} ${partner.phone} ${partner.email} ${partner.vehicle} ${partner.area} ${partner.verificationStatus} ${partner.status}`
+            .toLocaleLowerCase().includes(search)
+    );
+    count.textContent = `${riders.length} ${riders.length === 1 ? 'rider' : 'riders'}`;
+    const navCount = document.querySelector('.admin-nav-item[data-section="riders"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(merchantPartners.length);
+    tableBody.innerHTML = riders.length ? riders.map(partner => {
         const activeAssignments = merchantDeliveries.filter(delivery =>
             riderOwnsDelivery(delivery, partner) && riderActiveStatuses.includes(delivery.status)
         ).length;
         const latestAudit = partner.adminAudit?.at(-1);
         const actions = partner.verificationStatus === 'pending'
-            ? `<button type="button" data-admin-rider-action="verify" data-partner-id="${partner.id}">Verify partner</button><button class="reject" type="button" data-admin-rider-action="reject" data-partner-id="${partner.id}">Reject</button>`
+            ? `<button class="mini-btn" type="button" data-admin-rider-action="verify" data-partner-id="${partner.id}">Verify</button><button class="mini-btn danger" type="button" data-admin-rider-action="reject" data-partner-id="${partner.id}">Reject</button>`
             : partner.verificationStatus === 'rejected'
-                ? `<button type="button" data-admin-rider-action="reopen" data-partner-id="${partner.id}">Reopen review</button>`
+                ? `<button class="mini-btn" type="button" data-admin-rider-action="reopen" data-partner-id="${partner.id}">Reopen review</button>`
                 : partner.status === 'active'
-                    ? `<button class="reject" type="button" data-admin-rider-action="suspend" data-partner-id="${partner.id}" ${activeAssignments ? 'disabled' : ''}>Suspend</button>`
-                    : `<button type="button" data-admin-rider-action="activate" data-partner-id="${partner.id}">Reactivate</button>`;
-        return `<article class="admin-rider-review-card">
-          <div><strong>${escapeMerchantText(partner.name)}</strong><span>${escapeMerchantText(partner.vehicle)} · ${escapeMerchantText(partner.area)}</span>
-            <small>${escapeMerchantText(partner.verificationStatus)} verification · ${escapeMerchantText(partner.status)} account · ${escapeMerchantText(partner.availability || 'off-duty')} · ${activeAssignments} active deliveries</small>
-            ${latestAudit ? `<small>Last admin action: ${escapeMerchantText(latestAudit.action)} · ${escapeMerchantText(new Date(latestAudit.at).toLocaleString())}${latestAudit.reason ? ` · ${escapeMerchantText(latestAudit.reason)}` : ''}</small>` : ''}</div>
-          <div class="admin-marketplace-actions">${actions}</div>
-        </article>`;
-    }).join('') : '<div class="admin-marketplace-empty">No rider partners are registered.</div>';
+                    ? `<button class="mini-btn danger" type="button" data-admin-rider-action="suspend" data-partner-id="${partner.id}" ${activeAssignments ? 'disabled' : ''}>Suspend</button>`
+                    : `<button class="mini-btn" type="button" data-admin-rider-action="activate" data-partner-id="${partner.id}">Reactivate</button>`;
+        return `<tr>
+            <td><strong>${escapeHtml(partner.name)}</strong>${partner.demoSample || partner.sample ? '<small class="admin-table-area">Sample rider</small>' : ''}${latestAudit ? `<small class="admin-table-area">Last action: ${escapeHtml(latestAudit.action)}</small>` : ''}</td>
+            <td>${escapeHtml(partner.phone)}${partner.email ? `<small class="admin-table-area">${escapeHtml(partner.email)}</small>` : ''}</td>
+            <td>${escapeHtml(partner.vehicle)}</td>
+            <td>${escapeHtml(partner.area)}</td>
+            <td><span class="status-badge ${partner.verificationStatus === 'verified' ? 'success' : partner.verificationStatus === 'pending' ? 'pending' : 'danger'}">${escapeHtml(partner.verificationStatus)}</span><small class="admin-table-area">${escapeHtml(partner.status)} account · ${activeAssignments} active deliveries</small></td>
+            <td class="admin-vendor-actions">
+                <button class="mini-btn" type="button" data-rider-edit="${partner.id}">Edit</button>
+                ${actions}
+                <button class="mini-btn danger" type="button" data-rider-delete="${partner.id}" ${activeAssignments ? 'disabled title="Resolve active deliveries before removing this rider"' : ''}>Delete</button>
+            </td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty-state">No riders match this search. Register a rider using the form above.</td></tr>';
+}
+
+function bindAdminRiderManagement() {
+    const form = document.getElementById('adminRiderForm');
+    const tableBody = document.getElementById('adminRiderTableBody');
+    if (!form || !tableBody || form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const values = Object.fromEntries(new FormData(form).entries());
+        const name = String(values.name).trim();
+        const phone = String(values.phone).trim();
+        const email = String(values.email).trim();
+        const duplicateContact = merchantPartners.some(partner =>
+            String(partner.id) !== String(editingAdminRiderId) &&
+            (partner.phone.replace(/\s+/g, '') === phone.replace(/\s+/g, '') ||
+                (email && partner.email.toLocaleLowerCase() === email.toLocaleLowerCase()))
+        );
+        if (duplicateContact) {
+            showToast('A rider with this phone number or email address is already registered.');
+            return;
+        }
+        const existing = merchantPartners.find(partner => String(partner.id) === String(editingAdminRiderId));
+        const updatedRider = {
+            ...(existing || {}),
+            id: existing?.id ?? Math.max(0, ...merchantPartners.map(partner => Number(partner.id) || 0)) + 1,
+            name,
+            phone,
+            email,
+            vehicle: String(values.vehicle),
+            area: String(values.area).trim(),
+            status: existing?.status || 'inactive',
+            availability: existing?.availability || 'off-duty',
+            verificationStatus: existing?.verificationStatus || 'pending',
+            adminAudit: existing?.adminAudit || [],
+            ...(existing ? {} : { sample: false })
+        };
+        const nextPartners = existing
+            ? merchantPartners.map(partner => String(partner.id) === String(existing.id) ? updatedRider : partner)
+            : [...merchantPartners, updatedRider];
+        if (!saveMerchantCollection('kiryaMerchantPartners', nextPartners)) return;
+        merchantPartners = nextPartners;
+        resetAdminRiderForm();
+        renderAdminRiderReview();
+        renderMerchantPartners();
+        populateMerchantAssignmentOptions();
+        renderRiderPartnerOptions();
+        refreshRiderWorkflow();
+        renderAdminMarketplaceMap();
+        renderAdminDemoMetrics();
+        showToast(existing ? 'Rider record updated.' : 'Rider registered and awaiting verification.');
+    });
+
+    document.getElementById('adminRiderCancel').addEventListener('click', resetAdminRiderForm);
+    document.getElementById('adminRiderSearch').addEventListener('input', renderAdminRiderReview);
+    document.getElementById('adminRiderFilter').addEventListener('change', renderAdminRiderReview);
+    tableBody.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button || button.disabled) return;
+        const riderId = button.dataset.riderEdit || button.dataset.riderDelete || button.dataset.partnerId;
+        const rider = merchantPartners.find(record => String(record.id) === riderId);
+        if (!rider) return;
+
+        if (button.dataset.riderEdit) {
+            editingAdminRiderId = rider.id;
+            document.getElementById('adminRiderName').value = rider.name;
+            document.getElementById('adminRiderPhone').value = rider.phone;
+            document.getElementById('adminRiderEmail').value = rider.email;
+            document.getElementById('adminRiderVehicle').value = rider.vehicle;
+            document.getElementById('adminRiderArea').value = rider.area;
+            document.getElementById('adminRiderFormTitle').textContent = `Edit ${rider.name}`;
+            document.getElementById('adminRiderSubmit').textContent = 'Save changes';
+            document.getElementById('adminRiderCancel').hidden = false;
+            document.getElementById('adminRiderName').focus();
+            return;
+        }
+
+        if (button.dataset.adminRiderAction) {
+            reviewAdminRider(rider.id, button.dataset.adminRiderAction);
+            return;
+        }
+
+        if (button.dataset.riderDelete) {
+            const hasActiveAssignments = merchantDeliveries.some(delivery =>
+                riderOwnsDelivery(delivery, rider) && riderActiveStatuses.includes(delivery.status)
+            );
+            if (hasActiveAssignments) {
+                showToast('Resolve active deliveries before removing this rider.');
+                return;
+            }
+            if (!window.confirm(`Remove ${rider.name} from rider records?`)) return;
+            const nextPartners = merchantPartners.filter(record => String(record.id) !== String(rider.id));
+            if (!saveMerchantCollection('kiryaMerchantPartners', nextPartners)) return;
+            merchantPartners = nextPartners;
+            if (riderSelectedPartnerId !== null && String(riderSelectedPartnerId) === String(rider.id)) {
+                stopRiderLocationTracking(rider.id);
+            }
+            if (String(editingAdminRiderId) === String(rider.id)) resetAdminRiderForm();
+            renderAdminRiderReview();
+            renderMerchantPartners();
+            populateMerchantAssignmentOptions();
+            renderRiderPartnerOptions();
+            refreshRiderWorkflow();
+            renderAdminMarketplaceMap();
+            renderAdminDemoMetrics();
+            showToast('Rider removed.');
+        }
+    });
+    renderAdminRiderReview();
 }
 
 function renderAdminMarketplacePayouts() {
@@ -6660,8 +6973,8 @@ demoActiveOrders = demoActiveOrders.map(order => {
 if (merchantNeedsOrderMigration) saveMerchantCollection('kiryaMerchantActiveOrders', demoActiveOrders);
 
 let merchantPartners = [
-    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', verificationStatus: 'verified' },
-    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', verificationStatus: 'verified' },
+    { id: 1, name: 'James M.', phone: '+256 700 111222', email: 'james@example.com', vehicle: 'Motorcycle', area: 'Ntinda, Kampala', status: 'active', verificationStatus: 'verified', sample: true },
+    { id: 2, name: 'Grace N.', phone: '+256 780 333444', email: 'grace@example.com', vehicle: 'Motorcycle', area: 'Bugolobi, Kampala', status: 'active', verificationStatus: 'verified', sample: true },
     ...ugandaRegionalRiders
 ];
 

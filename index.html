@@ -1213,32 +1213,84 @@
         <div class="admin-section" data-section="users">
           <div class="dashboard-card">
             <div class="section-header">
-              <h3>User directory</h3>
-              <button class="ghost-btn" type="button">Add user</button>
+              <div>
+                <h3>User management</h3>
+                <p class="admin-vendor-description">Register users and manage their contact details, account type, and status.</p>
+              </div>
+              <span class="tiny-pill" id="adminUserCount">0 users</span>
             </div>
-            <div class="user-list expanded-list" id="adminFullUserList" aria-live="polite"></div>
+            <form class="admin-vendor-form" id="adminUserForm">
+              <h4 id="adminUserFormTitle">Register a user</h4>
+              <div class="admin-vendor-form-grid">
+                <label>Full name<input id="adminUserName" name="name" type="text" autocomplete="name" required /></label>
+                <label>Email<input id="adminUserEmail" name="email" type="email" autocomplete="email" /></label>
+                <label>Phone<input id="adminUserPhone" name="phone" type="tel" autocomplete="tel" /></label>
+                <label>Account type<select id="adminUserRole" name="role"><option value="Customer">Customer</option><option value="Rider">Rider</option><option value="Vendor">Vendor</option><option value="Admin">Admin</option></select></label>
+                <label>Location<input id="adminUserArea" name="area" type="text" /></label>
+                <label>Account status<select id="adminUserStatus" name="status"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Suspended">Suspended</option></select></label>
+              </div>
+              <div class="admin-vendor-form-actions">
+                <button class="mini-btn" id="adminUserSubmit" type="submit">Register user</button>
+                <button class="ghost-btn" id="adminUserCancel" type="button" hidden>Cancel edit</button>
+              </div>
+            </form>
+            <div class="section-header admin-vendor-table-heading">
+              <h3>User records</h3>
+              <div class="admin-vendor-controls">
+                <label class="merchant-visually-hidden" for="adminUserSearch">Search users</label>
+                <input id="adminUserSearch" type="search" placeholder="Search name, email, phone, or location" />
+                <label class="merchant-visually-hidden" for="adminUserFilter">Filter users by status</label>
+                <select id="adminUserFilter"><option value="all">All statuses</option><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Suspended">Suspended</option></select>
+              </div>
+            </div>
+            <div class="table-wrap admin-vendor-table-wrap">
+              <table class="admin-table admin-vendor-table">
+                <thead><tr><th>User</th><th>Account type</th><th>Contact</th><th>Location</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="adminUserTableBody" aria-live="polite"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
         <div class="admin-section" data-section="riders">
           <div class="dashboard-card">
             <div class="section-header">
-              <h3>Rider operations</h3>
-              <button class="ghost-btn" type="button">Assign</button>
+              <div>
+                <h3>Rider management</h3>
+                <p class="admin-vendor-description">Register riders and manage partner details, verification, and account access.</p>
+              </div>
+              <span class="tiny-pill" id="adminRiderCount">0 riders</span>
             </div>
-            <div class="stat-inline-row">
-              <span>Online</span><strong>86</strong>
-              <span>Delivering</span><strong>44</strong>
-              <span>Idle</span><strong>31</strong>
+            <form class="admin-vendor-form" id="adminRiderForm">
+              <h4 id="adminRiderFormTitle">Register a rider</h4>
+              <div class="admin-vendor-form-grid">
+                <label>Full name<input id="adminRiderName" name="name" type="text" autocomplete="name" required /></label>
+                <label>Phone<input id="adminRiderPhone" name="phone" type="tel" autocomplete="tel" required /></label>
+                <label>Email<input id="adminRiderEmail" name="email" type="email" autocomplete="email" /></label>
+                <label>Vehicle<select id="adminRiderVehicle" name="vehicle"><option>Motorcycle</option><option>Bicycle</option><option>Car</option><option>Walking</option></select></label>
+                <label>Service area<input id="adminRiderArea" name="area" type="text" required /></label>
+              </div>
+              <div class="admin-vendor-form-actions">
+                <button class="mini-btn" id="adminRiderSubmit" type="submit">Register rider</button>
+                <button class="ghost-btn" id="adminRiderCancel" type="button" hidden>Cancel edit</button>
+              </div>
+            </form>
+            <p class="admin-rider-review-note">Verification is an admin record only; identity and vehicle documents are not uploaded or independently verified.</p>
+            <div class="section-header admin-vendor-table-heading">
+              <h3>Rider records</h3>
+              <div class="admin-vendor-controls">
+                <label class="merchant-visually-hidden" for="adminRiderSearch">Search riders</label>
+                <input id="adminRiderSearch" type="search" placeholder="Search name, phone, vehicle, or area" />
+                <label class="merchant-visually-hidden" for="adminRiderFilter">Filter riders by account status</label>
+                <select id="adminRiderFilter"><option value="all">All account statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+              </div>
             </div>
-            <div class="alert-list" style="margin-top: 18px;">
-              <div class="alert-item success"><div class="alert-icon">✓</div><div><strong>Rider J. Smith</strong><p>Completed 18 trips today.</p></div></div>
-              <div class="alert-item info"><div class="alert-icon">⏱</div><div><strong>Rider M. Kasozi</strong><p>Average ETA is 11 minutes.</p></div></div>
-              <div class="alert-item warning"><div class="alert-icon">⚠</div><div><strong>Rider P. Ndugwa</strong><p>Route delay in downtown zone.</p></div></div>
+            <div class="table-wrap admin-vendor-table-wrap">
+              <table class="admin-table admin-vendor-table">
+                <thead><tr><th>Rider</th><th>Contact</th><th>Vehicle</th><th>Service area</th><th>Verification / account</th><th>Actions</th></tr></thead>
+                <tbody id="adminRiderTableBody" aria-live="polite"></tbody>
+              </table>
             </div>
-            <div class="section-header admin-rider-review-heading"><h3>Partner verification &amp; access</h3></div>
-            <p class="admin-rider-review-note">Prototype review only: rider identity and vehicle documents are not uploaded or independently verified.</p>
-            <div id="adminRiderReviewList" class="admin-rider-review-list" aria-live="polite"></div>
           </div>
         </div>
 
