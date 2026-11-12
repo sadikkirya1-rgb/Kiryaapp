@@ -1382,26 +1382,109 @@
           </div>
         </div>
 
+        <div class="admin-section" data-section="products">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <div>
+                <h3>Product catalog</h3>
+                <p class="admin-vendor-description">Manage vendor products and availability in the customer catalog.</p>
+              </div>
+              <span class="tiny-pill" id="adminProductCount">0 products</span>
+            </div>
+            <form class="admin-vendor-form" id="adminProductForm">
+              <h4 id="adminProductFormTitle">Add a product</h4>
+              <div class="admin-vendor-form-grid">
+                <label>Vendor<select id="adminProductVendor" name="vendorName" required></select></label>
+                <label>Product name<input id="adminProductName" name="name" type="text" required /></label>
+                <label>Category<input id="adminProductCategory" name="category" type="text" required /></label>
+                <label>Price (UGX)<input id="adminProductPrice" name="price" type="number" min="1" step="1" required /></label>
+                <label>Image / emoji<input id="adminProductImage" name="image" type="text" /></label>
+                <label class="admin-vendor-checkbox"><input id="adminProductActive" name="active" type="checkbox" checked /> Available to customers</label>
+                <label class="admin-vendor-full-row">Description<textarea id="adminProductDescription" name="description" rows="2"></textarea></label>
+              </div>
+              <div class="admin-vendor-form-actions">
+                <button class="mini-btn" id="adminProductSubmit" type="submit">Add product</button>
+                <button class="ghost-btn" id="adminProductCancel" type="button" hidden>Cancel edit</button>
+              </div>
+            </form>
+            <div class="section-header admin-vendor-table-heading">
+              <h3>Product records</h3>
+              <div class="admin-vendor-controls">
+                <label class="merchant-visually-hidden" for="adminProductSearch">Search products</label>
+                <input id="adminProductSearch" type="search" placeholder="Search products or vendors" />
+                <label class="merchant-visually-hidden" for="adminProductFilter">Filter products by vendor</label>
+                <select id="adminProductFilter"><option value="all">All vendors</option></select>
+              </div>
+            </div>
+            <div class="table-wrap admin-vendor-table-wrap">
+              <table class="admin-table admin-vendor-table">
+                <thead><tr><th>Product</th><th>Vendor</th><th>Category</th><th>Price</th><th>Availability</th><th>Actions</th></tr></thead>
+                <tbody id="adminProductTableBody" aria-live="polite"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-section" data-section="orders">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <div><h3>Order management</h3><p class="admin-vendor-description">Review and update active and completed app orders.</p></div>
+              <span class="tiny-pill" id="adminOrderCount">0 orders</span>
+            </div>
+            <div class="admin-vendor-controls admin-record-controls">
+              <label class="merchant-visually-hidden" for="adminOrderSearch">Search orders</label>
+              <input id="adminOrderSearch" type="search" placeholder="Search order, customer, or vendor" />
+              <label class="merchant-visually-hidden" for="adminOrderFilter">Filter orders by status</label>
+              <select id="adminOrderFilter"><option value="all">All statuses</option><option value="new">New</option><option value="preparing">Preparing</option><option value="ready">Ready</option><option value="Delivered">Delivered</option><option value="Cancelled">Cancelled</option></select>
+            </div>
+            <div class="table-wrap admin-vendor-table-wrap">
+              <table class="admin-table admin-vendor-table">
+                <thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="adminOrderTableBody" aria-live="polite"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-section" data-section="deliveries">
+          <div class="dashboard-card">
+            <div class="section-header">
+              <div><h3>Delivery management</h3><p class="admin-vendor-description">Monitor assignments and manage delivery status. Active rider jobs cannot be removed.</p></div>
+              <span class="tiny-pill" id="adminDeliveryCount">0 deliveries</span>
+            </div>
+            <div class="admin-vendor-controls admin-record-controls">
+              <label class="merchant-visually-hidden" for="adminDeliverySearch">Search deliveries</label>
+              <input id="adminDeliverySearch" type="search" placeholder="Search order, rider, or address" />
+              <label class="merchant-visually-hidden" for="adminDeliveryFilter">Filter deliveries by status</label>
+              <select id="adminDeliveryFilter"><option value="all">All statuses</option><option value="offered">Offered</option><option value="accepted">Accepted</option><option value="assigned">Assigned</option><option value="picked-up">Picked up</option><option value="in-transit">In transit</option><option value="delivered">Delivered</option><option value="declined">Declined</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option></select>
+            </div>
+            <div class="table-wrap admin-vendor-table-wrap">
+              <table class="admin-table admin-vendor-table">
+                <thead><tr><th>Order / item</th><th>Rider</th><th>Customer / destination</th><th>Status</th><th>Commission</th><th>Actions</th></tr></thead>
+                <tbody id="adminDeliveryTableBody" aria-live="polite"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div class="admin-section" data-section="payouts">
           <div class="dashboard-card">
             <div class="section-header">
-              <h3>Payout center</h3>
-              <button class="ghost-btn" type="button">Run batch</button>
+              <div><h3>Payout center</h3><p class="admin-vendor-description">Review marketplace rider commissions. Payment processing is not connected.</p></div>
+              <span class="tiny-pill" id="adminPayoutCount">0 commissions</span>
             </div>
-            <div class="admin-summary-grid">
-              <div class="dashboard-card stat-card">
-                <div class="stat-label">Pending payouts</div>
-                <div class="stat-value">UGX 84.6M</div>
-                <div class="stat-trend neutral">18 merchants</div>
-              </div>
-              <div class="dashboard-card stat-card accent">
-                <div class="stat-label">This week</div>
-                <div class="stat-value">UGX 234M</div>
-                <div class="stat-trend positive">+8.1% uplift</div>
-              </div>
+            <div class="admin-vendor-controls admin-record-controls">
+              <label class="merchant-visually-hidden" for="adminPayoutSearch">Search commissions</label>
+              <input id="adminPayoutSearch" type="search" placeholder="Search rider, item, or order" />
+              <label class="merchant-visually-hidden" for="adminPayoutFilter">Filter commissions</label>
+              <select id="adminPayoutFilter"><option value="all">All commissions</option><option value="pending">Pending</option><option value="manually-recorded">Manually recorded</option></select>
             </div>
-            <div class="section-header admin-marketplace-payout-heading"><h3>Marketplace rider commissions</h3><span class="tiny-pill">Prototype ledger</span></div>
-            <div id="adminMarketplacePayouts" class="admin-marketplace-payouts" aria-live="polite"></div>
+            <div class="table-wrap admin-vendor-table-wrap">
+              <table class="admin-table admin-vendor-table">
+                <thead><tr><th>Order / item</th><th>Rider</th><th>Commission</th><th>Payout status</th><th>Actions</th></tr></thead>
+                <tbody id="adminMarketplacePayouts" aria-live="polite"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -1453,14 +1536,17 @@
         <div class="admin-section" data-section="settings">
           <div class="dashboard-card">
             <div class="section-header">
-              <h3>Platform settings</h3>
-              <button class="ghost-btn" type="button">Save</button>
+              <div><h3>Platform settings</h3><p class="admin-vendor-description">Save administrative policy values for this browser prototype; no payment or authentication provider is connected.</p></div>
+              <span class="tiny-pill" id="adminSettingsSavedAt">Not saved</span>
             </div>
-            <div class="alert-list">
-              <div class="alert-item info"><div class="alert-icon">⚙</div><div><strong>Delivery fee policy</strong><p>Optimized for peak-hour demand.</p></div></div>
-              <div class="alert-item success"><div class="alert-icon">🔐</div><div><strong>Security</strong><p>2FA and fraud checks are active.</p></div></div>
-              <div class="alert-item warning"><div class="alert-icon">📣</div><div><strong>Promotions</strong><p>Campaign review scheduled for Friday.</p></div></div>
-            </div>
+            <form class="admin-vendor-form" id="adminSettingsForm">
+              <div class="admin-vendor-form-grid">
+                <label>Default delivery fee (UGX)<input id="adminSettingDeliveryFee" name="deliveryFee" type="number" min="0" step="100" required /></label>
+                <label>Minimum order (UGX)<input id="adminSettingMinimumOrder" name="minimumOrder" type="number" min="0" step="100" required /></label>
+                <label class="admin-vendor-checkbox"><input id="adminSettingRiderVerification" name="requireRiderVerification" type="checkbox" /> Require rider verification before accepting jobs</label>
+              </div>
+              <div class="admin-vendor-form-actions"><button class="mini-btn" type="submit">Save settings</button></div>
+            </form>
           </div>
         </div>
       </div>

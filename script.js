@@ -29,6 +29,33 @@ const deliveryLocationStorageKey = 'kiryaDeliveryLocation';
 const adminDeliveryLocationsStorageKey = 'kiryaAdminDeliveryLocations';
 const adminVendorsStorageKey = 'kiryaAdminVendors';
 const adminUsersStorageKey = 'kiryaAdminUsers';
+const adminSettingsStorageKey = 'kiryaAdminSettings';
+const defaultAdminSettings = {
+    deliveryFee: 0,
+    minimumOrder: 0,
+    requireRiderVerification: true
+};
+let adminSettings = (() => {
+    try {
+        const saved = JSON.parse(localStorage.getItem(adminSettingsStorageKey) || 'null');
+        if (!saved || typeof saved !== 'object') return { ...defaultAdminSettings };
+        return {
+            deliveryFee: Number.isFinite(saved.deliveryFee) && saved.deliveryFee >= 0 ? saved.deliveryFee : defaultAdminSettings.deliveryFee,
+            minimumOrder: Number.isFinite(saved.minimumOrder) && saved.minimumOrder >= 0 ? saved.minimumOrder : defaultAdminSettings.minimumOrder,
+            requireRiderVerification: typeof saved.requireRiderVerification === 'boolean'
+                ? saved.requireRiderVerification : defaultAdminSettings.requireRiderVerification
+        };
+    } catch (error) {
+        console.warn('Unable to read platform settings; using defaults.', error);
+        return { ...defaultAdminSettings };
+    }
+})();
+function isRiderVerificationRequired() {
+    return adminSettings.requireRiderVerification !== false;
+}
+function riderIsVerified(partner) {
+    return !isRiderVerificationRequired() || partner?.verificationStatus === 'verified';
+}
 let suppressLastScreenWrites = false;
 let deliveryLocationStep = 0;
 let pendingDeliveryLocation = {};
@@ -1176,7 +1203,44 @@ function getCustomerVendorListings(category) {
       eligibleCategories[category]?.includes(vendor.category) &&
       getVendorLocationId(vendor.location.region, vendor.location.district, vendor.location.town) === deliveryAreaId
     )
-    .map(vendor => ({ ...vendor, deliveryAreaLabel: vendor.location.town, demoSample: true }));
+    .map(vendor => ({
+      ...vendor,
+      products: getAdminVendorProducts().filter(product => product.vendorName === vendor.name && product.active)
+        .map(product => ({
+          name: product.name,
+          category: product.category,
+          description: product.description,
+          price: product.price,
+          image: product.image || '🛍️'
+        })),
+      deliveryAreaLabel: vendor.location.town,
+      demoSample: true
+    }))
+    .filter(vendor => {
+      const record = adminVendors.find(item => item.name === vendor.name);
+      return record?.status === 'Active' && vendor.products.length > 0;
+    });
+  const extraVendors = adminVendors.filter(record =>
+    eligibleCategories[category]?.includes(record.category) &&
+    record.status === 'Active' &&
+    record.area.toLocaleLowerCase().includes(location.town.toLocaleLowerCase()) &&
+    !vendors.some(vendor => vendor.name.toLocaleLowerCase() === record.name.toLocaleLowerCase())
+  ).map(record => ({
+    id: record.id,
+    name: record.name,
+    category: record.category,
+    address: record.address,
+    products: getAdminVendorProducts().filter(product => product.vendorName === record.name && product.active)
+        .map(product => ({
+          name: product.name,
+          category: product.category,
+          description: product.description,
+          price: product.price,
+          image: product.image || '🛍️'
+        })),
+    deliveryAreaLabel: record.area,
+    demoSample: true
+  })).filter(vendor => vendor.products.length > 0);
   const liveVendor = merchantProfile?.location && merchantPickupAddress && merchantPickupCoordinates &&
     Array.isArray(merchantProfile.serviceAreas) &&
     eligibleCategories[category]?.includes(merchantProfile.category) &&
@@ -1186,7 +1250,7 @@ function getCustomerVendorListings(category) {
       ? [{ ...merchantProfile, deliveryAreaLabel: merchantProfile.location.town }]
       : [];
   const names = new Set(liveVendor.map(vendor => vendor.name.toLocaleLowerCase()));
-  return [...liveVendor, ...vendors.filter(vendor => !names.has(vendor.name.toLocaleLowerCase()))];
+  return [...liveVendor, ...vendors.filter(vendor => !names.has(vendor.name.toLocaleLowerCase())), ...extraVendors];
 }
 
 function getRegisteredVendorMenu() {
@@ -1207,7 +1271,7 @@ function getRegisteredVendorMenu() {
 
 function getDemoVendorMenu(vendor) {
   const groups = new Map();
-  vendor.products.forEach(product => {
+  getAdminVendorProducts().filter(product => product.vendorName === vendor.name && product.active).forEach(product => {
     if (!groups.has(product.category)) groups.set(product.category, []);
     groups.get(product.category).push({
       title: product.name,
@@ -2373,9 +2437,13 @@ if (placeOrderBtn) {
 
             const resName = document.getElementById('resScreenName').textContent || 'Restaurant';
             const subTotal = computeCartSummary(cart).subtotal;
-            const deliveryFee = 0;
+            if (subTotal < Number(adminSettings.minimumOrder || 0)) {
+                showToast(`Orders must be at least ${formatMerchantCurrency(adminSettings.minimumOrder)}.`);
+                return;
+            }
+            const deliveryFee = Number(adminSettings.deliveryFee || 0);
             const tipAmount = subTotal * (tipPercentage / 100);
-            const demoTotal = subTotal + tipAmount;
+            const demoTotal = subTotal + deliveryFee + tipAmount;
             const deliveryAddress = document.getElementById('selectedAddressText').textContent || 'Not set';
             const customerName = recipientDetails.name || 'Customer';
             const customerPhone = userPhoneNumber || recipientDetails.phone;
@@ -2863,9 +2931,14 @@ function openAdmin() {
     renderAdminMarketplaceRequests();
     renderAdminMarketplaceAudit();
     renderAdminMarketplacePayouts();
+    bindAdminPayoutFilters();
     bindAdminUserManagement();
     bindAdminRiderManagement();
     bindAdminVendorManagement();
+    bindAdminProductManagement();
+    bindAdminOrderManagement();
+    bindAdminDeliveryManagement();
+    bindAdminSettingsManagement();
     if (document.querySelector('.admin-section.active')?.dataset.section === 'approvals') {
         initAdminMarketplaceMap();
         setTimeout(() => adminMarketplaceMap?.invalidateSize(), 100);
@@ -3152,12 +3225,121 @@ function loadAdminUsers() {
 
 let adminUsers = loadAdminUsers();
 
+let adminVendorProducts = null;
+const adminVendorProductsStorageKey = 'kiryaAdminVendorProducts';
+let adminRiderRecordCount = 2 + ugandaRegionalRiders.length;
+let adminPayoutRecordCount = 0;
+let adminOrderRecordCount = 0;
+let adminDeliveryRecordCount = 0;
+
+function getDefaultAdminVendorProducts() {
+    const products = ugandaMbaleDemoVendors.flatMap(vendor =>
+        vendor.products.map((product, index) => ({
+            id: `demo-${vendor.id}-${index + 1}`,
+            vendorName: vendor.name,
+            name: product.name,
+            category: product.category,
+            description: product.description,
+            price: Number(product.price),
+            image: product.image || '',
+            active: true,
+            sample: true,
+            source: 'demo-vendor'
+        }))
+    );
+    if (Array.isArray(merchantMenuItems)) {
+        products.push(...merchantMenuItems.map(item => ({
+            id: `shop-${item.id}`,
+            vendorName: 'Al Reef Restaurant',
+            name: item.name,
+            category: item.category || 'Menu',
+            description: item.description || '',
+            price: Number(item.price),
+            image: item.img || item.image || '',
+            active: Boolean(item.active),
+            sample: true,
+            source: 'merchant-menu',
+            sourceId: item.id
+        })));
+    }
+    return products;
+}
+
+function loadAdminVendorProducts() {
+    const samples = getDefaultAdminVendorProducts();
+    try {
+        const saved = localStorage.getItem(adminVendorProductsStorageKey);
+        if (saved === null) {
+            localStorage.setItem(adminVendorProductsStorageKey, JSON.stringify(samples));
+            return samples;
+        }
+        const records = JSON.parse(saved);
+        if (!Array.isArray(records) || !records.every(product =>
+            product && typeof product.id === 'string' &&
+            ['vendorName', 'name', 'category', 'description', 'image'].every(key => typeof product[key] === 'string') &&
+            Number.isFinite(product.price) && product.price > 0 &&
+            typeof product.active === 'boolean'
+        )) throw new Error('Saved product records have an invalid format.');
+        const products = mergeDemoRecords(records, samples);
+        if (products.length !== records.length) localStorage.setItem(adminVendorProductsStorageKey, JSON.stringify(products));
+        return products;
+    } catch (error) {
+        console.warn('Unable to read saved products; using sample products.', error);
+        return samples;
+    }
+}
+
+function getAdminVendorProducts() {
+    if (!adminVendorProducts) adminVendorProducts = loadAdminVendorProducts();
+    return adminVendorProducts;
+}
+
+function saveAdminVendorProducts(products) {
+    const shopMenu = products.filter(product => product.source === 'merchant-menu');
+    const nextMenu = shopMenu.map(product => ({
+        ...(merchantMenuItems.find(item => item.id === product.sourceId) || {}),
+        id: product.sourceId,
+        name: product.name,
+        category: product.category,
+        description: product.description,
+        price: Number(product.price),
+        img: product.image,
+        image: product.image,
+        active: product.active
+    }));
+    const shopMenuChanged = products.some(product =>
+        product.source === 'merchant-menu' || product.vendorName === 'Al Reef Restaurant'
+    );
+    if (shopMenuChanged) {
+        if (!saveMerchantCollections({
+            [adminVendorProductsStorageKey]: products,
+            kiryaMerchantMenu: nextMenu
+        })) return false;
+        merchantMenuItems = nextMenu;
+        renderMerchantMenuItems();
+        updateMerchantMenuCount();
+        renderMerchantKioskProducts();
+    } else {
+        try {
+            localStorage.setItem(adminVendorProductsStorageKey, JSON.stringify(products));
+        } catch (error) {
+            console.error('Unable to save product records.', error);
+            showToast('Product changes could not be saved. Check browser storage and try again.');
+            return false;
+        }
+    }
+    adminVendorProducts = products;
+    const navCount = document.querySelector('.admin-nav-item[data-section="products"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(products.length);
+    return true;
+}
+
 function renderAdminDemoMetrics() {
     const sampleOrderValue = adminDashboardData
         .filter(record => ['orders', 'revenue'].includes(record.type))
         .reduce((sum, record) => sum + Number(record.amount || 0), 0);
     const activeRiders = merchantPartners.filter(partner => partner.status === 'active');
-    const availableRiders = activeRiders.filter(partner => partner.availability === 'available' && partner.verificationStatus === 'verified');
+    const availableRiders = activeRiders.filter(partner => partner.availability === 'available' && riderIsVerified(partner));
     const demoJobs = marketplaceOffers.length + demoActiveOrders.length + dummyPastOrders.length;
     const pendingReviews = marketplaceOffers.filter(offer => offer.status === 'requested').length +
         merchantPartners.filter(partner => partner.verificationStatus === 'pending').length;
@@ -3173,11 +3355,14 @@ function renderAdminDemoMetrics() {
 const adminNavConfig = [
     { section: 'overview', icon: '◉', label: 'Overview', count: () => adminDashboardData.length + adminUserData.length },
     { section: 'users', icon: '👥', label: 'Users', count: () => adminUsers.length },
-    { section: 'riders', icon: '🏍', label: 'Riders', count: () => 2 + ugandaRegionalRiders.length },
+    { section: 'riders', icon: '🏍', label: 'Riders', count: () => adminRiderRecordCount },
     { section: 'approvals', icon: '✓', label: 'Pickup approvals', count: () => marketplaceOffers.filter(offer => offer.status === 'requested').length },
     { section: 'merchants', icon: '🏪', label: 'Vendors', count: () => adminVendors.length },
+    { section: 'products', icon: '▦', label: 'Products', count: () => getAdminVendorProducts().length },
+    { section: 'orders', icon: '▤', label: 'Orders', count: () => adminOrderRecordCount },
+    { section: 'deliveries', icon: '🚚', label: 'Deliveries', count: () => adminDeliveryRecordCount },
     { section: 'deliveryLocations', icon: '⌖', label: 'Delivery locations', count: () => getAdminDeliveryLocations().filter(location => location.active).length },
-    { section: 'payouts', icon: '💰', label: 'Payouts', count: () => 18 },
+    { section: 'payouts', icon: '💰', label: 'Payouts', count: () => adminPayoutRecordCount },
     { section: 'settings', icon: '⚙', label: 'Settings', count: () => 3 }
 ];
 
@@ -3291,6 +3476,270 @@ function renderAdminVendors() {
     `).join('') : '<tr><td colspan="6" class="empty-state">No vendors match this search. Register a vendor using the form above.</td></tr>';
 }
 
+function renderAdminOrders() {
+    const tableBody = document.getElementById('adminOrderTableBody');
+    const count = document.getElementById('adminOrderCount');
+    if (!tableBody || !count) return;
+    const active = demoActiveOrders.map(order => ({ ...order, adminActive: true }));
+    const past = dummyPastOrders.map(order => ({ ...order, adminActive: false }));
+    const allOrders = [...active, ...past];
+    const search = (document.getElementById('adminOrderSearch')?.value || '').trim().toLocaleLowerCase();
+    const statusFilter = document.getElementById('adminOrderFilter')?.value || 'all';
+    const orders = allOrders.filter(order =>
+        (statusFilter === 'all' || order.status === statusFilter) &&
+        `${order.id} ${order.customer} ${order.merchant || ''} ${order.items} ${order.total}`
+            .toLocaleLowerCase().includes(search)
+    );
+    count.textContent = `${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`;
+    adminOrderRecordCount = allOrders.length;
+    const navCount = document.querySelector('.admin-nav-item[data-section="orders"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(allOrders.length);
+    tableBody.innerHTML = orders.length ? orders.map(order => {
+        const status = order.adminActive
+            ? ({ new: 'New', preparing: 'Preparing', ready: 'Ready' }[order.status] || order.status)
+            : order.status;
+        const statusClass = ({ New: 'pending', Preparing: 'pending', Ready: 'pending', Delivered: 'success', Cancelled: 'danger' })[status] || 'pending';
+        return `<tr>
+            <td><strong>${escapeHtml(order.id)}</strong>${order.demoSample ? '<small class="admin-table-area">Sample order</small>' : ''}</td>
+            <td>${escapeHtml(order.customer || '—')}${order.area ? `<small class="admin-table-area">${escapeHtml(order.area)}</small>` : ''}</td>
+            <td>${escapeHtml(order.items || '—')}${order.merchant ? `<small class="admin-table-area">${escapeHtml(order.merchant)}</small>` : ''}</td>
+            <td>${escapeHtml(order.total || '—')}</td>
+            <td><span class="status-badge ${statusClass}">${escapeHtml(status)}</span></td>
+            <td class="admin-vendor-actions">
+                <select aria-label="Set status for order ${escapeHtml(order.id)}" data-order-status="${escapeHtml(order.id)}">
+                    ${['new', 'preparing', 'ready', 'Delivered', 'Cancelled'].map(value => {
+                        const label = ({ new: 'New', preparing: 'Preparing', ready: 'Ready' })[value] || value;
+                        return `<option value="${value}" ${status === label ? 'selected' : ''}>${label}</option>`;
+                    }).join('')}
+                </select>
+                <button class="mini-btn" type="button" data-order-save="${escapeHtml(order.id)}">Save</button>
+            </td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty-state">No orders match this search.</td></tr>';
+}
+
+function bindAdminOrderManagement() {
+    const tableBody = document.getElementById('adminOrderTableBody');
+    if (!tableBody || tableBody.dataset.bound === 'true') return;
+    tableBody.dataset.bound = 'true';
+    document.getElementById('adminOrderSearch').addEventListener('input', renderAdminOrders);
+    document.getElementById('adminOrderFilter').addEventListener('change', renderAdminOrders);
+    tableBody.addEventListener('click', event => {
+        const button = event.target.closest('[data-order-save]');
+        if (!button) return;
+        const id = button.dataset.orderSave;
+        const selectedStatus = tableBody.querySelector(`[data-order-status="${CSS.escape(id)}"]`)?.value;
+        if (!selectedStatus) return;
+        const activeOrder = demoActiveOrders.find(order => order.id === id);
+        const pastOrder = dummyPastOrders.find(order => order.id === id);
+        if (!activeOrder && !pastOrder) return;
+        const activeDelivery = merchantDeliveries.find(delivery =>
+            delivery.order === id && merchantActiveDeliveryStatuses.includes(delivery.status)
+        );
+        if (activeOrder && activeDelivery && ['Delivered', 'Cancelled'].includes(selectedStatus)) {
+            showToast('Update or resolve the active delivery before completing or cancelling this order.');
+            return;
+        }
+
+        if (activeOrder && ['Delivered', 'Cancelled'].includes(selectedStatus)) {
+            const reason = selectedStatus === 'Cancelled'
+                ? prompt(`Reason for cancelling order ${id}:`)?.trim()
+                : '';
+            if (selectedStatus === 'Cancelled' && !reason) {
+                showToast('A reason is required to cancel an order.');
+                return;
+            }
+            const nextActive = demoActiveOrders.filter(order => order.id !== id);
+            const nextPast = [{
+                ...activeOrder,
+                status: selectedStatus,
+                date: `Today, ${activeOrder.received}`,
+                statusColor: selectedStatus === 'Delivered' ? '#019E81' : '#ff4757',
+                statusHistory: [...(activeOrder.statusHistory || []), {
+                    status: selectedStatus.toLowerCase(),
+                    at: new Date().toISOString(),
+                    actor: 'Platform admin',
+                    ...(reason ? { reason } : {})
+                }],
+                ...(reason ? { cancellationReason: reason } : {})
+            }, ...dummyPastOrders];
+            if (!saveMerchantCollections({
+                kiryaMerchantActiveOrders: nextActive,
+                kiryaMerchantPastOrders: nextPast
+            })) return;
+            demoActiveOrders = nextActive;
+            dummyPastOrders = nextPast;
+        } else if (activeOrder) {
+            const nextActive = demoActiveOrders.map(order => order.id === id ? {
+                ...order,
+                status: selectedStatus,
+                statusHistory: [...(order.statusHistory || []), {
+                    status: selectedStatus,
+                    at: new Date().toISOString(),
+                    actor: 'Platform admin'
+                }]
+            } : order);
+            if (!saveMerchantCollection('kiryaMerchantActiveOrders', nextActive)) return;
+            demoActiveOrders = nextActive;
+        } else if (pastOrder && ['Delivered', 'Cancelled'].includes(selectedStatus)) {
+            const nextPast = dummyPastOrders.map(order => order.id === id ? { ...order, status: selectedStatus } : order);
+            if (!saveMerchantCollection('kiryaMerchantPastOrders', nextPast)) return;
+            dummyPastOrders = nextPast;
+        } else if (pastOrder) {
+            const nextActive = [...demoActiveOrders, {
+                ...pastOrder,
+                status: selectedStatus,
+                received: pastOrder.date || 'Restored by admin',
+                statusHistory: [...(pastOrder.statusHistory || []), {
+                    status: selectedStatus,
+                    at: new Date().toISOString(),
+                    actor: 'Platform admin'
+                }]
+            }];
+            const nextPast = dummyPastOrders.filter(order => order.id !== id);
+            if (!saveMerchantCollections({
+                kiryaMerchantActiveOrders: nextActive,
+                kiryaMerchantPastOrders: nextPast
+            })) return;
+            demoActiveOrders = nextActive;
+            dummyPastOrders = nextPast;
+        }
+        renderAdminOrders();
+        renderMerchantActiveOrders();
+        renderMerchantOrders();
+        renderCustomerOrders();
+        updateMerchantOrderMetrics();
+        showToast(`Order ${id} updated.`);
+    });
+    renderAdminOrders();
+}
+
+function renderAdminDeliveries() {
+    const tableBody = document.getElementById('adminDeliveryTableBody');
+    const count = document.getElementById('adminDeliveryCount');
+    if (!tableBody || !count) return;
+    const search = (document.getElementById('adminDeliverySearch')?.value || '').trim().toLocaleLowerCase();
+    const statusFilter = document.getElementById('adminDeliveryFilter')?.value || 'all';
+    const deliveries = merchantDeliveries.filter(delivery =>
+        (statusFilter === 'all' || delivery.status === statusFilter) &&
+        `${delivery.order} ${delivery.itemTitle || ''} ${delivery.driver} ${delivery.customer} ${delivery.address}`
+            .toLocaleLowerCase().includes(search)
+    );
+    count.textContent = `${deliveries.length} ${deliveries.length === 1 ? 'delivery' : 'deliveries'}`;
+    adminDeliveryRecordCount = merchantDeliveries.length;
+    const navCount = document.querySelector('.admin-nav-item[data-section="deliveries"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(merchantDeliveries.length);
+    tableBody.innerHTML = deliveries.length ? deliveries.map(delivery => {
+        const nextStatuses = merchantDeliveryTransitions[delivery.status] || [];
+        return `<tr>
+            <td><strong>${escapeHtml(delivery.itemTitle || delivery.order)}</strong><small class="admin-table-area">${escapeHtml(delivery.order)}${delivery.marketplace ? ' · Marketplace' : ''}</small></td>
+            <td>${escapeHtml(delivery.driver || 'Unassigned')}</td>
+            <td>${escapeHtml(delivery.customer || '—')}<small class="admin-table-area">${escapeHtml(delivery.address || '—')}</small></td>
+            <td><span class="status-badge ${delivery.status === 'delivered' ? 'success' : ['failed', 'cancelled', 'declined'].includes(delivery.status) ? 'danger' : 'pending'}">${escapeHtml(merchantDeliveryStatusLabels[delivery.status] || delivery.status)}</span></td>
+            <td>${delivery.marketplace ? formatMerchantCurrency(delivery.commissionAmount || 0) : '—'}</td>
+            <td class="admin-vendor-actions">
+                ${nextStatuses.length ? `<select aria-label="Next status for ${escapeHtml(delivery.order)}" data-delivery-status="${escapeHtml(delivery.id)}"><option value="">Update status</option>${nextStatuses.map(status => `<option value="${escapeHtml(status)}">${escapeHtml(merchantDeliveryStatusLabels[status] || status)}</option>`).join('')}</select><button class="mini-btn" type="button" data-delivery-save="${escapeHtml(delivery.id)}">Save</button>` : '<span class="merchant-muted">Final status</span>'}
+                <button class="mini-btn danger" type="button" data-delivery-delete="${escapeHtml(delivery.id)}" ${merchantActiveDeliveryStatuses.includes(delivery.status) ? 'disabled title="Active deliveries cannot be removed"' : ''}>Delete</button>
+            </td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty-state">No deliveries match this search.</td></tr>';
+}
+
+function bindAdminDeliveryManagement() {
+    const tableBody = document.getElementById('adminDeliveryTableBody');
+    if (!tableBody || tableBody.dataset.bound === 'true') return;
+    tableBody.dataset.bound = 'true';
+    document.getElementById('adminDeliverySearch').addEventListener('input', renderAdminDeliveries);
+    document.getElementById('adminDeliveryFilter').addEventListener('change', renderAdminDeliveries);
+    tableBody.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const id = button.dataset.deliverySave || button.dataset.deliveryDelete;
+        const delivery = merchantDeliveries.find(record => String(record.id) === id);
+        if (!delivery) return;
+        if (button.dataset.deliverySave) {
+            const nextStatus = tableBody.querySelector(`[data-delivery-status="${CSS.escape(id)}"]`)?.value;
+            if (!nextStatus || !merchantDeliveryTransitions[delivery.status]?.includes(nextStatus)) {
+                showToast('Choose a valid next status for this delivery.');
+                return;
+            }
+            const now = new Date().toISOString();
+            const updated = {
+                ...delivery,
+                status: nextStatus,
+                updatedAt: now,
+                statusHistory: [...(delivery.statusHistory || []), { status: nextStatus, at: now, actor: 'Platform admin' }]
+            };
+            const nextDeliveries = merchantDeliveries.map(record =>
+                String(record.id) === id ? updated : record
+            );
+            const collections = { kiryaMerchantDeliveries: nextDeliveries };
+            if (delivery.marketplace) {
+                collections.kiryaMarketplaceOffers = marketplaceOffers.map(offer => String(offer.id) === String(delivery.marketplaceOfferId)
+                    ? {
+                        ...offer,
+                        status: nextStatus === 'delivered' ? 'delivered' : offer.status,
+                        statusHistory: [...(offer.statusHistory || []), { status: nextStatus, at: now, actor: 'Platform admin' }]
+                    }
+                    : offer
+                );
+            } else if (nextStatus === 'delivered') {
+                const order = demoActiveOrders.find(record => record.id === delivery.order);
+                if (order) {
+                    const deliveredOrder = {
+                        ...order,
+                        status: 'Delivered',
+                        statusColor: '#019E81',
+                        date: `Today, ${order.received || new Date(now).toLocaleTimeString('en-UG', { hour: 'numeric', minute: '2-digit' })}`,
+                        deliveredAt: now,
+                        statusHistory: [...(order.statusHistory || []), {
+                            status: 'Delivered',
+                            at: now,
+                            actor: 'Platform admin'
+                        }]
+                    };
+                    collections.kiryaMerchantActiveOrders = demoActiveOrders.filter(record => record.id !== order.id);
+                    collections.kiryaMerchantPastOrders = [deliveredOrder, ...dummyPastOrders];
+                }
+            }
+            if (!saveMerchantCollections(collections)) return;
+            if (collections.kiryaMarketplaceOffers) marketplaceOffers = collections.kiryaMarketplaceOffers;
+            merchantDeliveries = nextDeliveries;
+            if (collections.kiryaMerchantActiveOrders) demoActiveOrders = collections.kiryaMerchantActiveOrders;
+            if (collections.kiryaMerchantPastOrders) dummyPastOrders = collections.kiryaMerchantPastOrders;
+            renderAdminDeliveries();
+            renderAdminMarketplacePayouts();
+            renderAdminOrders();
+            renderAdminMarketplaceRequests();
+            renderAdminMarketplaceAudit();
+            renderMerchantMarketplaceNotifications();
+            renderMerchantActiveOrders();
+            renderMerchantOrders();
+            renderCustomerOrders();
+            updateMerchantOrderMetrics();
+            refreshRiderWorkflow();
+            showToast(`Delivery ${delivery.order} updated.`);
+            return;
+        }
+        if (button.dataset.deliveryDelete) {
+            if (merchantActiveDeliveryStatuses.includes(delivery.status)) {
+                showToast('Active deliveries cannot be removed.');
+                return;
+            }
+            if (!window.confirm(`Delete delivery record ${delivery.order}?`)) return;
+            const nextDeliveries = merchantDeliveries.filter(record => String(record.id) !== id);
+            if (!saveMerchantCollection('kiryaMerchantDeliveries', nextDeliveries)) return;
+            merchantDeliveries = nextDeliveries;
+            renderAdminDeliveries();
+            renderAdminMarketplacePayouts();
+            renderAdminMarketplaceAudit();
+            renderAdminNav();
+            showToast('Delivery record deleted.');
+        }
+    });
+    renderAdminDeliveries();
+}
+
 function bindAdminVendorManagement() {
     const form = document.getElementById('adminVendorForm');
     const tableBody = document.getElementById('adminVendorTableBody');
@@ -3322,14 +3771,22 @@ function bindAdminVendorManagement() {
             area,
             address,
             status: String(values.status),
-            sample: existing?.sample || false
+            sample: existing?.sample || false,
         };
         const nextVendors = existing
             ? adminVendors.map(vendor => vendor.id === existing.id ? updatedVendor : vendor)
             : [...adminVendors, updatedVendor];
+        const oldName = existing?.name;
+        const nextProducts = getAdminVendorProducts().map(product =>
+            oldName && product.vendorName === oldName
+                ? { ...product, vendorName: name }
+                : product
+        );
+        if (oldName && oldName !== name && !saveAdminVendorProducts(nextProducts)) return;
         if (!saveAdminVendors(nextVendors)) return;
         resetAdminVendorForm();
         renderAdminVendors();
+        renderAdminProducts();
         showToast(existing ? 'Vendor record updated.' : 'Vendor registered.');
     });
 
@@ -3367,12 +3824,162 @@ function bindAdminVendorManagement() {
         }
 
         if (button.dataset.vendorDelete && window.confirm(`Delete ${vendor.name} from the vendor register?`)) {
+            const nextProducts = getAdminVendorProducts().map(product =>
+                product.vendorName === vendor.name ? { ...product, active: false } : product
+            );
+            if (!saveAdminVendorProducts(nextProducts)) return;
             if (!saveAdminVendors(adminVendors.filter(record => record.id !== vendor.id))) return;
             if (editingAdminVendorId === vendor.id) resetAdminVendorForm();
             renderAdminVendors();
+            renderAdminProducts();
         }
     });
     renderAdminVendors();
+}
+
+function resetAdminProductForm() {
+    const form = document.getElementById('adminProductForm');
+    if (!form) return;
+    form.reset();
+    editingAdminProductId = null;
+    document.getElementById('adminProductActive').checked = true;
+    document.getElementById('adminProductFormTitle').textContent = 'Add a product';
+    document.getElementById('adminProductSubmit').textContent = 'Add product';
+    document.getElementById('adminProductCancel').hidden = true;
+}
+
+let editingAdminProductId = null;
+
+function renderAdminProducts() {
+    const products = getAdminVendorProducts();
+    const tableBody = document.getElementById('adminProductTableBody');
+    const count = document.getElementById('adminProductCount');
+    const vendorSelect = document.getElementById('adminProductVendor');
+    const vendorFilter = document.getElementById('adminProductFilter');
+    if (!tableBody || !count || !vendorSelect || !vendorFilter) return;
+
+    const vendors = [...new Set([...adminVendors.map(vendor => vendor.name), ...products.map(product => product.vendorName)])]
+        .sort((first, second) => first.localeCompare(second));
+    const selectedVendor = vendorSelect.value;
+    const selectedFilter = vendorFilter.value || 'all';
+    vendorSelect.innerHTML = vendors.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+    vendorFilter.innerHTML = `<option value="all">All vendors</option>${vendors.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}`;
+    if (vendors.includes(selectedVendor)) vendorSelect.value = selectedVendor;
+    if (selectedFilter === 'all' || vendors.includes(selectedFilter)) vendorFilter.value = selectedFilter;
+
+    const search = (document.getElementById('adminProductSearch')?.value || '').trim().toLocaleLowerCase();
+    const shown = products.filter(product =>
+        (vendorFilter.value === 'all' || product.vendorName === vendorFilter.value) &&
+        `${product.name} ${product.vendorName} ${product.category} ${product.description}`.toLocaleLowerCase().includes(search)
+    );
+    count.textContent = `${shown.length} ${shown.length === 1 ? 'product' : 'products'}`;
+    const navCount = document.querySelector('.admin-nav-item[data-section="products"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(products.length);
+    tableBody.innerHTML = shown.length ? shown.map(product => `
+        <tr>
+            <td><strong>${escapeHtml(product.image ? `${product.image} ${product.name}` : product.name)}</strong>${product.sample ? '<small class="admin-table-area">Sample product</small>' : ''}</td>
+            <td>${escapeHtml(product.vendorName)}</td>
+            <td>${escapeHtml(product.category)}</td>
+            <td>${formatMerchantCurrency(product.price)}</td>
+            <td><span class="status-badge ${product.active ? 'success' : 'danger'}">${product.active ? 'Available' : 'Unavailable'}</span></td>
+            <td class="admin-vendor-actions">
+                <button class="mini-btn" type="button" data-product-edit="${escapeHtml(product.id)}">Edit</button>
+                <button class="mini-btn" type="button" data-product-toggle="${escapeHtml(product.id)}">${product.active ? 'Hide' : 'Publish'}</button>
+                <button class="mini-btn danger" type="button" data-product-delete="${escapeHtml(product.id)}">Delete</button>
+            </td>
+        </tr>
+    `).join('') : '<tr><td colspan="6" class="empty-state">No products match this search. Add a product using the form above.</td></tr>';
+}
+
+function bindAdminProductManagement() {
+    const form = document.getElementById('adminProductForm');
+    const tableBody = document.getElementById('adminProductTableBody');
+    if (!form || !tableBody || form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const values = Object.fromEntries(new FormData(form).entries());
+        const name = String(values.name).trim();
+        const vendorName = String(values.vendorName);
+        const price = Number(values.price);
+        if (!Number.isFinite(price) || price <= 0) {
+            showToast('Enter a product price greater than zero.');
+            return;
+        }
+        const existing = getAdminVendorProducts().find(product => product.id === editingAdminProductId);
+        if ((!existing || vendorName !== existing.vendorName) &&
+            !adminVendors.some(vendor => vendor.name === vendorName && vendor.status === 'Active')) {
+            showToast('Register and activate the vendor before adding products.');
+            return;
+        }
+        let source = existing?.source || 'admin';
+        let sourceId = existing?.sourceId;
+        if (!existing && vendorName === 'Al Reef Restaurant') {
+            source = 'merchant-menu';
+            sourceId = Math.max(0, ...merchantMenuItems.map(item => Number(item.id) || 0)) + 1;
+        }
+        const product = {
+            id: existing?.id || `${source}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            vendorName,
+            name,
+            category: String(values.category).trim(),
+            description: String(values.description).trim(),
+            price,
+            image: String(values.image).trim(),
+            active: document.getElementById('adminProductActive').checked,
+            sample: existing?.sample || false,
+            source,
+            ...(sourceId !== undefined ? { sourceId } : {})
+        };
+        const nextProducts = existing
+            ? getAdminVendorProducts().map(record => record.id === existing.id ? product : record)
+            : [...getAdminVendorProducts(), product];
+        if (!saveAdminVendorProducts(nextProducts)) return;
+        resetAdminProductForm();
+        renderAdminProducts();
+        showToast(existing ? 'Product updated.' : 'Product added to the catalog.');
+    });
+
+    document.getElementById('adminProductCancel').addEventListener('click', resetAdminProductForm);
+    document.getElementById('adminProductSearch').addEventListener('input', renderAdminProducts);
+    document.getElementById('adminProductFilter').addEventListener('change', renderAdminProducts);
+    tableBody.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const product = getAdminVendorProducts().find(record =>
+            record.id === (button.dataset.productEdit || button.dataset.productToggle || button.dataset.productDelete)
+        );
+        if (!product) return;
+        if (button.dataset.productEdit) {
+            editingAdminProductId = product.id;
+            document.getElementById('adminProductVendor').value = product.vendorName;
+            document.getElementById('adminProductName').value = product.name;
+            document.getElementById('adminProductCategory').value = product.category;
+            document.getElementById('adminProductPrice').value = product.price;
+            document.getElementById('adminProductImage').value = product.image;
+            document.getElementById('adminProductDescription').value = product.description;
+            document.getElementById('adminProductActive').checked = product.active;
+            document.getElementById('adminProductFormTitle').textContent = `Edit ${product.name}`;
+            document.getElementById('adminProductSubmit').textContent = 'Save changes';
+            document.getElementById('adminProductCancel').hidden = false;
+            document.getElementById('adminProductName').focus();
+            return;
+        }
+        if (button.dataset.productToggle) {
+            if (!saveAdminVendorProducts(getAdminVendorProducts().map(record =>
+                record.id === product.id ? { ...record, active: !record.active } : record
+            ))) return;
+            renderAdminProducts();
+            return;
+        }
+        if (button.dataset.productDelete && window.confirm(`Delete ${product.name} from ${product.vendorName}?`)) {
+            if (!saveAdminVendorProducts(getAdminVendorProducts().filter(record => record.id !== product.id))) return;
+            if (editingAdminProductId === product.id) resetAdminProductForm();
+            renderAdminProducts();
+        }
+    });
+    renderAdminProducts();
 }
 
 function resetAdminDeliveryLocationForm() {
@@ -3504,6 +4111,53 @@ function bindAdminDeliveryLocationManagement() {
 }
 
 function saveAdminUsers(users) {
+    const linkedCustomers = users.filter(user => user.sourceCustomerId !== undefined);
+    const retainedCustomerIds = new Set(linkedCustomers.map(user => String(user.sourceCustomerId)));
+    const removedCustomers = adminUsers.filter(user =>
+        user.sourceCustomerId !== undefined && !retainedCustomerIds.has(String(user.sourceCustomerId))
+    );
+    for (const user of removedCustomers) {
+        const hasOrders = [...demoActiveOrders, ...dummyPastOrders].some(order =>
+            String(order.customerId) === String(user.sourceCustomerId) ||
+            (user.phone && merchantPhoneKey(order.phone || '') === merchantPhoneKey(user.phone))
+        );
+        if (hasOrders) {
+            showToast('This customer has order history and cannot be deleted. Deactivate the account instead.');
+            return false;
+        }
+    }
+    if (linkedCustomers.length || removedCustomers.length) {
+        const nextCustomers = merchantCustomers
+            .filter(customer => !removedCustomers.some(user => String(user.sourceCustomerId) === String(customer.id)))
+            .map(customer => {
+                const user = linkedCustomers.find(record => String(record.sourceCustomerId) === String(customer.id));
+                return user ? {
+                    ...customer,
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                    address: user.area,
+                    adminStatus: user.status
+                } : customer;
+            });
+        linkedCustomers.forEach(user => {
+            if (!nextCustomers.some(customer => String(customer.id) === String(user.sourceCustomerId))) {
+                nextCustomers.push({
+                    id: Number(user.sourceCustomerId),
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                    address: user.area,
+                    orders: 0,
+                    lastOrderAt: new Date().toISOString(),
+                    adminStatus: user.status,
+                    demoSample: false
+                });
+            }
+        });
+        if (!saveMerchantCollection('kiryaMerchantCustomers', nextCustomers)) return false;
+        merchantCustomers = nextCustomers;
+    }
     try {
         localStorage.setItem(adminUsersStorageKey, JSON.stringify(users));
         adminUsers = users;
@@ -3528,6 +4182,29 @@ function resetAdminUserForm() {
 }
 
 function renderAdminUsers() {
+    const knownUserContacts = new Set(adminUsers.map(user => `${user.email.toLocaleLowerCase()}|${user.phone.replace(/\s+/g, '')}`));
+    const customerUsers = merchantCustomers.filter(customer =>
+        !knownUserContacts.has(`${customer.email.toLocaleLowerCase()}|${customer.phone.replace(/\s+/g, '')}`)
+    ).map(customer => ({
+        id: `customer-${customer.id}`,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        role: 'Customer',
+        area: customer.address,
+        status: customer.adminStatus || 'Active',
+        sample: Boolean(customer.demoSample),
+        sourceCustomerId: customer.id
+    }));
+    if (customerUsers.length) {
+        adminUsers = [...adminUsers, ...customerUsers];
+        try {
+            localStorage.setItem(adminUsersStorageKey, JSON.stringify(adminUsers));
+        } catch (error) {
+            console.error('Unable to synchronize customer records with admin users.', error);
+            showToast('Customer records could not be fully synchronized to the admin directory.');
+        }
+    }
     const preview = document.getElementById('adminUserList');
     const dashboardSearch = (document.getElementById('adminSearchInput')?.value || '').trim().toLocaleLowerCase();
     const dashboardFilter = document.querySelector('.admin-chip.active')?.dataset.filter || 'all';
@@ -3596,15 +4273,20 @@ function bindAdminUserManagement() {
             return;
         }
         const existing = adminUsers.find(user => user.id === editingAdminUserId);
+        const role = String(values.role);
+        const sourceCustomerId = role === 'Customer'
+            ? existing?.sourceCustomerId ?? Math.max(0, ...merchantCustomers.map(customer => Number(customer.id) || 0)) + 1
+            : undefined;
         const updatedUser = {
             id: existing?.id || `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             name,
             email,
             phone,
-            role: String(values.role),
+            role,
             area: String(values.area).trim(),
             status: String(values.status),
-            sample: existing?.sample || false
+            sample: existing?.sample || false,
+            ...(sourceCustomerId !== undefined ? { sourceCustomerId } : {})
         };
         const nextUsers = existing
             ? adminUsers.map(user => user.id === existing.id ? updatedUser : user)
@@ -3739,8 +4421,24 @@ function bindAdminSectionNavigation() {
                 bindAdminVendorManagement();
                 renderAdminVendors();
             }
+            if (sectionName === 'products') {
+                bindAdminProductManagement();
+                renderAdminProducts();
+            }
+            if (sectionName === 'orders') {
+                bindAdminOrderManagement();
+                renderAdminOrders();
+            }
+            if (sectionName === 'deliveries') {
+                bindAdminDeliveryManagement();
+                renderAdminDeliveries();
+            }
             if (sectionName === 'deliveryLocations') bindAdminDeliveryLocationManagement();
-            if (sectionName === 'payouts') renderAdminMarketplacePayouts();
+            if (sectionName === 'payouts') {
+                bindAdminPayoutFilters();
+                renderAdminMarketplacePayouts();
+            }
+            if (sectionName === 'settings') bindAdminSettingsManagement();
             if (sectionName === 'approvals') {
                 initAdminMarketplaceMap();
                 renderAdminMarketplaceMap();
@@ -3809,10 +4507,8 @@ function setupGlobalNavigation() {
         }
     });
 }
-renderAdminNav();
 setupAdminMobileSidebar();
 setupGlobalNavigation();
-bindAdminDashboard();
 document.getElementById('adminMarketplaceRequests')?.addEventListener('click', event => {
     const button = event.target.closest('[data-marketplace-review]');
     if (button) reviewMarketplaceRequest(button.dataset.marketplaceId, button.dataset.marketplaceReview);
@@ -4313,7 +5009,7 @@ function renderAdminMarketplaceMap() {
             id: `partner-${partner.id}`,
             name: partner.name,
             vehicle: partner.vehicle,
-            availability: partner.availability || 'available',
+            availability: riderIsVerified(partner) ? partner.availability || 'available' : 'off-duty',
             verificationStatus: partner.verificationStatus || 'pending',
             latitude: location?.latitude ?? sample.latitude,
             longitude: location?.longitude ?? sample.longitude,
@@ -4474,8 +5170,8 @@ function renderMarketplaceMapOffers() {
 
 function requestMarketplaceDelivery(offerId) {
     const partner = riderCurrentPartner();
-    if (!partner || partner.status !== 'active' || partner.verificationStatus !== 'verified' || !isRiderOnline || partner.availability !== 'available') {
-        showToast('Go online with an active, verified rider account before requesting a pickup.');
+    if (!partner || partner.status !== 'active' || !riderIsVerified(partner) || !isRiderOnline || partner.availability !== 'available') {
+        showToast(`Go online with an active${isRiderVerificationRequired() ? ', verified' : ''} rider account before requesting a pickup.`);
         return;
     }
     const deliveries = readRiderDeliveries();
@@ -4584,6 +5280,7 @@ function renderAdminRiderReview() {
             .toLocaleLowerCase().includes(search)
     );
     count.textContent = `${riders.length} ${riders.length === 1 ? 'rider' : 'riders'}`;
+    adminRiderRecordCount = merchantPartners.length;
     const navCount = document.querySelector('.admin-nav-item[data-section="riders"] .admin-nav-badge');
     if (navCount) navCount.textContent = String(merchantPartners.length);
     tableBody.innerHTML = riders.length ? riders.map(partner => {
@@ -4726,15 +5423,84 @@ function bindAdminRiderManagement() {
 function renderAdminMarketplacePayouts() {
     const list = document.getElementById('adminMarketplacePayouts');
     if (!list) return;
-    const deliveries = merchantDeliveries.filter(delivery => delivery.marketplace)
+    const search = (document.getElementById('adminPayoutSearch')?.value || '').trim().toLocaleLowerCase();
+    const statusFilter = document.getElementById('adminPayoutFilter')?.value || 'all';
+    const allDeliveries = merchantDeliveries.filter(delivery => delivery.marketplace)
         .sort((first, second) => Date.parse(second.updatedAt || '') - Date.parse(first.updatedAt || ''));
+    adminPayoutRecordCount = allDeliveries.length;
+    const navCount = document.querySelector('.admin-nav-item[data-section="payouts"] .admin-nav-badge');
+    if (navCount) navCount.textContent = String(adminPayoutRecordCount);
+    const deliveries = allDeliveries.filter(delivery =>
+        (statusFilter === 'all' || (delivery.payoutStatus || 'not-eligible') === statusFilter) &&
+        `${delivery.itemTitle || ''} ${delivery.order} ${delivery.driver} ${delivery.payoutStatus || ''}`.toLocaleLowerCase().includes(search)
+    );
+    const count = document.getElementById('adminPayoutCount');
+    if (count) count.textContent = `${deliveries.length} ${deliveries.length === 1 ? 'commission' : 'commissions'}`;
     list.innerHTML = deliveries.length ? deliveries.map(delivery => `
-      <article class="admin-marketplace-payout-row">
-        <div><strong>${escapeMerchantText(delivery.itemTitle || delivery.order)}</strong><span>${escapeMerchantText(delivery.driver)} · ${escapeMerchantText(delivery.status)}</span>
-          <small>${escapeMerchantText(delivery.commissionStatus || 'locked')} commission · ${escapeMerchantText(delivery.payoutStatus || 'not-eligible')}${delivery.payoutRecordedAt ? ` · manually recorded ${escapeMerchantText(new Date(delivery.payoutRecordedAt).toLocaleString())}` : ''}</small></div>
-        <strong>${formatMerchantCurrency(delivery.commissionAmount || 0)}</strong>
-        ${delivery.payoutStatus === 'pending' ? `<button type="button" data-marketplace-payout="${delivery.id}">Record manual payout</button>` : ''}
-      </article>`).join('') : '<div class="admin-marketplace-empty">Marketplace commissions will appear after a rider is approved.</div>';
+      <tr>
+        <td><strong>${escapeHtml(delivery.itemTitle || delivery.order)}</strong><small class="admin-table-area">${escapeHtml(delivery.order)}</small></td>
+        <td>${escapeHtml(delivery.driver || '—')}</td>
+        <td>${formatMerchantCurrency(delivery.commissionAmount || 0)}</td>
+        <td><span class="status-badge ${delivery.payoutStatus === 'manually-recorded' ? 'success' : delivery.payoutStatus === 'pending' ? 'pending' : 'danger'}">${escapeHtml(delivery.payoutStatus || 'not-eligible')}</span>${delivery.payoutRecordedAt ? `<small class="admin-table-area">Recorded ${escapeHtml(new Date(delivery.payoutRecordedAt).toLocaleString())}</small>` : ''}</td>
+        <td>${delivery.payoutStatus === 'pending' ? `<button class="mini-btn" type="button" data-marketplace-payout="${escapeHtml(delivery.id)}">Record manual payout</button>` : '—'}</td>
+      </tr>`).join('') : '<tr><td colspan="5" class="empty-state">Marketplace commissions will appear after a rider is approved.</td></tr>';
+}
+
+function bindAdminPayoutFilters() {
+    const search = document.getElementById('adminPayoutSearch');
+    const filter = document.getElementById('adminPayoutFilter');
+    if (search?.dataset.bound === 'true') return;
+    if (!search || !filter) return;
+    search.dataset.bound = 'true';
+    search.addEventListener('input', renderAdminMarketplacePayouts);
+    filter.addEventListener('change', renderAdminMarketplacePayouts);
+}
+
+function bindAdminSettingsManagement() {
+    const form = document.getElementById('adminSettingsForm');
+    if (!form || form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+    document.getElementById('adminSettingDeliveryFee').value = adminSettings.deliveryFee;
+    document.getElementById('adminSettingMinimumOrder').value = adminSettings.minimumOrder;
+    document.getElementById('adminSettingRiderVerification').checked = adminSettings.requireRiderVerification;
+    const savedAt = document.getElementById('adminSettingsSavedAt');
+    try {
+        const updatedAt = localStorage.getItem(`${adminSettingsStorageKey}:updatedAt`);
+        if (updatedAt && savedAt) savedAt.textContent = `Saved ${new Date(updatedAt).toLocaleString()}`;
+    } catch (error) {
+        console.error('Unable to read platform settings update time.', error);
+    }
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const nextSettings = {
+            deliveryFee: Number(document.getElementById('adminSettingDeliveryFee').value),
+            minimumOrder: Number(document.getElementById('adminSettingMinimumOrder').value),
+            requireRiderVerification: document.getElementById('adminSettingRiderVerification').checked
+        };
+        if (![nextSettings.deliveryFee, nextSettings.minimumOrder].every(value => Number.isFinite(value) && value >= 0)) {
+            showToast('Delivery fee and minimum order must be zero or greater.');
+            return;
+        }
+        const updatedAt = new Date().toISOString();
+        try {
+            localStorage.setItem(adminSettingsStorageKey, JSON.stringify(nextSettings));
+            localStorage.setItem(`${adminSettingsStorageKey}:updatedAt`, updatedAt);
+        } catch (error) {
+            console.error('Unable to save platform settings.', error);
+            showToast('Platform settings could not be saved in this browser.');
+            return;
+        }
+        adminSettings = nextSettings;
+        if (savedAt) savedAt.textContent = `Saved ${new Date(updatedAt).toLocaleString()}`;
+        renderRiderAvailability();
+        renderAdminRiderReview();
+        renderMerchantPartners();
+        populateMerchantAssignmentOptions();
+        renderAdminMarketplaceMap();
+        renderAdminDemoMetrics();
+        showToast('Platform settings saved.');
+    });
 }
 
 function recordMarketplacePayout(deliveryId) {
@@ -4773,7 +5539,7 @@ function reviewAdminRider(partnerId, action) {
         showToast('An active delivery must be resolved before rejecting or suspending this rider.');
         return;
     }
-    if (action === 'activate' && partner.verificationStatus !== 'verified') {
+    if (action === 'activate' && !riderIsVerified(partner)) {
         showToast('Verify this partner before reactivating the account.');
         return;
     }
@@ -4833,8 +5599,8 @@ function reviewMarketplaceRequest(offerId, decision) {
         showToast('A reason is required to reject a pickup request.');
         return;
     }
-    if (decision === 'approve' && (!partner || partner.status !== 'active' || partner.verificationStatus !== 'verified' || partner.availability !== 'available')) {
-        showToast('The requesting rider is no longer active, available, and verified.');
+    if (decision === 'approve' && (!partner || partner.status !== 'active' || !riderIsVerified(partner) || partner.availability !== 'available')) {
+        showToast(`The requesting rider is no longer active, available${isRiderVerificationRequired() ? ', and verified' : ''}.`);
         return;
     }
     if (decision === 'approve' && merchantDeliveries.some(delivery =>
@@ -5317,8 +6083,8 @@ function riderOwnsDelivery(delivery, partner) {
 function setRiderAvailability(isAvailable, forceOffline = false) {
     const partners = readRiderCollection('kiryaMerchantPartners', riderPartnerFallback);
     const partner = riderCurrentPartner(partners);
-    if (!partners || !partner || partner.status !== 'active' || partner.verificationStatus !== 'verified') {
-        showToast('Only an active, verified rider partner can go online.');
+    if (!partners || !partner || partner.status !== 'active' || !riderIsVerified(partner)) {
+        showToast(`Only an active${isRiderVerificationRequired() ? ', verified' : ''} rider partner can go online.`);
         return false;
     }
     if (isAvailable && riderDemoRegion === 'live' && (!navigator.geolocation || !window.isSecureContext)) {
@@ -5352,7 +6118,7 @@ function renderRiderAvailability() {
     const button = document.getElementById('riderStatusToggle');
     const partner = riderCurrentPartner();
     if (!button || !partner) return;
-    const isActive = partner.status === 'active' && partner.verificationStatus === 'verified' && partner.availability === 'available';
+    const isActive = partner.status === 'active' && riderIsVerified(partner) && partner.availability === 'available';
     isRiderOnline = isActive;
     const locationStatus = document.getElementById('riderLocationStatus');
     if (isActive) startRiderLocationTracking(partner);
@@ -5373,7 +6139,7 @@ function renderRiderAvailability() {
     if (idleMessage) idleMessage.textContent = isActive
         ? 'You are online. Browse nearby map offers and request a pickup.'
         : partner.status !== 'active' ? 'This partner account is inactive. Contact the merchant.'
-            : partner.verificationStatus !== 'verified' ? 'Admin verification is required before you can go online.'
+            : isRiderVerificationRequired() && partner.verificationStatus !== 'verified' ? 'Admin verification is required before you can go online.'
                 : 'Go online to request nearby pickups. Available jobs remain visible on the map.';
 }
 
@@ -5411,7 +6177,7 @@ function renderRiderPartnerOptions() {
     }
     select.disabled = false;
     select.innerHTML = eligiblePartners.map(partner =>
-        `<option value="${escapeMerchantText(partner.id)}">${escapeMerchantText(partner.name)}${partner.status !== 'active' ? ' (inactive)' : partner.verificationStatus !== 'verified' ? ' (verification pending)' : ''}</option>`
+        `<option value="${escapeMerchantText(partner.id)}">${escapeMerchantText(partner.name)}${partner.status !== 'active' ? ' (inactive)' : isRiderVerificationRequired() && !riderIsVerified(partner) ? ' (verification pending)' : ''}</option>`
     ).join('');
     if (riderSelectedPartnerId === null) {
         try {
@@ -6110,6 +6876,7 @@ merchantMenuItems = loadMerchantCollection('kiryaMerchantMenu', merchantMenuItem
     item && Number.isInteger(item.id) && typeof item.name === 'string' &&
     Number.isFinite(item.price) && item.price > 0 && typeof item.active === 'boolean'
 );
+renderAdminNav();
 
 function escapeMerchantText(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -6368,20 +7135,23 @@ function renderMerchantMenuItems() {
 function renderMerchantDemoVendors() {
     const list = document.getElementById('merchantDemoVendorList');
     if (!list) return;
-    list.innerHTML = ugandaMbaleDemoVendors.map(vendor => `
+    const vendors = ugandaMbaleDemoVendors.filter(vendor =>
+        adminVendors.find(record => record.name === vendor.name)?.status === 'Active'
+    );
+    list.innerHTML = vendors.map(vendor => `
         <article class="merchant-demo-vendor">
             <div class="merchant-demo-vendor-heading">
                 <strong>${escapeMerchantText(vendor.name)}</strong>
                 <span>${escapeMerchantText(vendor.category)} · ${escapeMerchantText(vendor.address)}</span>
             </div>
             <div class="merchant-demo-products">
-                ${vendor.products.map(product => `
+                ${getAdminVendorProducts().filter(product => product.vendorName === vendor.name && product.active).map(product => `
                     <div class="merchant-demo-product">
                         <span class="merchant-demo-product-icon" aria-hidden="true">${escapeMerchantText(product.image)}</span>
                         <div><strong>${escapeMerchantText(product.name)}</strong><small>${escapeMerchantText(product.category)} · ${escapeMerchantText(product.description)}</small></div>
                         <b>${formatMerchantCurrency(product.price)}</b>
                     </div>
-                `).join('')}
+                `).join('') || '<p class="merchant-marketplace-empty">No products currently available.</p>'}
             </div>
         </article>
     `).join('');
@@ -6991,6 +7761,7 @@ merchantPartners = mergeDemoRecords(savedMerchantPartners, merchantPartners).map
     adminAudit: Array.isArray(partner.adminAudit) ? partner.adminAudit : []
 }));
 if (merchantPartners.length !== savedMerchantPartners.length) saveMerchantCollection('kiryaMerchantPartners', merchantPartners);
+bindAdminDashboard();
 
 let merchantDeliveries = [
     { id: 1, order: '#8911', customer: 'Daniel K.', address: 'Ntinda, Kampala', driver: 'James M.', phone: '+256 700 111222', status: 'in-transit' },
@@ -7164,7 +7935,7 @@ function merchantPartnerCoversAddress(partner, address) {
 }
 
 function merchantPartnerIsEligible(partner, address, excludedDeliveryId = null) {
-    return partner.status === 'active' && partner.verificationStatus === 'verified' &&
+    return partner.status === 'active' && riderIsVerified(partner) &&
         partner.availability === 'available' &&
         merchantPartnerWorkload(partner, excludedDeliveryId) < merchantRiderWorkloadLimit &&
         merchantPartnerCoversAddress(partner, address);
@@ -7377,7 +8148,7 @@ function renderMerchantPartners() {
             const hasPendingOffer = merchantDeliveries.some(delivery =>
                 delivery.partnerId === partner.id && delivery.status === 'offered'
             );
-            const availability = partner.verificationStatus !== 'verified'
+            const availability = isRiderVerificationRequired() && !riderIsVerified(partner)
                 ? 'Verification pending'
                 : partner.status !== 'active' ? 'Inactive'
                 : hasPendingOffer ? 'Offer pending'
@@ -7387,7 +8158,7 @@ function renderMerchantPartners() {
               <td>${escapeMerchantText(partner.name)}</td><td>${escapeMerchantText(partner.phone)}</td>
               <td>${escapeMerchantText(partner.email || '—')}</td><td>${escapeMerchantText(partner.vehicle)}</td>
               <td>${escapeMerchantText(partner.area)}</td>
-              <td><span class="merchant-status-pill ${partner.verificationStatus === 'verified' ? 'delivered' : 'offered'}">${escapeMerchantText(partner.verificationStatus || 'pending')}</span> <span class="merchant-muted">${partner.status === 'active' ? 'Active' : 'Inactive'} · ${escapeMerchantText(availability)}</span><button class="merchant-record-action" type="button" data-partner-action="availability" data-partner-id="${partner.id}" ${partner.status !== 'active' || partner.verificationStatus !== 'verified' || workload ? 'disabled' : ''}>${partner.availability === 'off-duty' ? 'Set available' : 'Set off duty'}</button></td>
+              <td><span class="merchant-status-pill ${riderIsVerified(partner) ? 'delivered' : 'offered'}">${escapeMerchantText(partner.verificationStatus || 'pending')}</span> <span class="merchant-muted">${partner.status === 'active' ? 'Active' : 'Inactive'} · ${escapeMerchantText(availability)}</span><button class="merchant-record-action" type="button" data-partner-action="availability" data-partner-id="${partner.id}" ${partner.status !== 'active' || !riderIsVerified(partner) || workload ? 'disabled' : ''}>${partner.availability === 'off-duty' ? 'Set available' : 'Set off duty'}</button></td>
               <td>${workload} / ${merchantRiderWorkloadLimit} active; ${merchantPartnerCompletedCount(partner)} completed; ${merchantPartnerCancelledCount(partner)} cancelled (${merchantPartnerCancellationRate(partner)}%)</td>
               <td><div class="merchant-record-actions"><button class="merchant-record-action" type="button" data-partner-action="edit" data-partner-id="${partner.id}">Edit</button><button class="merchant-record-action danger" type="button" data-partner-action="delete" data-partner-id="${partner.id}">Remove</button></div></td>
             </tr>
