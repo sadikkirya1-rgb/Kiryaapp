@@ -439,6 +439,8 @@ function updateAddAddressBtn(){
 }
 
 // --- App startup and navigation ---
+const SPLASH_RIDE_DURATION = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 6000;
+
 function openRoleScreenFromHash() {
   const hash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
   const roleScreens = {
@@ -467,12 +469,7 @@ function openRoleScreenFromHash() {
   if (home) home.style.display = 'none';
 
     setTimeout(() => {
-        if (splash) {
-            splash.style.opacity = '0';
-            setTimeout(() => {
-                splash.style.display = 'none';
-            }, 500);
-        }
+      if (splash) splash.style.display = 'none';
                 suppressLastScreenWrites = true;
                 try {
                     roleScreens[hash]();
@@ -486,7 +483,7 @@ function openRoleScreenFromHash() {
             if (hash === 'user') showDeliveryHome();
             rememberLastScreen(hash === 'user' ? 'newHome' : hash);
         }
-    }, 1800);
+    }, SPLASH_RIDE_DURATION);
   return true;
 }
 
@@ -495,10 +492,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   if (openRoleScreenFromHash()) return;
 
   setTimeout(()=>{
-    document.getElementById('splash').style.opacity=0;
-    setTimeout(()=>{
-      document.getElementById('splash').style.display='none';
-      document.getElementById('home').style.display='block';
+    document.getElementById('splash').style.display='none';
+    document.getElementById('home').style.display='block';
             if (!getSavedDeliveryLocation()) {
                 showDeliveryLanding();
                 rememberLastScreen('home');
@@ -506,8 +501,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 showDeliveryHome();
                 rememberLastScreen('newHome');
             }
-    },500);
-  },3000);
+  },SPLASH_RIDE_DURATION);
 });
 
 /* Open Map */
