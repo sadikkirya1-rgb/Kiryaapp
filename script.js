@@ -443,8 +443,63 @@ const SPLASH_RIDE_DURATION = window.matchMedia('(prefers-reduced-motion: reduce)
 
 const loginForm = document.getElementById('loginForm');
 const loginStatus = document.getElementById('loginStatus');
+const loginWelcome = document.getElementById('loginWelcome');
+const loginDescription = document.getElementById('loginDescription');
+const loginModeLabel = document.getElementById('loginModeLabel');
 const loginPassword = document.getElementById('loginPassword');
 const toggleLoginPassword = document.getElementById('toggleLoginPassword');
+const signupNameField = document.getElementById('signupNameField');
+const signupName = document.getElementById('loginSignupName');
+const signupConfirmField = document.getElementById('signupConfirmField');
+const signupConfirmPassword = document.getElementById('loginConfirmPassword');
+const loginOptions = document.getElementById('loginOptions');
+const loginDivider = document.getElementById('loginDivider');
+const loginGoogle = document.getElementById('loginGoogle');
+const loginSubmitLabel = document.getElementById('loginSubmitLabel');
+const loginSignupPrompt = document.getElementById('loginSignupPrompt');
+const toggleSignupMode = document.getElementById('toggleSignupMode');
+const LOCAL_DEMO_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+let isSignupMode = false;
+
+function isLocalDemoHost(hostname) {
+    return LOCAL_DEMO_HOSTS.has(hostname)
+        || hostname.endsWith('.github.dev')
+        || hostname.endsWith('.githubpreview.dev');
+}
+
+function setSignupMode(enabled) {
+    isSignupMode = enabled;
+    signupNameField.hidden = !enabled;
+    signupName.required = enabled;
+    signupConfirmField.hidden = !enabled;
+    signupConfirmPassword.required = enabled;
+    loginOptions.hidden = enabled;
+    loginDivider.hidden = enabled;
+    loginGoogle.hidden = enabled;
+    loginWelcome.textContent = enabled ? 'Create your account' : 'Sign in to your account';
+    loginDescription.textContent = enabled
+        ? 'Enter your details to preview the sign-up form.'
+        : 'Enter your details below to continue.';
+    loginModeLabel.textContent = enabled ? 'CREATE ACCOUNT' : 'WELCOME BACK';
+    loginSubmitLabel.textContent = enabled ? 'Create account' : 'Sign in';
+    loginSignupPrompt.textContent = enabled ? 'Already have an account?' : "Don't have an account?";
+    toggleSignupMode.textContent = enabled ? 'Sign in' : 'Sign up';
+    loginPassword.autocomplete = enabled ? 'new-password' : 'current-password';
+    if (enabled) {
+        loginPassword.setAttribute('minlength', '8');
+    } else {
+        loginPassword.removeAttribute('minlength');
+    }
+    loginPassword.value = '';
+    signupConfirmPassword.value = '';
+    signupConfirmPassword.setCustomValidity('');
+    loginStatus.textContent = '';
+    loginPassword.type = 'password';
+    signupConfirmPassword.type = 'password';
+    toggleLoginPassword.setAttribute('aria-label', 'Show password');
+    toggleLoginPassword.setAttribute('aria-pressed', 'false');
+    (enabled ? signupName : document.getElementById('loginEmail')).focus();
+}
 
 toggleLoginPassword?.addEventListener('click', () => {
     const showPassword = loginPassword.type === 'password';
@@ -455,10 +510,34 @@ toggleLoginPassword?.addEventListener('click', () => {
 
 loginForm?.addEventListener('submit', event => {
     event.preventDefault();
-    if (loginStatus) {
-        loginStatus.textContent = "Sign-in isn't connected yet. Your details have not been submitted.";
+    if (isSignupMode) {
+        if (loginPassword.value !== signupConfirmPassword.value) {
+            const message = 'Passwords do not match.';
+            signupConfirmPassword.setCustomValidity(message);
+            signupConfirmPassword.reportValidity();
+            loginStatus.textContent = message;
+            return;
+        }
+        loginStatus.textContent = 'Sign-up form preview only. Account creation is not connected, and no information was saved or submitted.';
+        return;
     }
+
+    if (!isLocalDemoHost(window.location.hostname)) {
+        if (loginStatus) {
+            loginStatus.textContent = "Sign-in isn't connected yet. Your details have not been submitted.";
+        }
+        return;
+    }
+
+    document.body.dataset.appRole = 'user';
+    document.getElementById('splash')?.style.setProperty('display', 'none');
+    document.getElementById('loginScreen')?.classList.remove('is-visible');
+    openDeliveryLocationPicker();
 });
+
+signupConfirmPassword?.addEventListener('input', () => signupConfirmPassword.setCustomValidity(''));
+loginPassword?.addEventListener('input', () => signupConfirmPassword.setCustomValidity(''));
+toggleSignupMode?.addEventListener('click', () => setSignupMode(!isSignupMode));
 
 document.querySelectorAll('[data-login-notice]').forEach(button => {
     button.addEventListener('click', () => {
