@@ -126,6 +126,18 @@ function getDemoPhotoForImage(image) {
     return 'assets/merchant-burger.jpg';
 }
 
+function getVendorCardPhoto(vendor) {
+    const category = String(vendor?.category || '').toLocaleLowerCase();
+    if (category.includes('pharmacy') || category.includes('retail') || category.includes('other')) return '';
+    if (category.includes('grocery') || category.includes('grocer') || category.includes('produce') || category.includes('bar')) {
+        return 'assets/merchant-drink.jpg';
+    }
+    const productDetails = Array.isArray(vendor?.products)
+        ? vendor.products.map(product => `${product.name || ''} ${product.category || ''}`).join(' ')
+        : '';
+    return getDemoPhotoForImage(`${vendor?.name || ''} ${category} ${productDetails}`);
+}
+
 function getDefaultAdminDeliveryLocations() {
     return ugandaDeliveryLocationOptions.flatMap(region =>
         region.districts.flatMap(district =>
@@ -1487,7 +1499,9 @@ function renderCategoryContent(category) {
   // Render Restaurants / Items
   const generateCardHTML = (item) => `
       <div class="res-image">
-        <span class="vendor-category-icon" aria-hidden="true">${escapeHtml(item.image)}</span>
+        ${item.photo
+          ? `<img src="${item.photo}" alt="${escapeHtml(item.name)}" loading="lazy">`
+          : `<span class="vendor-category-icon" aria-hidden="true">${escapeHtml(item.image)}</span>`}
         <button class="heart-btn">♡</button>
       </div>
       <div class="res-name">${escapeHtml(item.name)}</div>
@@ -1515,6 +1529,7 @@ function renderCategoryContent(category) {
         const item = {
           name: vendor.name,
           image: getMerchantCategoryIcon(vendor.category),
+          photo: getVendorCardPhoto(vendor),
           rating: 'New',
           delivery: 'Local delivery',
           time: `Serves ${vendor.deliveryAreaLabel}`
