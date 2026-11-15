@@ -666,7 +666,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; background:#e2f2e6; }
   will-change: transform; /* Performance hint */
 }
 #restaurantScreen .res-cover-bg img{ width:100%; height:100%; object-fit:cover; }
-#restaurantScreen .res-header-content { padding: 50px 20px 0; margin-top: 0; position: relative; }
+#restaurantScreen .res-header-content { padding: 0 20px; margin-top: 0; position: relative; }
 #restaurantScreen .res-screen-name { font-size: 1.8em; font-weight: 800; color: #333; margin-bottom: 8px; }
 #restaurantScreen .res-meta-row { display: flex; align-items: center; gap: 15px; color: #555; font-size: 0.95em; flex-wrap: wrap; }
 #restaurantScreen .res-meta-item { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-weight: 600; }
@@ -688,6 +688,9 @@ html,body{ width:100%; height:100%; overflow-x:hidden; background:#e2f2e6; }
 #restaurantScreen .res-action-btn:active { transform: scale(0.9); }
 #restaurantScreen .res-profile-pic { position: absolute; top: -40px; left: 15px; width: 80px; height: 80px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; font-size: 3em; z-index: 20; overflow:hidden; }
 #restaurantScreen .res-profile-pic img{ width:100%; height:100%; object-fit:cover; }
+#restaurantScreen .res-profile-row { position:relative; z-index:20; display:flex; align-items:center; gap:14px; min-height:80px; margin-top:-40px; margin-bottom:12px; }
+#restaurantScreen .res-profile-row .res-profile-pic { position:relative; top:auto; left:auto; flex:0 0 80px; }
+#restaurantScreen .res-profile-row .res-screen-name { flex:1; min-width:0; margin:0; font-size:1.55em; overflow-wrap:anywhere; transform:translateY(13px); }
 #restaurantScreen .res-badges-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 #restaurantScreen .res-badge-discount { background: #FFF8D0; color: #4A4A20; font-size: 0.75em; font-weight: 700; padding: 4px 8px; border-radius: 6px; display: flex; align-items: center; gap: 4px; }
 #restaurantScreen .res-badge-top { background: #333; color: #fff; font-size: 0.75em; font-weight: 700; padding: 4px 8px; border-radius: 6px; display: flex; align-items: center; gap: 4px; border: 1px solid #FFD700; box-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
@@ -700,7 +703,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; background:#e2f2e6; }
   gap: 20px;
   justify-content: flex-start;
   align-items: center;
-  background: orange;
+  background: linear-gradient(135deg,#188c50,#087443);
   margin: 0;
   padding: 20px 20px 20px 20px;
   border-radius: 0;
@@ -717,21 +720,21 @@ html,body{ width:100%; height:100%; overflow-x:hidden; background:#e2f2e6; }
 #restaurantScreen .res-menu-item:active { background-color: rgba(255,255,255,0.2); }
 #restaurantScreen .res-menu-item.active { color: #fff; font-weight: 800; border-bottom: 3px solid #fff; }
 #restaurantScreen .res-menu-content { padding: 0 20px 100px; background: transparent; }
-#restaurantScreen .res-category-title { font-weight: 800; font-size: 1.2em; color: #333; margin: 20px 0 15px 0; padding: 0; scroll-margin-top: 80px; }
+#restaurantScreen .res-category-title { font-weight: 800; font-size: 0.8em; color: #333; margin: 4px 0 2px; padding: 0; scroll-margin-top: 80px; }
 #restaurantScreen .res-item-card { 
-  display: flex; justify-content: space-between; width: calc(100% + 40px); margin: 0 -20px 20px;
-  background: #fff; border-radius: 16px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); 
+  position:relative; display: flex; justify-content: space-between; width: calc(100% + 40px); min-height:130px; margin: 0 -20px 8px;
+  background: #fff; border-radius: 16px; padding: 15px calc(clamp(140px,42vw,280px) + 15px) 15px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.06);
   border: 1px solid #f0f0f0; transition: all 0.2s ease-in-out; cursor: pointer; 
 }
 #restaurantScreen .res-item-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
 #restaurantScreen .res-item-card:active { transform: scale(0.98); box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-#restaurantScreen .res-item-info { flex: 1; padding-right: 15px; display: flex; flex-direction: column; justify-content: center; }
+#restaurantScreen .res-item-info { flex: 1; min-width:0; padding-right: 0; display: flex; flex-direction: column; justify-content: center; }
 #restaurantScreen .res-item-title { font-weight: 700; font-size: 1em; color: #333; margin-bottom: 6px; }
 #restaurantScreen .res-item-desc { font-size: 0.85em; color: #777; margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #restaurantScreen .res-item-price-row { display: flex; align-items: center; gap: 6px; font-size: 0.95em; }
 #restaurantScreen .res-item-old-price { text-decoration: line-through; color: #bbb; font-size: 0.9em; }
 #restaurantScreen .res-item-current-price { font-weight: 700; color: #333; }
-#restaurantScreen .res-item-img-box { width: 110px; height: 110px; border-radius: 12px; background: #f5f5f5; position: relative; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 3em; color: #ddd; }
+#restaurantScreen .res-item-img-box { position:absolute; top:0; right:0; bottom:0; width:clamp(140px,42vw,280px); border-radius:0 16px 16px 0; background: #f5f5f5; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 3em; color: #ddd; }
 #restaurantScreen .res-item-img-box .demo-menu-photo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 #restaurantScreen .res-item-add-btn { position: absolute; bottom: 8px; right: 8px; width: 30px; height: 30px; background: #fff; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease-in-out; overflow: hidden; }
 #restaurantScreen .res-item-add-btn:active { transform: scale(0.95); }
