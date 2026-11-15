@@ -166,6 +166,8 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 .delivery-location-details label{ color:#26332f; font-size:.86rem; font-weight:700; }
 .delivery-location-details label span{ color:#8a9590; font-size:.75rem; font-weight:500; }
 .delivery-location-details textarea{ width:100%; resize:vertical; min-height:90px; padding:12px; border:1px solid #dfe7e3; border-radius:12px; outline-color:#019e81; color:#26332f; font:inherit; font-size:.9rem; }
+.delivery-location-map-link{ width:100%; min-height:46px; padding:10px 12px; border:1px solid #dfe7e3; border-radius:12px; outline-color:#019e81; background:#fff; color:#26332f; font:inherit; font-size:.9rem; }
+.delivery-location-map-link::placeholder{ color:#929e98; }
 .delivery-location-note{ color:#71807a; font-size:.78rem; line-height:1.45; }
 #confirmDeliveryLocationBtn{ width:100%; min-height:50px; margin-top:8px; border:0; border-radius:12px; background:#019e81; color:#fff; font:inherit; font-weight:800; cursor:pointer; }
 .delivery-location-panel.is-details-step .delivery-location-progress-group{ margin-top:20px; }

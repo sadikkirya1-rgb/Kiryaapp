@@ -167,7 +167,9 @@
       </div>
       <label for="deliveryAddressDetails">House, building, street or directions <span>Optional</span></label>
       <textarea id="deliveryAddressDetails" rows="3" maxlength="180" placeholder="For example: Blue gate opposite the school, near the main road"></textarea>
-      <p class="delivery-location-note">The landmark identifies the area. Extra directions can help the rider find your exact drop-off point.</p>
+      <label for="deliveryGoogleMapsLink">Google Maps pin or live-location link <span>Optional</span></label>
+      <input id="deliveryGoogleMapsLink" class="delivery-location-map-link" type="url" maxlength="500" inputmode="url" autocomplete="url" placeholder="https://maps.app.goo.gl/…">
+      <p class="delivery-location-note">Add a map link for the rider to open in Google Maps. Live sharing and expiry are managed in Google Maps; anyone with access to the link may see the shared location.</p>
       <button id="confirmDeliveryLocationBtn" type="button">Confirm location and continue</button>
     </section>
   </div>
@@ -1026,6 +1028,7 @@
                 <div style="font-weight:bold; font-size:0.8em; color:#666;">DROPOFF</div>
                 <div id="riderCustomerName" style="font-size:1.05em; font-weight:800; margin-top:2px; color:#333;">Customer</div>
                 <div id="riderDropoffAddress" style="font-size:0.85em; color:#888; margin-top:2px;">Customer delivery address</div>
+                <a id="riderDropoffDirections" class="rider-pickup-directions" target="_blank" rel="noopener noreferrer" hidden>Open customer location in Google Maps</a>
                 <a id="riderCustomerCall" class="rider-customer-call" href="#" hidden>Call customer</a>
             </div>
 

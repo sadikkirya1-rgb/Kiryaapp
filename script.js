@@ -83,6 +83,24 @@ function getSavedDeliveryLocation() {
     }
 }
 
+function normalizeGoogleMapsLink(value) {
+    const link = String(value || '').trim();
+    if (!link) return '';
+    try {
+        const url = new URL(link);
+        const hostname = url.hostname.toLocaleLowerCase();
+        const isGoogleMapsHost =
+            hostname === 'maps.app.goo.gl' ||
+            hostname === 'maps.google.com' ||
+            (['google.com', 'www.google.com'].includes(hostname) && /^\/maps(?:\/|$)/.test(url.pathname)) ||
+            (hostname === 'goo.gl' && /^\/maps(?:\/|$)/.test(url.pathname));
+        if (url.protocol !== 'https:' || url.username || url.password || url.port || !isGoogleMapsHost) return null;
+        return url.href;
+    } catch {
+        return null;
+    }
+}
+
 function setDeliveryLocationAddress(location) {
     const selectedAddress = document.getElementById('selectedAddress');
     if (selectedAddress) selectedAddress.textContent = location?.fullAddress || 'Select a location on the map';
@@ -286,6 +304,7 @@ function selectDeliveryLocationOption(name) {
 function openDeliveryLocationPicker() {
     pendingDeliveryLocation = {};
     deliveryLocationStep = 0;
+    document.getElementById('deliveryGoogleMapsLink').value = getSavedDeliveryLocation()?.googleMapsLink || '';
     document.getElementById('home').style.display = 'none';
     document.getElementById('mapScreen').style.display = 'none';
     document.getElementById('newHomeScreen').classList.remove('active');
@@ -331,10 +350,18 @@ function closeDeliveryLocationPicker() {
 
 function saveDeliveryLocation() {
     const details = document.getElementById('deliveryAddressDetails').value.trim();
+    const mapLinkInput = document.getElementById('deliveryGoogleMapsLink');
+    const googleMapsLink = normalizeGoogleMapsLink(mapLinkInput.value);
+    if (googleMapsLink === null) {
+        showToast('Enter a valid Google Maps link, such as a shared map pin or live location.');
+        mapLinkInput.focus();
+        return;
+    }
     const shortAddress = `${pendingDeliveryLocation.landmark}, ${pendingDeliveryLocation.town}`;
     const savedLocation = {
         ...pendingDeliveryLocation,
         details,
+        googleMapsLink,
         shortAddress,
         fullAddress: [details, shortAddress, pendingDeliveryLocation.district, pendingDeliveryLocation.region, 'Uganda']
             .filter(Boolean)
@@ -351,6 +378,7 @@ function saveDeliveryLocation() {
     }
 
     document.getElementById('deliveryAddressDetails').value = '';
+    mapLinkInput.value = '';
     showDeliveryHome();
     if (returnToCheckoutAfterAddressEdit) {
         resumeCheckoutAfterAddressEdit();
@@ -2570,6 +2598,7 @@ if (placeOrderBtn) {
             const customerName = recipientDetails.name || 'Customer';
             const customerPhone = userPhoneNumber || recipientDetails.phone;
             const needsCutlery = Boolean(document.getElementById('cutlerySwitch')?.checked);
+            const deliveryNavigationLink = getSavedDeliveryLocation()?.googleMapsLink || '';
 
             const order = createCustomerMarketplaceOrder({
                 restaurant: resName,
@@ -2586,6 +2615,7 @@ if (placeOrderBtn) {
                 recipientName: recipientDetails.name,
                 recipientPhone: recipientDetails.phone,
                 deliveryAddress,
+                deliveryNavigationLink,
                 paymentMethod: selectedPaymentMethod.text,
                 notes: allergyNotes,
                 needsCutlery
@@ -6508,6 +6538,10 @@ function renderRiderCurrentDelivery(delivery, partner) {
     document.getElementById('riderDropoffAddress').textContent = delivery.marketplace
         ? `${delivery.address} · approximately ${Number(delivery.pickupToDropoffKm).toFixed(1)} km from pickup`
         : delivery.address;
+    const customerDirections = document.getElementById('riderDropoffDirections');
+    const customerMapLink = normalizeGoogleMapsLink(delivery.deliveryNavigationLink || order?.deliveryNavigationLink || '');
+    customerDirections.href = customerMapLink || '#';
+    customerDirections.hidden = !customerMapLink;
     const callLink = document.getElementById('riderCustomerCall');
     const phone = String(delivery.customerPhone || '').replace(/[^\d+]/g, '');
     callLink.href = phone ? `tel:${phone}` : '#';
@@ -7104,10 +7138,15 @@ function merchantPhoneKey(phone) {
     return String(phone || '').replace(/\D/g, '');
 }
 
-function createCustomerMarketplaceOrder({ restaurant, items, subtotal, deliveryFee, tipAmount, total, customerName, customerPhone, recipientName, recipientPhone, deliveryAddress, paymentMethod, notes, needsCutlery }) {
+function createCustomerMarketplaceOrder({ restaurant, items, subtotal, deliveryFee, tipAmount, total, customerName, customerPhone, recipientName, recipientPhone, deliveryAddress, deliveryNavigationLink, paymentMethod, notes, needsCutlery }) {
     const normalizedAddress = String(deliveryAddress || '').trim();
     if (!normalizedAddress || /^(not set|set delivery address|selected address not set)$/i.test(normalizedAddress)) {
         showToast('Set a delivery address before placing your order.');
+        return false;
+    }
+    const normalizedNavigationLink = normalizeGoogleMapsLink(deliveryNavigationLink);
+    if (String(deliveryNavigationLink || '').trim() && !normalizedNavigationLink) {
+        showToast('The saved Google Maps link is invalid. Update your delivery address and try again.');
         return false;
     }
     const name = String(customerName || '').trim();
@@ -7131,6 +7170,7 @@ function createCustomerMarketplaceOrder({ restaurant, items, subtotal, deliveryF
         received: new Date().toLocaleTimeString('en-UG', { hour: 'numeric', minute: '2-digit' }),
         fulfillment: 'delivery',
         deliveryAddress: normalizedAddress,
+        deliveryNavigationLink: normalizedNavigationLink,
         pickupAddress: merchantPickupAddress,
         items: items.join(', '),
         subtotal: formatMerchantCurrency(subtotal),
@@ -8638,6 +8678,7 @@ document.getElementById('merchantDeliveryForm').addEventListener('submit', event
         customerId: customer?.id || order.customerId || null,
         customerPhone,
         address,
+        deliveryNavigationLink: order.deliveryNavigationLink || '',
         pickupAddress: order.pickupAddress || merchantPickupAddress,
         partnerId: partner.id,
         driver: partner.name,
