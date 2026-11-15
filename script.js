@@ -66,11 +66,11 @@ let editingAdminRiderId = null;
 let returnToCheckoutAfterAddressEdit = false;
 
 const deliveryLocationSteps = [
-    { key: 'region', title: 'Choose your region', hint: 'Select the region where you would like your order delivered.' },
-    { key: 'district', title: 'Choose your district', hint: 'Choose a district in your selected region.' },
-    { key: 'town', title: 'Choose your town or city', hint: 'Select the town or city closest to your delivery address.' },
-    { key: 'landmark', title: 'Choose a nearby landmark', hint: 'Pick a familiar place near your delivery address.' },
-    { key: 'details', title: 'Add delivery directions', hint: 'Give the rider a more exact place to deliver your order.' }
+    { key: 'region', label: 'Region', title: 'Choose your region', hint: 'Select the region where you would like your order delivered.' },
+    { key: 'district', label: 'District', title: 'Choose your district', hint: 'Choose a district in your selected region.' },
+    { key: 'town', label: 'Town / city', title: 'Choose your town or city', hint: 'Select the town or city closest to your delivery address.' },
+    { key: 'landmark', label: 'Landmark', title: 'Choose a nearby landmark', hint: 'Pick a familiar place near your delivery address.' },
+    { key: 'details', label: 'Directions', title: 'Add delivery directions', hint: 'Give the rider a more exact place to deliver your order.' }
 ];
 
 function getSavedDeliveryLocation() {
@@ -199,6 +199,10 @@ function renderDeliveryLocationPicker() {
     const backButton = document.getElementById('deliveryLocationBackBtn');
     const closeButton = document.getElementById('deliveryLocationCloseBtn');
     const progress = document.getElementById('deliveryLocationProgress');
+    const progressBar = document.getElementById('deliveryLocationProgressBar');
+    const stepCount = document.getElementById('deliveryLocationStepCount');
+    const progressText = document.getElementById('deliveryLocationProgressText');
+    const stepList = document.getElementById('deliveryLocationSteps');
     const breadcrumb = document.getElementById('deliveryLocationBreadcrumb');
 
     title.textContent = step.title;
@@ -209,7 +213,32 @@ function renderDeliveryLocationPicker() {
     search.hidden = isDetailsStep;
     backButton.hidden = deliveryLocationStep === 0 && !getSavedDeliveryLocation();
     closeButton.hidden = !getSavedDeliveryLocation() && deliveryLocationStep === 0;
-    progress.style.width = `${((deliveryLocationStep + 1) / deliveryLocationSteps.length) * 100}%`;
+    const currentStep = deliveryLocationStep + 1;
+    const totalSteps = deliveryLocationSteps.length;
+    const completionPercentage = Math.round((currentStep / totalSteps) * 100);
+    const currentStepTitle = isDetailsStep ? 'Confirm delivery location' : step.title;
+    progress.style.width = `${completionPercentage}%`;
+    stepCount.textContent = `Step ${currentStep} of ${totalSteps}`;
+    progressText.textContent = `${completionPercentage}% complete`;
+    progressBar.setAttribute('aria-valuenow', String(currentStep));
+    progressBar.setAttribute('aria-valuetext', `Step ${currentStep} of ${totalSteps}: ${currentStepTitle}`);
+    stepList.replaceChildren(...deliveryLocationSteps.map((locationStep, index) => {
+        const item = document.createElement('li');
+        item.className = 'delivery-location-step';
+        item.classList.toggle('is-complete', index < deliveryLocationStep);
+        item.classList.toggle('is-current', index === deliveryLocationStep);
+
+        const marker = document.createElement('span');
+        marker.className = 'delivery-location-step-marker';
+        marker.textContent = index < deliveryLocationStep ? '✓' : String(index + 1);
+
+        const label = document.createElement('span');
+        label.className = 'delivery-location-step-label';
+        label.textContent = locationStep.label;
+
+        item.append(marker, label);
+        return item;
+    }));
     breadcrumb.textContent = [
         pendingDeliveryLocation.region,
         pendingDeliveryLocation.district,

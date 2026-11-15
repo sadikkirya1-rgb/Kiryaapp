@@ -137,7 +137,22 @@
       <div class="delivery-location-logo-wrap" aria-hidden="true"><img src="assets/Food%20Courier.svg" alt="" class="delivery-location-logo"></div>
       <button id="deliveryLocationCloseBtn" class="delivery-location-nav-btn" type="button" aria-label="Close address selection">×</button>
     </header>
-    <div class="delivery-location-progress" aria-hidden="true"><span id="deliveryLocationProgress"></span></div>
+    <div class="delivery-location-progress-group">
+      <div class="delivery-location-progress-meta">
+        <span id="deliveryLocationStepCount">Step 1 of 5</span>
+        <span id="deliveryLocationProgressText">20% complete</span>
+      </div>
+      <ol id="deliveryLocationSteps" class="delivery-location-steps" aria-hidden="true">
+        <li class="delivery-location-step is-current"><span class="delivery-location-step-marker">1</span><span class="delivery-location-step-label">Region</span></li>
+        <li class="delivery-location-step"><span class="delivery-location-step-marker">2</span><span class="delivery-location-step-label">District</span></li>
+        <li class="delivery-location-step"><span class="delivery-location-step-marker">3</span><span class="delivery-location-step-label">Town / city</span></li>
+        <li class="delivery-location-step"><span class="delivery-location-step-marker">4</span><span class="delivery-location-step-label">Landmark</span></li>
+        <li class="delivery-location-step"><span class="delivery-location-step-marker">5</span><span class="delivery-location-step-label">Directions</span></li>
+      </ol>
+      <div id="deliveryLocationProgressBar" class="delivery-location-progress" role="progressbar" aria-label="Delivery address setup progress" aria-valuemin="0" aria-valuemax="5" aria-valuenow="1" aria-valuetext="Step 1 of 5: Choose your region">
+        <span id="deliveryLocationProgress"></span>
+      </div>
+    </div>
     <p id="deliveryLocationHint" class="delivery-location-hint">Select where you would like your order delivered.</p>
     <div id="deliveryLocationBreadcrumb" class="delivery-location-breadcrumb" aria-live="polite"></div>
     <label class="delivery-location-search">

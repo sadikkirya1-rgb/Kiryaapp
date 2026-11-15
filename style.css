@@ -133,8 +133,19 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 #deliveryLocationTitle{ color:#153d2b; font-size:1.35rem; line-height:1.25; }
 .delivery-location-logo-wrap{ z-index:0; display:block; flex:0 0 clamp(72px,16vw,86px); width:clamp(72px,16vw,86px); transform:scaleX(-1); pointer-events:none; }
 .delivery-location-logo{ display:block; width:100%; height:auto; filter:drop-shadow(0 8px 12px rgba(22,69,44,.16)); animation:courierBounce .32s ease-in-out infinite alternate; }
-.delivery-location-progress{ height:5px; margin:20px 0 15px; overflow:hidden; border-radius:99px; background:#e9efed; }
-.delivery-location-progress span{ display:block; width:20%; height:100%; border-radius:inherit; background:#019e81; transition:width .2s ease; }
+.delivery-location-progress-group{ margin:20px 0 15px; padding:14px 14px 12px; border:1px solid #e4efea; border-radius:16px; background:linear-gradient(145deg,#f6fbf8,#eef7f3); box-shadow:0 4px 14px rgba(27,91,65,.06); }
+.delivery-location-progress-meta{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; color:#56645e; font-size:.75rem; font-weight:700; }
+.delivery-location-progress-meta span:first-child{ color:#263b32; }
+.delivery-location-progress-meta span:last-child{ color:#68736f; font-weight:600; }
+.delivery-location-steps{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; margin:0 0 11px; padding:0; list-style:none; }
+.delivery-location-step{ display:flex; min-width:0; flex-direction:column; align-items:center; gap:6px; color:#76827d; font-size:.64rem; line-height:1.15; text-align:center; }
+.delivery-location-step-marker{ display:grid; width:29px; height:29px; place-items:center; border:1px solid #d5e0da; border-radius:9px; background:#fff; color:#718079; font-size:.72rem; font-weight:800; transition:background .2s,border-color .2s,color .2s,box-shadow .2s; }
+.delivery-location-step.is-current{ color:#17664f; font-weight:800; }
+.delivery-location-step.is-current .delivery-location-step-marker{ border-color:#15966f; background:#fff; color:#087a5b; box-shadow:0 0 0 3px rgba(21,150,111,.12); }
+.delivery-location-step.is-complete{ color:#28765c; font-weight:700; }
+.delivery-location-step.is-complete .delivery-location-step-marker{ border-color:#15966f; background:#15966f; color:#fff; font-size:.85rem; }
+.delivery-location-progress{ height:6px; overflow:hidden; border-radius:99px; background:#dce9e2; }
+.delivery-location-progress span{ display:block; width:20%; height:100%; border-radius:inherit; background:linear-gradient(90deg,#087a5b,#41b993); transition:width .25s ease; }
 .delivery-location-hint{ margin-bottom:12px; color:#68736f; font-size:.9rem; line-height:1.45; }
 .delivery-location-breadcrumb{ min-height:20px; margin-bottom:10px; color:#019e81; font-size:.78rem; font-weight:700; line-height:1.4; }
 .delivery-location-search{ display:flex; align-items:center; gap:10px; padding:0 14px; border:1px solid #e1e8e5; border-radius:12px; background:#f8faf9; color:#74807b; }
@@ -157,7 +168,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 .delivery-location-details textarea{ width:100%; resize:vertical; min-height:90px; padding:12px; border:1px solid #dfe7e3; border-radius:12px; outline-color:#019e81; color:#26332f; font:inherit; font-size:.9rem; }
 .delivery-location-note{ color:#71807a; font-size:.78rem; line-height:1.45; }
 #confirmDeliveryLocationBtn{ width:100%; min-height:50px; margin-top:8px; border:0; border-radius:12px; background:#019e81; color:#fff; font:inherit; font-weight:800; cursor:pointer; }
-.delivery-location-panel.is-details-step .delivery-location-progress{ margin-top:20px; }
+.delivery-location-panel.is-details-step .delivery-location-progress-group{ margin-top:20px; }
 @media(max-width:600px){
   #deliveryLocationScreen{ align-items:flex-end; padding:0; background:rgba(22,30,29,.38); }
   .delivery-location-panel{ width:100%; height:100dvh; max-height:100dvh; min-height:100dvh; padding:22px 18px calc(18px + env(safe-area-inset-bottom)); border-radius:0; }
@@ -170,7 +181,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 #deliveryLocationScreen.active .delivery-location-header{ animation:deliveryHeaderEnter .65s cubic-bezier(.16,1,.3,1) both; }
 #deliveryLocationScreen.active .delivery-location-eyebrow{ animation:deliveryContentEnter .5s .12s cubic-bezier(.16,1,.3,1) both; }
 #deliveryLocationScreen.active #deliveryLocationTitle{ animation:deliveryContentEnter .55s .2s cubic-bezier(.16,1,.3,1) both; }
-#deliveryLocationScreen.active .delivery-location-progress{ animation:deliveryContentEnter .5s .24s cubic-bezier(.16,1,.3,1) both; }
+#deliveryLocationScreen.active .delivery-location-progress-group{ animation:deliveryContentEnter .5s .24s cubic-bezier(.16,1,.3,1) both; }
 #deliveryLocationScreen.active .delivery-location-hint{ animation:deliveryContentEnter .5s .3s cubic-bezier(.16,1,.3,1) both; }
 #deliveryLocationScreen.active .delivery-location-breadcrumb{ animation:deliveryContentEnter .5s .36s cubic-bezier(.16,1,.3,1) both; }
 #deliveryLocationScreen.active .delivery-location-search{ animation:deliveryContentEnter .5s .42s cubic-bezier(.16,1,.3,1) both; }
@@ -180,7 +191,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
   #deliveryLocationScreen.active .delivery-location-header,
   #deliveryLocationScreen.active .delivery-location-eyebrow,
   #deliveryLocationScreen.active #deliveryLocationTitle,
-  #deliveryLocationScreen.active .delivery-location-progress,
+  #deliveryLocationScreen.active .delivery-location-progress-group,
   #deliveryLocationScreen.active .delivery-location-hint,
   #deliveryLocationScreen.active .delivery-location-breadcrumb,
   #deliveryLocationScreen.active .delivery-location-search,
