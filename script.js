@@ -441,13 +441,40 @@ function updateAddAddressBtn(){
 // --- App startup and navigation ---
 const SPLASH_RIDE_DURATION = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 6000;
 
+const loginForm = document.getElementById('loginForm');
+const loginStatus = document.getElementById('loginStatus');
+const loginPassword = document.getElementById('loginPassword');
+const toggleLoginPassword = document.getElementById('toggleLoginPassword');
+
+toggleLoginPassword?.addEventListener('click', () => {
+    const showPassword = loginPassword.type === 'password';
+    loginPassword.type = showPassword ? 'text' : 'password';
+    toggleLoginPassword.setAttribute('aria-label', showPassword ? 'Hide password' : 'Show password');
+    toggleLoginPassword.setAttribute('aria-pressed', String(showPassword));
+});
+
+loginForm?.addEventListener('submit', event => {
+    event.preventDefault();
+    if (loginStatus) {
+        loginStatus.textContent = "Sign-in isn't connected yet. Your details have not been submitted.";
+    }
+});
+
+document.querySelectorAll('[data-login-notice]').forEach(button => {
+    button.addEventListener('click', () => {
+        if (loginStatus) loginStatus.textContent = button.dataset.loginNotice || '';
+    });
+});
+
 function openRoleScreenFromHash() {
   const hash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
   const roleScreens = {
     user: () => {
       const splash = document.getElementById('splash');
+      const login = document.getElementById('loginScreen');
       const home = document.getElementById('home');
       if (splash) splash.style.display = 'none';
+      if (login) login.classList.remove('is-visible');
       if (home) home.style.display = 'block';
     },
     rider: openRider,
@@ -493,14 +520,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   setTimeout(()=>{
     document.getElementById('splash').style.display='none';
-    document.getElementById('home').style.display='block';
-            if (!getSavedDeliveryLocation()) {
-                showDeliveryLanding();
-                rememberLastScreen('home');
-            } else if (!restoreLastScreen('main')) {
-                showDeliveryHome();
-                rememberLastScreen('newHome');
-            }
+    document.getElementById('loginScreen').classList.add('is-visible');
   },SPLASH_RIDE_DURATION);
 });
 
