@@ -430,7 +430,7 @@ function restoreLastScreen(role = getCurrentAppRole()) {
             return true;
         case 'addressPicker':
             if (getSavedDeliveryLocation()) showDeliveryHome();
-            else showDeliveryLanding();
+            else openDeliveryLocationPicker();
             return true;
         case 'map':
             if (getSavedDeliveryLocation()) showDeliveryHome();
@@ -589,7 +589,14 @@ loginForm?.addEventListener('submit', event => {
     document.body.dataset.appRole = 'user';
     document.getElementById('splash')?.style.setProperty('display', 'none');
     document.getElementById('loginScreen')?.classList.remove('is-visible');
-    openDeliveryLocationPicker();
+    if (!restoreLastScreen('user')) {
+        if (getSavedDeliveryLocation()) {
+            showDeliveryHome();
+            rememberLastScreen('newHome');
+        } else {
+            openDeliveryLocationPicker();
+        }
+    }
 });
 
 signupConfirmPassword?.addEventListener('input', () => signupConfirmPassword.setCustomValidity(''));
