@@ -1470,7 +1470,7 @@ function renderCategoryContent(category) {
       const item = document.createElement('div');
       item.className = 'filter-item';
       item.innerHTML = `<div class="filter-box">${f.icon}</div><div class="filter-name">${f.name}</div>`;
-      item.addEventListener('click', () => showDetailScreen(f.name)); 
+      item.addEventListener('click', () => showDetailScreen(f.name));
       filterScroll.appendChild(item);
     });
   }
@@ -1712,11 +1712,18 @@ function openRestaurant(name, menuData) {
   
   navContainer.innerHTML = '';
   contentContainer.innerHTML = '';
+
+  const allNavItem = document.createElement('div');
+  allNavItem.className = 'res-menu-item active';
+  allNavItem.dataset.menuCategory = 'all';
+  allNavItem.textContent = 'All';
+  navContainer.appendChild(allNavItem);
   
-  menu.forEach((category, index) => {
+  menu.forEach(category => {
       // Nav Item
       const navItem = document.createElement('div');
-      navItem.className = `res-menu-item ${index === 0 ? 'active' : ''}`;
+      navItem.className = 'res-menu-item';
+      navItem.dataset.menuCategory = category.name;
       navItem.textContent = category.name;
       navContainer.appendChild(navItem);
       
@@ -1952,15 +1959,21 @@ if(headerSearchInput && mainCatSearchInput){
 const resMenuNav = document.getElementById('resMenuNav');
 if (resMenuNav) {
     resMenuNav.addEventListener('click', (e) => {
-        if (e.target.classList.contains('res-menu-item')) {
+        const navItem = e.target.closest('.res-menu-item');
+        if (navItem && resMenuNav.contains(navItem)) {
             resMenuNav.querySelectorAll('.res-menu-item').forEach(item => item.classList.remove('active'));
-            e.target.classList.add('active');
+            navItem.classList.add('active');
 
             // Auto-scroll the navigation bar to center the clicked item.
             // This ensures the active item is always visible.
-            e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            navItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
             
-            const targetName = e.target.textContent.trim();
+            if (navItem.dataset.menuCategory === 'all') {
+                restaurantScreen.querySelector('.res-category-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                return;
+            }
+
+            const targetName = navItem.dataset.menuCategory;
             const titles = document.querySelectorAll('.res-category-title');
             for (const title of titles) {
                 if (title.textContent.trim() === targetName) {
