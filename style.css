@@ -530,10 +530,19 @@ html,body{ width:100%; height:100%; overflow-x:hidden; background:#e2f2e6; }
 }
 #categoryScreen.active{ opacity:1; pointer-events:auto; }
 #categoryScreen{ font-size:14px; }
-#categoryScreen .cat-header{ padding:12px; background:radial-gradient(ellipse at 50% 40%,rgba(255,255,255,.92) 0%,rgba(255,255,255,0) 58%),linear-gradient(145deg,#f5fbf4 0%,#e6f4e9 52%,#d9eee3 100%); border-bottom:none; display:flex; align-items:center; justify-content: space-between; position: relative; height:54px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+#categoryScreen .cat-header{ padding:12px; background:linear-gradient(135deg,#70d88a,#31b968); border-bottom:none; display:flex; align-items:center; justify-content: space-between; position: relative; height:72px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
 #categoryScreen .back-btn{ font-size:1.5em; cursor:pointer; padding:5px; border-radius:50%; transition:background-color .2s; }
 #categoryScreen .back-btn:hover,#categoryScreen .back-btn:active{ background-color:transparent; }
-#categoryScreen .cat-address-card{ position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #fff; padding: 5px 10px; border-radius: 20px; font-size: 0.82em; font-weight: 600; color: #333; display: flex; align-items: center; gap: 4px; white-space: nowrap; max-width: 60%; overflow: hidden; border:none; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
+#categoryScreen .cat-address-card{ position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #fff; padding: 5px 10px; border-radius: 20px; font-size: 0.82em; font-weight: 600; color: #333; display: flex; align-items: center; gap: 4px; white-space: nowrap; max-width: min(60%, calc(100% - 150px)); overflow: hidden; border:none; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
+#categoryScreen .cat-header-actions { position:relative; z-index:2; display:flex; flex:0 0 auto; align-items:center; gap:4px; margin-left:auto; }
+#categoryScreen .cat-header-action { display:grid; width:34px; height:34px; flex:0 0 34px; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; color:#17452a; cursor:pointer; }
+#categoryScreen .cat-header-action:hover,#categoryScreen .cat-header-action:active { background:rgba(23,100,69,.12); }
+#categoryScreen .cat-header-action:focus-visible { outline:2px solid #087a67; outline-offset:2px; }
+#categoryScreen .cat-header-action svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+#categoryScreen .profile-header-photo,#restaurantScreen .profile-header-photo { display:none; width:100%; height:100%; border-radius:inherit; object-fit:cover; }
+#categoryScreen .cat-header-action.has-profile-photo .profile-header-photo,#restaurantScreen .res-profile-action.has-profile-photo .profile-header-photo { display:block; }
+#categoryScreen .cat-header-action.has-profile-photo svg,#restaurantScreen .res-profile-action.has-profile-photo svg { display:none; }
+#restaurantScreen .res-profile-action { overflow:hidden; border-radius:50%; padding:0; }
 #categoryScreen .cat-address-card .home-icon{ width:18px; height:18px; object-fit:contain; flex-shrink:0; }
 #categoryScreen .cat-address-card #catAddressText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 #categoryScreen .cat-title{ font-size:1.55em; font-weight:800; margin-bottom: 10px; color:#333; }
@@ -664,14 +673,15 @@ html,body{ width:100%; height:100%; overflow-x:hidden; background:#e2f2e6; }
 #restaurantScreen .delivery-free { color: #019E81; font-weight: bold; margin-left: 5px; }
 
 #restaurantScreen .res-cover-header {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: space-between; align-items: center; min-height:72px;
   padding: 10px 15px;
-  background: orange;
+  background: linear-gradient(135deg,#70d88a,#31b968);
   border-bottom: none;
 }
 #restaurantScreen .res-cover-actions-right { display: flex; gap: 8px; }
 
-#restaurantScreen .res-action-btn { width: 40px; height: 40px; padding: 6px; background: transparent; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.3); font-size: 1em; transition: transform .2s; color: black; }
+#restaurantScreen .res-action-btn { width: 40px; height: 40px; padding: 6px; border: 0; background: transparent; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.3); font: inherit; font-size: 1em; transition: transform .2s; color: black; }
+#restaurantScreen .res-action-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #restaurantScreen .res-action-btn:active { transform: scale(0.9); }
 #restaurantScreen .res-profile-pic { position: absolute; top: -40px; left: 15px; width: 80px; height: 80px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; font-size: 3em; z-index: 20; overflow:hidden; }
 #restaurantScreen .res-profile-pic img{ width:100%; height:100%; object-fit:cover; }

@@ -1677,6 +1677,16 @@ const restaurantScreen = document.getElementById('restaurantScreen');
 const resBackBtn = document.getElementById('resBackBtn');
 const resCloseBtn = document.getElementById('resCloseBtn');
 const resShareBtn = document.getElementById('resShareBtn');
+const resProfileBtn = document.getElementById('resProfileBtn');
+const resNotificationsBtn = document.getElementById('resNotificationsBtn');
+const catProfileBtn = document.getElementById('catProfileBtn');
+const catNotificationsBtn = document.getElementById('catNotificationsBtn');
+
+if (resProfileBtn) resProfileBtn.addEventListener('click', openProfile);
+if (catProfileBtn) catProfileBtn.addEventListener('click', openProfile);
+const showCustomerNotificationsUnavailable = () => showToast('Customer notifications are not available yet.');
+if (resNotificationsBtn) resNotificationsBtn.addEventListener('click', showCustomerNotificationsUnavailable);
+if (catNotificationsBtn) catNotificationsBtn.addEventListener('click', showCustomerNotificationsUnavailable);
 
 function openRestaurant(name, menuData) {
   document.getElementById('resScreenName').textContent = name;
@@ -9641,8 +9651,19 @@ if(profilePic && profilePicInput) {
         if(file) {
             const reader = new FileReader();
             reader.onload = function(event) {
-                profilePic.style.backgroundImage = `url(${event.target.result})`;
+                const imageData = typeof event.target.result === 'string' ? event.target.result : '';
+                if (!imageData) {
+                    showToast('The selected profile photo could not be loaded.');
+                    return;
+                }
+                profilePic.style.backgroundImage = `url(${imageData})`;
                 profilePic.textContent = ''; // Remove the default emoji
+                [document.getElementById('catHeaderProfilePhoto'), document.getElementById('resHeaderProfilePhoto')]
+                    .filter(Boolean)
+                    .forEach(photo => {
+                        photo.src = imageData;
+                        photo.closest('button')?.classList.add('has-profile-photo');
+                    });
             }
             reader.readAsDataURL(file);
         }

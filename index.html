@@ -300,6 +300,15 @@
       <img src="assets/Location%20Pin.svg" alt="Search by location" class="map-pin-badge">
       <input type="text" placeholder="Search in category..." id="headerSearchInput">
     </div>
+    <div class="cat-header-actions">
+      <button class="cat-header-action" id="catProfileBtn" type="button" aria-label="Open your profile" title="Profile">
+        <img class="profile-header-photo" id="catHeaderProfilePhoto" alt="">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>
+      </button>
+      <button class="cat-header-action" id="catNotificationsBtn" type="button" aria-label="Notifications" title="Notifications">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+      </button>
+    </div>
   </div>
   <div class="cat-content">
     <div class="cat-title" id="catTitle">Category</div>
@@ -402,6 +411,13 @@
   <div class="res-cover-header">
     <div class="res-action-btn" id="resBackBtn">⬅️</div>
     <div class="res-cover-actions-right">
+      <button class="res-action-btn res-profile-action" id="resProfileBtn" type="button" aria-label="Open your profile" title="Profile">
+        <img class="profile-header-photo" id="resHeaderProfilePhoto" alt="">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>
+      </button>
+      <button class="res-action-btn" id="resNotificationsBtn" type="button" aria-label="Notifications" title="Notifications">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+      </button>
       <div class="res-action-btn" id="resShareBtn">🔗</div>
       <div class="res-action-btn" id="resCloseBtn">✖</div>
     </div>
@@ -416,24 +432,6 @@
       <div class="res-badge-discount"><span>🏷️</span> -20% some items</div>
       <div class="res-badge-top"><span>👑</span> Top Rated</div>
     </div>
-    <div class="res-meta-row">
-      <div class="res-meta-item">
-        <span>👍</span>
-        <span id="resLikes">300</span>
-      </div>
-      <div class="res-meta-item">
-        <span>🕒</span>
-        <span id="resTime">20-30 Mins</span>
-      </div>
-      <div class="res-meta-item">
-        <span class="bike-icon-right">🚴‍♂️</span>
-        <div>
-          <span class="delivery-fee-cross">200</span>
-          <span class="delivery-free">Free</span>
-        </div>
-      </div>
-    </div>
-    <div class="res-price-disclaimer">Crossed-out prices show the lowest price in the last 3 days before reduction</div>
   </div>
   
   <div class="res-menu-nav" id="resMenuNav">
