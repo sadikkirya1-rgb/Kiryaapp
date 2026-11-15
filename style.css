@@ -2,7 +2,7 @@
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter', sans-serif;-webkit-tap-highlight-color:transparent;}
 /* Hide all scrollbars */
 *{ -ms-overflow-style: none; scrollbar-width: none; } *::-webkit-scrollbar { display: none; }
-html,body{ width:100%; height:100%; overflow-x:hidden; }
+html,body{ width:100%; height:100%; overflow-x:hidden; background:#e2f2e6; }
 
 /* Splash */
 #splash{ position:fixed; inset:0; z-index:9999; display:flex; justify-content:center; align-items:center; min-height:100vh; min-height:100svh; overflow:hidden; padding:24px; background:radial-gradient(ellipse at 50% 40%,rgba(255,255,255,.92) 0%,rgba(255,255,255,0) 58%),linear-gradient(145deg,#f5fbf4 0%,#e6f4e9 52%,#d9eee3 100%); }
@@ -329,7 +329,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
   border-radius:24px; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.4); position: relative; z-index: 2;
 }
 #newHomeScreen .selected-address-card{ 
-  position: relative; min-height:calc(132px + env(safe-area-inset-top)); align-self:stretch; display:inline-flex; align-items:center; justify-content:flex-start; gap:12px; width:auto; margin:0; padding:calc(38px + env(safe-area-inset-top)) 18px 38px; border-radius:0 0 18px 18px; background:linear-gradient(135deg,#d8f3e4,#b8e7ce); border:none; color:#17452a; box-shadow:0 4px 10px rgba(23,100,69,0.14); font-weight:700; font-size:0.96em; cursor:pointer; transition: transform .2s, box-shadow .2s; white-space:normal;
+  position: relative; min-height:calc(132px + env(safe-area-inset-top)); align-self:stretch; display:inline-flex; align-items:center; justify-content:flex-start; gap:12px; width:auto; margin:0; padding:calc(38px + env(safe-area-inset-top)) 18px 38px; border-radius:0 0 18px 18px; background:linear-gradient(135deg,#9fe2ae,#57c97d); border:none; color:#17452a; box-shadow:0 4px 10px rgba(23,100,69,0.14); font-weight:700; font-size:0.96em; cursor:pointer; transition: transform .2s, box-shadow .2s; white-space:normal;
 }
 #newHomeScreen .selected-address-card #selectedAddressText { flex:1; min-width:0; font-size:0.95em; line-height:1.35; text-align:left; white-space:normal; overflow-wrap:anywhere; }
 #newHomeScreen .selected-address-card:hover{ box-shadow:0 6px 15px rgba(0,0,0,0.15); }
@@ -348,7 +348,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 #newHomeScreen .circle {
   width:108px; height:108px; border-radius:50%;
   background: #fff;
-  display:flex; align-items:center; justify-content:center; color:#333; font-weight:700; font-size:3.5em; font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiSymbols', sans-serif;
+  display:flex; align-items:center; justify-content:center; color:#333; font-weight:700; font-size:4.1em; font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiSymbols', sans-serif;
   box-shadow: 0 5px 15px rgba(0,0,0,0.15);
   transition: all 0.2s ease-in-out;
 }
@@ -376,7 +376,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 #contentSearchScreen .grid-label { color: #333; }
 
 #newHomeScreen .grid-item, #contentSearchScreen .grid-item { touch-action: manipulation; }
-#newHomeScreen .content{ flex:1; background:#fff; padding: 30px 0 calc(120px + env(safe-area-inset-bottom)); overflow-y:auto; margin-top: -20px; z-index: 1; padding-top: 40px; }
+#newHomeScreen .content{ flex:1; background:#fff; padding: 30px 0 calc(160px + env(safe-area-inset-bottom)); overflow-y:auto; margin-top: -20px; z-index: 1; padding-top: 40px; }
 #newHomeScreen .for-you-text {
   font-size: 1.34em;
   font-weight: bold;
@@ -415,12 +415,21 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
     top: 0;
     left: 0;
     width: 100%;
-    padding: 56px 20px calc(15px + env(safe-area-inset-bottom));
+    padding: 88px 20px calc(15px + env(safe-area-inset-bottom));
     border-radius: 20px 20px 0 0;
     opacity: 0;
     transition: opacity 0.8s ease-in-out;
     pointer-events: none;
 }
+#newHomeScreen .shop-info.ad-banner .shop-info-row {
+    justify-content: center;
+    text-align: center;
+    transform: translateY(-8px);
+}
+#newHomeScreen .shop-info.ad-banner .headline { font-size: 1.08em; }
+#newHomeScreen .shop-info.ad-banner .sub { font-size: 0.9em; }
+#newHomeScreen .shop-info.ad-banner .bike-block { width: 56px; height: 56px; }
+#newHomeScreen .shop-info.ad-banner .bike-block span { display: inline-block; transform: scale(1.08); }
 #newHomeScreen .shop-info.ad-banner.active {
     position: relative;
     opacity: 1;
@@ -609,7 +618,7 @@ html,body{ width:100%; height:100%; overflow-x:hidden; }
 @keyframes brandPopIn { to { opacity: 1; transform: translateY(0) scale(1); } }
 #categoryScreen .brands-pagination.hidden { display: none; }
 
-#restaurantScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(235, 235, 235, 0.85); backdrop-filter: blur(12px); z-index: 3000; display: none; flex-direction: column; overflow-y: auto; }
+#restaurantScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e2f2e6; backdrop-filter: blur(12px); z-index: 3000; display: none; flex-direction: column; overflow-y: auto; }
 #restaurantScreen.active { display: flex; }
 #restaurantScreen .res-cover { 
   width: 100%; 
@@ -1238,6 +1247,7 @@ input:checked + .slider:before { transform: translateX(22px); }
 .generic-screen.active { transform: translateX(0); }
 #cartScreen, #checkoutActionScreen, #allergyScreen, #profileScreen, #savedAddressScreen, .generic-screen { transition: none !important; }
 #riderScreen, #adminScreen, #shopPortalScreen { transition: none; }
+#shopPortalScreen { background:#e2f2e6; }
 .generic-header { padding: 15px; background: #fff; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 15px; height: 60px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 .generic-back-btn { font-size: 1.5em; cursor: pointer; padding: 5px; }
 .generic-title { font-size: 1.4em; font-weight: 800; color: #333; }
@@ -1267,7 +1277,7 @@ body.merchant-nav-open .merchant-sidebar { transform: translateX(0); }
 .merchant-nav-count { display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; margin-left: auto; padding: 0 6px; border-radius: 999px; background: #eaf6f2; color: #087a67; font-size: 0.72rem; font-weight: 800; line-height: 1; }
 .merchant-sidebar .merchant-nav-icon { display: inline-flex; flex: 0 0 24px; width: 24px; height: 24px; align-items: center; justify-content: center; font-size: 1.15rem; line-height: 1; }
 .merchant-sidebar-close:focus-visible, .merchant-side-nav button:focus-visible, .merchant-store-toggle:focus-visible, .merchant-mobile-nav-toggle:focus-visible { outline: 2px solid #019e81; outline-offset: 2px; }
-.merchant-main { position: relative; z-index: 1; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: #f8faf9; }
+.merchant-main { position: relative; z-index: 1; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: #e2f2e6; }
 .merchant-main .generic-content { width: 100%; }
 .merchant-nav-backdrop { position: fixed; z-index: 7001; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: rgba(15, 23, 42, 0.36); opacity: 0; pointer-events: none; transition: opacity 0.26s ease; cursor: pointer; }
 body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto; }
@@ -1386,7 +1396,7 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
 .merchant-chart-frame { position: relative; width: 100%; height: 250px; }
 .merchant-sales-chart .merchant-chart-frame { height: 290px; }
 .merchant-chart-frame canvas { width: 100% !important; height: 100% !important; }
-.merchant-kiosk-screen { background: #f5f8f6; }
+.merchant-kiosk-screen { background: #e2f2e6; }
 .merchant-kiosk-header { flex: 0 0 68px; height: 68px; gap: 14px; padding: 10px 20px; }
 .merchant-kiosk-back, .merchant-kiosk-cart-jump { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 9px; padding: 8px 12px; border: 1px solid #dfe9e4; border-radius: 7px; background: #fff; color: #26483c; font: inherit; font-weight: 750; cursor: pointer; }
 .merchant-kiosk-back { width: 40px; padding: 0; font-size: 1.5rem; }
@@ -1992,9 +2002,9 @@ body.merchant-nav-open .merchant-nav-backdrop { opacity: 1; pointer-events: auto
   #newHomeScreen .header{ min-height:calc(41% + 24px); padding:0; border-radius:20px; }
   #newHomeScreen .top-grid{ padding:20px 16px; gap:10px 8px; }
   #newHomeScreen .grid-item{ gap:4px; margin-bottom:4px; }
-  #newHomeScreen .circle{ width:78px; height:78px; font-size:1.75em; }
+  #newHomeScreen .circle{ width:78px; height:78px; font-size:2.3em; }
   #newHomeScreen .grid-label{ padding:3px 8px; border-radius:8px; font-size:.74em; }
-  #newHomeScreen .content{ padding:34px 0 calc(120px + env(safe-area-inset-bottom)); }
+  #newHomeScreen .content{ padding:34px 0 calc(160px + env(safe-area-inset-bottom)); }
   #newHomeScreen .for-you-text{ margin-bottom:12px; padding:0 16px; font-size:1.18em; }
   #newHomeScreen .shop-scroll{ gap:12px; padding:4px 16px 16px; }
   #newHomeScreen .shop-item{ width:68px; height:68px; min-width:68px; font-size:1.7em; }
