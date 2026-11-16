@@ -119,6 +119,7 @@ function hideDeliveryLocationPicker(focusTarget) {
 
 function getDemoPhotoForImage(image) {
     const value = String(image || '').toLocaleLowerCase();
+    if (value.includes('chicken-biryani.png') || value.includes('biryani') || value.includes('🍱')) return 'assets/chicken-biryani.png';
     if (value.includes('🍕') || value.includes('pizza')) return 'assets/merchant-pizza.jpg';
     if (value.includes('🍗') || value.includes('🍖') || value.includes('chicken') || value.includes('wing') || value.includes('kfc')) return 'assets/merchant-wings.jpg';
     if (value.includes('🍟') || value.includes('fries') || value.includes('potato')) return 'assets/merchant-fries.jpg';
@@ -1148,11 +1149,11 @@ const categoryConfig = {
       {icon: "🥘", name: "Local"}, {icon: "🍰", name: "Desserts"}
     ],
     brands: [
-      {icon: "🍔", name: "McDonald's"}, {icon: "🍗", name: "KFC"}, {icon: "🍕", name: "Pizza Hut"},
+      {icon: "assets/chicken-biryani.png", name: "McDonald's"}, {icon: "🍗", name: "KFC"}, {icon: "🍕", name: "Pizza Hut"},
       {icon: "☕", name: "Starbucks"}, {icon: "🥪", name: "Subway"}
     ],
     items: [
-      {name: "Tasty Restaurant", image: "🍽️", rating: "4.8", time: "20-30 Mins", delivery: "Free"},
+      {name: "Tasty Restaurant", image: "assets/chicken-biryani.png", rating: "4.8", time: "20-30 Mins", delivery: "Free"},
       {name: "Burger King", image: "🍔", rating: "4.5", time: "25-35 Mins", delivery: "500"},
       {name: "Pizza Hut", image: "🍕", rating: "4.7", time: "30-40 Mins", delivery: "Free"},
       {name: "KFC", image: "🍗", rating: "4.6", time: "20-30 Mins", delivery: "Free"}
@@ -1501,7 +1502,9 @@ function renderCategoryContent(category) {
       <div class="res-image">
         ${item.photo
           ? `<img src="${item.photo}" alt="${escapeHtml(item.name)}" loading="lazy">`
-          : `<span class="vendor-category-icon" aria-hidden="true">${escapeHtml(item.image)}</span>`}
+          : (typeof item.image === 'string' && /\.(png|jpe?g|svg|webp|gif)(?:[?#].*)?$/i.test(item.image)
+              ? `<img src="${item.image}" alt="${escapeHtml(item.name)}" loading="lazy">`
+              : `<span class="vendor-category-icon" aria-hidden="true">${escapeHtml(item.image)}</span>`)}
         <button class="heart-btn">♡</button>
       </div>
       <div class="res-name">${escapeHtml(item.name)}</div>
